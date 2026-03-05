@@ -198,7 +198,7 @@ func (s *Service) Start() error {
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "start", "openclaw")
+		return runCommand("systemctl", "start", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
@@ -238,7 +238,7 @@ func (s *Service) Stop() error {
 	}
 	switch s.DetectRuntime() {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "stop", "openclaw")
+		return runCommand("systemctl", "stop", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
@@ -295,7 +295,7 @@ func (s *Service) Restart() error {
 	logger.Gateway.Debug().Str("runtime", fmt.Sprintf("%v", rt)).Msg(i18n.T(i18n.MsgLogRestartDetectedRuntime))
 	switch rt {
 	case RuntimeSystemd:
-		return runCommand("systemctl", "restart", "openclaw")
+		return runCommand("systemctl", "restart", "openclaw-gateway")
 	case RuntimeDocker:
 		name := s.ensureContainerName()
 		if name == "" {
@@ -760,25 +760,26 @@ WorkingDirectory=%s
 WantedBy=multi-user.target
 `, absCmd, bind, port, filepath.Dir(absCmd))
 
-	if err := os.WriteFile(systemdUnitPath, []byte(unit), 0644); err != nil {
-		return fmt.Errorf("write unit file: %w", err)
+	// Write unit file via sudo tee to handle permission
+	teeCmd := exec.Command("sudo", "tee", systemdUnitPath)
+	teeCmd.Stdin = strings.NewReader(unit)
+	if out, err := teeCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("write unit file: %s", strings.TrimSpace(string(out)))
 	}
-	if err := runCommand("systemctl", "daemon-reload"); err != nil {
+	if err := runCommand("sudo", "systemctl", "daemon-reload"); err != nil {
 		return fmt.Errorf("daemon-reload: %w", err)
 	}
-	if err := runCommand("systemctl", "enable", "openclaw-gateway"); err != nil {
+	if err := runCommand("sudo", "systemctl", "enable", "openclaw-gateway"); err != nil {
 		return fmt.Errorf("enable: %w", err)
 	}
 	return nil
 }
 
 func (s *Service) daemonUninstallSystemd() error {
-	_ = runCommand("systemctl", "stop", "openclaw-gateway")
-	_ = runCommand("systemctl", "disable", "openclaw-gateway")
-	if err := os.Remove(systemdUnitPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove unit file: %w", err)
-	}
-	_ = runCommand("systemctl", "daemon-reload")
+	_ = runCommand("sudo", "systemctl", "stop", "openclaw-gateway")
+	_ = runCommand("sudo", "systemctl", "disable", "openclaw-gateway")
+	_ = runCommand("sudo", "rm", "-f", systemdUnitPath)
+	_ = runCommand("sudo", "systemctl", "daemon-reload")
 	return nil
 }
 
