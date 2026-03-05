@@ -813,6 +813,24 @@ const Settings: React.FC<SettingsProps> = ({ language, onLogout }) => {
                       </div>
                       <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-white/15 group-hover:text-primary">open_in_new</span>
                     </SmartLink>
+                    <SmartLink href="https://clawdeckx.com"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                      <span className="text-[20px]">🌐</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-white/70 group-hover:text-primary">ClawDeckX</p>
+                        <p className="text-[10px] text-slate-400 dark:text-white/20 truncate">clawdeckx.com</p>
+                      </div>
+                      <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-white/15 group-hover:text-primary">open_in_new</span>
+                    </SmartLink>
+                    <SmartLink href="https://x.com/clawdeckx"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                      <span className="text-[20px]">𝕏</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-slate-700 dark:text-white/70 group-hover:text-primary">X (Twitter)</p>
+                        <p className="text-[10px] text-slate-400 dark:text-white/20 truncate">x.com/clawdeckx</p>
+                      </div>
+                      <span className="material-symbols-outlined text-[14px] text-slate-300 dark:text-white/15 group-hover:text-primary">open_in_new</span>
+                    </SmartLink>
                   </div>
                 </div>
               </div>
