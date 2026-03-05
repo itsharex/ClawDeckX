@@ -1,0 +1,14 @@
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata
+WORKDIR /app
+ARG TARGETARCH
+COPY clawdeckx-linux-${TARGETARCH} ./clawdeckx
+RUN chmod +x ./clawdeckx
+VOLUME ["/data"]
+EXPOSE 18791
+ENV OCD_DB_SQLITE_PATH=/data/ClawDeckX.db \
+    OCD_LOG_FILE=/data/ClawDeckX.log \
+    OCD_BIND=0.0.0.0 \
+    OCD_PORT=18791
+ENTRYPOINT ["/app/clawdeckx"]
+CMD ["serve"]
