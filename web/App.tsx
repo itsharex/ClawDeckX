@@ -237,10 +237,10 @@ const App: React.FC = () => {
       ...w,
       title: resolveWindowTitle(t as any, w.id)
     })));
-    // Sync language to backend (fire and forget, no need to wait)
-    settingsApi.setLanguage(language).catch(() => {
-      // Ignore errors (e.g., not logged in yet)
-    });
+    // Sync language to backend (fire and forget, skip when not logged in)
+    if (!isLocked) {
+      settingsApi.setLanguage(language).catch(() => {});
+    }
   }, [language, t]);
 
   // 自动检查OpenClaw 安装状态，未安装则自动打开安装向导

@@ -76,7 +76,7 @@ async function request<T = any>(
   // 401 → clear stale token and reload to force login screen
   // Exclude endpoints where 401 means "wrong password", not "session expired"
   if (res.status === 401 && !url.includes('/unlock-preview')) {
-    if (!url.includes('/auth/login') && !url.includes('/auth/needs-setup')) {
+    if (!url.includes('/auth/login') && !url.includes('/auth/needs-setup') && !url.includes('/auth/me')) {
       // Clear stale session token to break any potential reload loop
       clearToken();
       // Debounce: only reload if we haven't reloaded in the last 3 seconds
