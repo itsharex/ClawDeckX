@@ -1,0 +1,21 @@
+services:
+  clawdeckx:
+    image: clawdeckx/clawdeckx:latest
+    container_name: clawdeckx
+    restart: unless-stopped
+    ports:
+      - "18791:18791"
+    volumes:
+      - clawdeckx-data:/data
+    environment:
+      # OpenClaw Gateway 连接配置
+      # 如果 Gateway 运行在宿主机，使用 host.docker.internal（Mac/Windows）
+      # 或使用宿主机实际 IP（Linux）
+      OCD_OPENCLAW_GATEWAY_HOST: host.docker.internal
+      OCD_OPENCLAW_GATEWAY_PORT: 18789
+      # OCD_OPENCLAW_GATEWAY_TOKEN: your_token_here
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  clawdeckx-data:
