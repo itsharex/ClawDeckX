@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "Admin account already exists",
   "AUTH_OLD_PASSWORD_WRONG": "Old password incorrect",
   "AUTH_LOGIN_FAILED": "Login failed",
+  "IP_RATE_LIMITED": "Too many failed attempts from this IP, please try again later",
 
   "NOT_FOUND": "Resource not found",
   "INVALID_PARAM": "Invalid request parameter",

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"ClawDeckX/internal/redact"
 	"ClawDeckX/internal/webconfig"
 
 	"github.com/rs/zerolog"
@@ -35,10 +36,10 @@ func Init(cfg webconfig.LogConfig) {
 	var writer io.Writer
 
 	if cfg.Mode == "debug" {
-		writer = zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "15:04:05"}
+		writer = zerolog.ConsoleWriter{Out: redact.NewWriter(os.Stderr), TimeFormat: "15:04:05"}
 	} else {
 		if err := os.MkdirAll(filepath.Dir(cfg.FilePath), 0o755); err != nil {
-			writer = os.Stderr
+			writer = redact.NewWriter(os.Stderr)
 		} else {
 			lj := &lumberjack.Logger{
 				Filename:   cfg.FilePath,
@@ -47,7 +48,7 @@ func Init(cfg webconfig.LogConfig) {
 				MaxAge:     cfg.MaxAgeDays,
 				Compress:   cfg.Compress,
 			}
-			writer = lj
+			writer = redact.NewWriter(lj)
 		}
 	}
 

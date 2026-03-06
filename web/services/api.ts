@@ -55,6 +55,14 @@ export const selfUpdateApi = {
   translateNotes: (text: string, lang: string, product?: string, version?: string) => post<{ translated: string; status: string }>('/api/v1/self-update/translate-notes', { text, lang, product, version }),
 };
 
+export const serviceApi = {
+  status: () => get<{ openclaw_installed: boolean; clawdeckx_installed: boolean }>('/api/v1/service/status'),
+  installOpenClaw: () => post<{ message: string }>('/api/v1/service/openclaw/install', {}),
+  uninstallOpenClaw: () => post<{ message: string }>('/api/v1/service/openclaw/uninstall', {}),
+  installClawDeckX: () => post<{ message: string }>('/api/v1/service/clawdeckx/install', {}),
+  uninstallClawDeckX: () => post<{ message: string }>('/api/v1/service/clawdeckx/uninstall', {}),
+};
+
 // ==================== 服务器访问配置 ====================
 export interface ServerConfig {
   bind: string;

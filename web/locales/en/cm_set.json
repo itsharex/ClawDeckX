@@ -285,7 +285,14 @@
     "notifySaveFail": "Save failed",
     "notifyActive": "Active channels",
     "notifyReuse": "Reuse OpenClaw channel",
-    "notifyReuseHint": "Detected Telegram in OpenClaw config. You can reuse the Bot Token — just enter a Chat ID."
+    "notifyReuseHint": "Detected Telegram in OpenClaw config. You can reuse the Bot Token — just enter a Chat ID.",
+    "serviceManagement": "System Service Management",
+    "serviceInstalled": "Installed",
+    "serviceNotInstalled": "Not installed",
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "installService": "Install Service",
+    "serviceUninstalled": "Service uninstalled"
   },
   "hi": {
     "title": "Host Info",

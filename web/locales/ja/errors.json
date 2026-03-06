@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "管理者アカウントは既に存在します",
   "AUTH_OLD_PASSWORD_WRONG": "旧パスワードが正しくありません",
   "AUTH_LOGIN_FAILED": "ログインに失敗しました",
+  "IP_RATE_LIMITED": "このIPからの失敗した試行が多すぎます。後でもう一度お試しください",
 
   "NOT_FOUND": "リソースが見つかりません",
   "INVALID_PARAM": "リクエストパラメータが無効です",

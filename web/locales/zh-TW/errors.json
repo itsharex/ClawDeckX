@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "管理員帳戶已存在",
   "AUTH_OLD_PASSWORD_WRONG": "原密碼錯誤",
   "AUTH_LOGIN_FAILED": "登入失敗",
+  "IP_RATE_LIMITED": "該IP失敗嘗試次數過多，請稍後再試",
 
   "NOT_FOUND": "資源未找到",
   "INVALID_PARAM": "請求參數無效",

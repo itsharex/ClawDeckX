@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "Akun admin sudah ada",
   "AUTH_OLD_PASSWORD_WRONG": "Kata sandi lama salah",
   "AUTH_LOGIN_FAILED": "Login gagal",
+  "IP_RATE_LIMITED": "Terlalu banyak percobaan gagal dari IP ini, coba lagi nanti",
   "NOT_FOUND": "Sumber daya tidak ditemukan",
   "INVALID_PARAM": "Parameter permintaan tidak valid",
   "INVALID_BODY": "Body permintaan tidak valid",

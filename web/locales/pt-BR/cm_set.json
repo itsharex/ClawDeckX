@@ -285,6 +285,13 @@
     "notifyActive": "Canais ativos",
     "notifyReuse": "Reutilizar canal OpenClaw",
     "notifyReuseHint": "Telegram detectado na config do OpenClaw. Você pode reutilizar o Token do Bot — basta inserir um Chat ID."
+    ,"serviceManagement": "Gerenciamento de serviços do sistema"
+    ,"serviceInstalled": "Instalado"
+    ,"serviceNotInstalled": "Não instalado"
+    ,"install": "Instalar"
+    ,"uninstall": "Desinstalar"
+    ,"installService": "Instalar serviço"
+    ,"serviceUninstalled": "Serviço desinstalado"
   },
   "hi": {
     "title": "Info do Host",

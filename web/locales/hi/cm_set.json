@@ -285,6 +285,13 @@
     "notifyActive": "सक्रिय चैनल",
     "notifyReuse": "OpenClaw चैनल पुनः उपयोग करें",
     "notifyReuseHint": "OpenClaw कॉन्फ़िग में Telegram पाया गया। आप Bot Token पुनः उपयोग कर सकते हैं — बस Chat ID दर्ज करें।"
+    ,"serviceManagement": "सिस्टम सेवा प्रबंधन"
+    ,"serviceInstalled": "स्थापित"
+    ,"serviceNotInstalled": "स्थापित नहीं"
+    ,"install": "स्थापित करें"
+    ,"uninstall": "अनइंस्टॉल करें"
+    ,"installService": "सेवा स्थापित करें"
+    ,"serviceUninstalled": "सेवा अनइंस्टॉल की गई"
   },
   "hi": {
     "title": "होस्ट जानकारी",

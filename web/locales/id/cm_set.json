@@ -285,6 +285,13 @@
     "notifyActive": "Channel aktif",
     "notifyReuse": "Gunakan ulang channel OpenClaw",
     "notifyReuseHint": "Telegram terdeteksi di konfigurasi OpenClaw. Anda dapat menggunakan ulang Token Bot — cukup masukkan Chat ID."
+    ,"serviceManagement": "Manajemen Layanan Sistem"
+    ,"serviceInstalled": "Terinstal"
+    ,"serviceNotInstalled": "Tidak terinstal"
+    ,"install": "Instal"
+    ,"uninstall": "Hapus"
+    ,"installService": "Instal Layanan"
+    ,"serviceUninstalled": "Layanan dihapus"
   },
   "hi": {
     "title": "Info Host",

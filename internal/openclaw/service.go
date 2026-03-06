@@ -854,11 +854,17 @@ func (s *Service) daemonInstallSystemd() error {
 	}
 
 	// Check if systemd user services are available
+	useSystemLevel := false
 	if !systemdUserAvailable() {
 		if isWSL2() {
 			return errors.New(i18n.T(i18n.MsgErrDaemonSystemdWSL2))
 		}
-		return errors.New(i18n.T(i18n.MsgErrDaemonSystemdUnavailable))
+		// Fallback to system-level systemd service
+		if !commandExists("sudo") {
+			return errors.New(i18n.T(i18n.MsgErrDaemonSystemdUnavailable))
+		}
+		useSystemLevel = true
+		logger.Gateway.Info().Msg("systemd user service unavailable, using system-level service (requires sudo)")
 	}
 
 	cmdName := ResolveOpenClawCmd()
@@ -897,6 +903,10 @@ WorkingDirectory=%s
 WantedBy=default.target
 `, absCmd, bind, port, filepath.Dir(absCmd))
 
+	if useSystemLevel {
+		return s.installSystemLevelSystemd(unit, absCmd)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(unitPath), 0755); err != nil {
 		return fmt.Errorf(i18n.T(i18n.MsgErrDaemonCreateDir), err)
 	}
@@ -924,7 +934,30 @@ WantedBy=default.target
 	return nil
 }
 
+func (s *Service) installSystemLevelSystemd(unit, absCmd string) error {
+	systemPath := "/etc/systemd/system/openclaw-gateway.service"
+	tmpFile := "/tmp/openclaw-gateway.service"
+
+	if err := os.WriteFile(tmpFile, []byte(unit), 0644); err != nil {
+		return fmt.Errorf("failed to write temp unit file: %w", err)
+	}
+
+	if err := runCommand("sudo", "mv", tmpFile, systemPath); err != nil {
+		return fmt.Errorf("failed to install system service (sudo required): %w", err)
+	}
+	if err := runCommand("sudo", "systemctl", "daemon-reload"); err != nil {
+		return fmt.Errorf("failed to reload systemd: %w", err)
+	}
+	if err := runCommand("sudo", "systemctl", "enable", "openclaw-gateway"); err != nil {
+		return fmt.Errorf("failed to enable service: %w", err)
+	}
+
+	logger.Gateway.Info().Msg("system-level systemd service installed successfully")
+	return nil
+}
+
 func (s *Service) daemonUninstallSystemd() error {
+	// Try user-level first
 	_ = runCommand("systemctl", "--user", "stop", systemdServiceName)
 	_ = runCommand("systemctl", "--user", "disable", systemdServiceName)
 	unitPath := systemdUserUnitPath()
@@ -932,6 +965,16 @@ func (s *Service) daemonUninstallSystemd() error {
 		_ = os.Remove(unitPath)
 	}
 	_ = runCommand("systemctl", "--user", "daemon-reload")
+
+	// Also try system-level
+	systemPath := "/etc/systemd/system/openclaw-gateway.service"
+	if _, err := os.Stat(systemPath); err == nil {
+		_ = runCommand("sudo", "systemctl", "stop", "openclaw-gateway")
+		_ = runCommand("sudo", "systemctl", "disable", "openclaw-gateway")
+		_ = runCommand("sudo", "rm", "-f", systemPath)
+		_ = runCommand("sudo", "systemctl", "daemon-reload")
+	}
+
 	return nil
 }
 

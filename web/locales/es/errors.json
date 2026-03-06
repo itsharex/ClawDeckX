@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "La cuenta de administrador ya existe",
   "AUTH_OLD_PASSWORD_WRONG": "Contraseña anterior incorrecta",
   "AUTH_LOGIN_FAILED": "Error de inicio de sesión",
+  "IP_RATE_LIMITED": "Demasiados intentos fallidos desde esta IP, intente más tarde",
 
   "NOT_FOUND": "Recurso no encontrado",
   "INVALID_PARAM": "Parámetro de solicitud inválido",

@@ -26,12 +26,22 @@ interface CheckItem {
   status: CheckStatus;
 }
 
-// Step definitions — check → identity → scenarios → memory → tips
+interface CapabilityCheck {
+  id: string;
+  status: CheckStatus;
+  section: string;
+  icon: string;
+  current: string;
+  recommendation: string;
+}
+
+// Step definitions — check → identity → scenarios → memory → capability → tips
 const STEPS = [
   { key: 'check', icon: 'verified' },
   { key: 'identity', icon: 'badge' },
   { key: 'scenarios', icon: 'category' },
   { key: 'memory', icon: 'psychology' },
+  { key: 'capability', icon: 'tune' },
   { key: 'tips', icon: 'lightbulb' },
 ] as const;
 
@@ -220,6 +230,17 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
   const heartbeatModel = heartbeatCfg?.model || '';
   const heartbeatEvery = heartbeatCfg?.every || '30m';
   const subagentModel = config?.agents?.defaults?.subagents?.model || '';
+  const toolProfile = String(config?.tools?.profile || 'full');
+  const toolAllow = Array.isArray(config?.tools?.allow) ? config.tools.allow.map(String) : [];
+  const toolDeny = Array.isArray(config?.tools?.deny) ? config.tools.deny.map(String) : [];
+  const commandsBashEnabled = config?.commands?.bash !== false;
+  const browserEnabled = config?.browser?.enabled === true;
+  const browserEvaluateEnabled = config?.browser?.evaluateEnabled === true;
+  const webSearchEnabled = config?.tools?.web?.search?.enabled !== false;
+  const webFetchEnabled = config?.tools?.web?.fetch?.enabled !== false;
+  const imageEnabled = config?.tools?.media?.image?.enabled !== false;
+  const audioEnabled = config?.tools?.media?.audio?.enabled !== false;
+  const videoEnabled = config?.tools?.media?.video?.enabled !== false;
   const memoryFlush = config?.agents?.defaults?.compaction?.memoryFlush;
   const memoryFlushEnabled = memoryFlush?.enabled !== false;
   const configuredChannels = config?.channels ? Object.keys(config.channels).filter(k => config.channels[k]?.enabled !== false) : [];
@@ -233,6 +254,17 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
   const authMode = gwAuth?.mode || config?.gateway?.authMode || '';
   const authIsNone = authMode === 'none' || (!authMode && !gwAuth?.token);
   const hasTls = !!config?.gateway?.tls?.cert || !!config?.gateway?.tls?.enabled;
+  const highImpactDenyList = useMemo(() => {
+    const flags = { shell: false, browser: false, web: false, file: false };
+    toolDeny.forEach((item: string) => {
+      const lower = item.toLowerCase();
+      if (lower.includes('shell') || lower.includes('bash') || lower.includes('exec') || lower.includes('terminal')) flags.shell = true;
+      if (lower.includes('browser')) flags.browser = true;
+      if (lower.includes('web') || lower.includes('search') || lower.includes('fetch')) flags.web = true;
+      if (lower.includes('file') || lower.includes('fs') || lower.includes('read') || lower.includes('write')) flags.file = true;
+    });
+    return Object.entries(flags).filter(([, disabled]) => disabled).map(([name]) => name);
+  }, [toolDeny]);
 
   // Check sections with weight: required items weight 2, recommended weight 1
   const checks = useMemo(() => {
@@ -277,6 +309,140 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
     }
     return { totalWeight: tw, passWeight: pw, failCount: fc, scorePercent: tw > 0 ? Math.round((pw / tw) * 100) : 0 };
   }, [checks]);
+
+  const capabilityChecks = useMemo<CapabilityCheck[]>(() => {
+    const impactedTools = highImpactDenyList.join(', ');
+    return [
+      {
+        id: 'capToolProfile',
+        status: toolProfile === 'full' ? 'pass' : toolProfile === 'messaging' || toolProfile === 'minimal' ? 'fail' : 'warn',
+        section: 'tools',
+        icon: 'build',
+        current: `tools.profile = ${toolProfile}`,
+        recommendation: toolProfile === 'full'
+          ? (o?.capOkFull || 'All tools are available.')
+          : (o?.capProfileRecommend || 'Set tools.profile to full, or remove it to restore the default profile.'),
+      },
+      {
+        id: 'capToolAllow',
+        status: toolAllow.length === 0 ? 'pass' : 'warn',
+        section: 'tools',
+        icon: 'checklist',
+        current: toolAllow.length === 0 ? (o?.capNotConfigured || 'Not configured') : `${toolAllow.length} item(s)`,
+        recommendation: toolAllow.length === 0
+          ? (o?.capAllowOk || 'No tool whitelist is limiting capabilities.')
+          : (o?.capAllowRecommend || 'Review tools.allow. Anything not on the allow list will be unavailable.'),
+      },
+      {
+        id: 'capToolDeny',
+        status: highImpactDenyList.length === 0 ? 'pass' : 'fail',
+        section: 'tools',
+        icon: 'block',
+        current: highImpactDenyList.length === 0 ? (o?.capNotConfigured || 'Not configured') : impactedTools,
+        recommendation: highImpactDenyList.length === 0
+          ? (o?.capDenyOk || 'No high-impact tools are denied.')
+          : (o?.capDenyRecommend || 'Review tools.deny and remove blocked shell, browser, web, or file tools if you want full capability.'),
+      },
+      {
+        id: 'capCommandsBash',
+        status: commandsBashEnabled ? 'pass' : 'fail',
+        section: 'commands',
+        icon: 'terminal',
+        current: `commands.bash = ${commandsBashEnabled}`,
+        recommendation: commandsBashEnabled
+          ? (o?.capBashOk || 'Command execution is enabled.')
+          : (o?.capBashRecommend || 'Enable commands.bash if you want the assistant to run terminal commands.'),
+      },
+      {
+        id: 'capBrowserEnabled',
+        status: browserEnabled ? 'pass' : 'warn',
+        section: 'browser',
+        icon: 'language',
+        current: `browser.enabled = ${browserEnabled}`,
+        recommendation: browserEnabled
+          ? (o?.capBrowserOk || 'Browser automation is enabled.')
+          : (o?.capBrowserRecommend || 'Enable browser.enabled if you want page navigation, browsing, and web automation.'),
+      },
+      {
+        id: 'capBrowserEval',
+        status: !browserEnabled ? 'warn' : browserEvaluateEnabled ? 'pass' : 'warn',
+        section: 'browser',
+        icon: 'code',
+        current: `browser.evaluateEnabled = ${browserEvaluateEnabled}`,
+        recommendation: !browserEnabled
+          ? (o?.capBrowserEvalBlocked || 'Browser automation is off, so page evaluation is unavailable too.')
+          : browserEvaluateEnabled
+            ? (o?.capBrowserEvalOk || 'Page evaluation is enabled.')
+            : (o?.capBrowserEvalRecommend || 'Enable browser.evaluateEnabled if you want more complex page interaction.'),
+      },
+      {
+        id: 'capWebSearch',
+        status: webSearchEnabled ? 'pass' : 'warn',
+        section: 'browser',
+        icon: 'travel_explore',
+        current: `tools.web.search.enabled = ${webSearchEnabled}`,
+        recommendation: webSearchEnabled
+          ? (o?.capWebSearchOk || 'Web search is enabled.')
+          : (o?.capWebSearchRecommend || 'Enable tools.web.search.enabled to improve online search capability.'),
+      },
+      {
+        id: 'capWebFetch',
+        status: webFetchEnabled ? 'pass' : 'warn',
+        section: 'browser',
+        icon: 'pageview',
+        current: `tools.web.fetch.enabled = ${webFetchEnabled}`,
+        recommendation: webFetchEnabled
+          ? (o?.capWebFetchOk || 'Web fetch is enabled.')
+          : (o?.capWebFetchRecommend || 'Enable tools.web.fetch.enabled if you want the assistant to reliably read page content.'),
+      },
+      {
+        id: 'capMediaImage',
+        status: imageEnabled ? 'pass' : 'warn',
+        section: 'tools',
+        icon: 'image',
+        current: `tools.media.image.enabled = ${imageEnabled}`,
+        recommendation: imageEnabled
+          ? (o?.capMediaImageOk || 'Image understanding is enabled.')
+          : (o?.capMediaImageRecommend || 'Enable tools.media.image.enabled for image understanding tasks.'),
+      },
+      {
+        id: 'capMediaAudio',
+        status: audioEnabled ? 'pass' : 'warn',
+        section: 'tools',
+        icon: 'graphic_eq',
+        current: `tools.media.audio.enabled = ${audioEnabled}`,
+        recommendation: audioEnabled
+          ? (o?.capMediaAudioOk || 'Audio understanding is enabled.')
+          : (o?.capMediaAudioRecommend || 'Enable tools.media.audio.enabled for audio understanding tasks.'),
+      },
+      {
+        id: 'capMediaVideo',
+        status: videoEnabled ? 'pass' : 'warn',
+        section: 'tools',
+        icon: 'video_library',
+        current: `tools.media.video.enabled = ${videoEnabled}`,
+        recommendation: videoEnabled
+          ? (o?.capMediaVideoOk || 'Video understanding is enabled.')
+          : (o?.capMediaVideoRecommend || 'Enable tools.media.video.enabled for video understanding tasks.'),
+      },
+    ];
+  }, [
+    audioEnabled,
+    browserEnabled,
+    browserEvaluateEnabled,
+    commandsBashEnabled,
+    highImpactDenyList,
+    imageEnabled,
+    o,
+    toolAllow.length,
+    toolProfile,
+    videoEnabled,
+    webFetchEnabled,
+    webSearchEnabled,
+  ]);
+
+  const capabilityIssueCount = useMemo(() => capabilityChecks.filter(item => item.status !== 'pass').length, [capabilityChecks]);
+  const capabilityFailCount = useMemo(() => capabilityChecks.filter(item => item.status === 'fail').length, [capabilityChecks]);
 
   // Auto-expand first problematic section on first load
   useEffect(() => {
@@ -343,6 +509,10 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
     const resolved = resolveI18n(tpl);
     setEditingFile({ ...editingFile, content: resolved.content });
   }, [editingFile, resolveI18n]);
+
+  const openEditorSection = useCallback((section: string) => {
+    window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'editor', section } }));
+  }, []);
 
   // Generate identity config from Q&A fields — IDENTITY.md + USER.md
   const generateIdentityFromQa = useCallback(() => {
@@ -463,14 +633,14 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
 
   const statusDot = (s: CheckStatus) => s === 'pass' ? 'bg-mac-green' : s === 'warn' ? 'bg-mac-yellow' : 'bg-mac-red';
 
-  const renderGoEditorHint = (hint: string, configPath?: string) => (
+  const renderGoEditorHint = (hint: string, configPath?: string, showButton: boolean = true) => (
     <div className="mt-2 sm:ms-7 flex flex-col gap-1.5 px-3 py-2 rounded-lg bg-primary/5 border border-primary/15">
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex items-start sm:items-center gap-2 flex-1 min-w-0">
           <span className="material-symbols-outlined text-[14px] text-primary shrink-0 mt-0.5 sm:mt-0">lightbulb</span>
           <span className="text-[10px] text-primary/80 dark:text-primary/60">{hint}</span>
         </div>
-        {onOpenEditor && (
+        {showButton && onOpenEditor && (
           <button onClick={(e) => { e.stopPropagation(); onOpenEditor(); }}
             className="text-[10px] px-2.5 py-1 rounded-lg bg-primary text-white font-bold flex items-center gap-1 hover:bg-primary/90 transition-colors shrink-0 self-start sm:self-auto">
             <span className="material-symbols-outlined text-[12px]">settings</span>{o?.goEditor}
@@ -599,18 +769,17 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
   // ---------------------------------------------------------------------------
 
   const checkItemAction = (itemId: string): { label: string; action: () => void } | null => {
-    if (!onOpenEditor) return null;
     switch (itemId) {
       case 'provider': case 'primary': case 'fallback': case 'heartbeatModel': case 'subagentModel':
-        return { label: o?.goEditor, action: () => onOpenEditor() };
+        return { label: o?.goEditor, action: () => openEditorSection('models') };
       case 'identity': case 'user':
         return { label: o?.goIdentity || o?.goEditor, action: () => handleStepChange('identity') };
       case 'memoryFlush':
         return { label: o?.goMemory || o?.goEditor, action: () => handleStepChange('memory') };
       case 'channel':
-        return { label: o?.goEditor, action: () => onOpenEditor() };
+        return { label: o?.goEditor, action: () => openEditorSection('channels') };
       case 'authMode': case 'tlsEnabled':
-        return { label: o?.goEditor, action: () => onOpenEditor() };
+        return { label: o?.goEditor, action: () => openEditorSection('gateway') };
       default: return null;
     }
   };
@@ -810,6 +979,104 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
                   </div>
                 </div>
               )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderStepCapability = () => {
+    const statusTone = capabilityFailCount > 0
+      ? 'border-red-300/50 dark:border-red-500/20 bg-red-50/60 dark:bg-red-500/[0.04]'
+      : capabilityIssueCount > 0
+        ? 'border-amber-300/50 dark:border-amber-500/20 bg-amber-50/60 dark:bg-amber-500/[0.04]'
+        : 'border-mac-green/30 bg-mac-green/[0.04]';
+
+    const groups = [
+      { key: 'core', title: o?.capGroupCore || 'Core restrictions', ids: ['capToolProfile', 'capToolAllow', 'capToolDeny', 'capCommandsBash'] },
+      { key: 'web', title: o?.capGroupWeb || 'Browsing and web access', ids: ['capBrowserEnabled', 'capBrowserEval', 'capWebSearch', 'capWebFetch'] },
+      { key: 'media', title: o?.capGroupMedia || 'Multimodal capability', ids: ['capMediaImage', 'capMediaAudio', 'capMediaVideo'] },
+    ];
+
+    return (
+      <div className="space-y-4">
+        <div className={`rounded-2xl border p-4 ${statusTone}`}>
+          <div className="flex items-start gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${capabilityIssueCount === 0 ? 'bg-mac-green/10' : capabilityFailCount > 0 ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
+              <span className={`material-symbols-outlined text-[20px] ${capabilityIssueCount === 0 ? 'text-mac-green' : capabilityFailCount > 0 ? 'text-red-500' : 'text-amber-500'}`}>tune</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-white/80">{o?.capabilityTitle || 'Capability Limits'}</h3>
+              <p className="text-[11px] text-slate-500 dark:text-white/40 mt-0.5">{o?.capabilitySubtitle || 'These settings directly change what OpenClaw can do, even if the system is otherwise healthy.'}</p>
+              <p className="text-[11px] font-medium mt-2 text-slate-600 dark:text-white/55">
+                {capabilityIssueCount === 0
+                  ? (o?.capSummaryOk || 'No major capability restrictions detected.')
+                  : capabilityFailCount > 0
+                    ? (o?.capSummaryLimited || '{count} high-impact restriction(s) detected.').replace('{count}', String(capabilityFailCount))
+                    : (o?.capSummaryReview || '{count} optimization item(s) worth reviewing.').replace('{count}', String(capabilityIssueCount))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {groups.map(group => {
+          const items = capabilityChecks.filter(item => group.ids.includes(item.id));
+          return (
+            <div key={group.key} className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-white/80">{group.title}</h4>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/45">
+                  {items.filter(item => item.status !== 'pass').length}/{items.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {items.map(item => {
+                  const tone = item.status === 'pass'
+                    ? 'border-mac-green/20 bg-mac-green/[0.03]'
+                    : item.status === 'fail'
+                      ? 'border-red-300/40 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/[0.04]'
+                      : 'border-amber-300/40 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/[0.04]';
+                  const chip = item.status === 'pass'
+                    ? 'bg-mac-green/10 text-mac-green'
+                    : item.status === 'fail'
+                      ? 'bg-red-500/10 text-red-500'
+                      : 'bg-amber-500/10 text-amber-500';
+                  return (
+                    <div key={item.id} className={`rounded-xl border p-3 ${tone}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.status === 'pass' ? 'bg-mac-green/10' : item.status === 'fail' ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
+                          <span className={`material-symbols-outlined text-[18px] ${item.status === 'pass' ? 'text-mac-green' : item.status === 'fail' ? 'text-red-500' : 'text-amber-500'}`}>{item.icon}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[12px] font-bold text-slate-700 dark:text-white/80">{(o as any)?.[item.id] || item.id}</p>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${chip}`}>
+                              {item.status === 'pass' ? (o?.capStatusOk || 'OK') : item.status === 'fail' ? (o?.capStatusLimited || 'Limited') : (o?.capStatusReview || 'Review')}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-white/40 mt-1 font-mono break-all">{item.current}</p>
+                          <p className="text-[11px] text-slate-600 dark:text-white/55 mt-2 leading-relaxed">{item.recommendation}</p>
+                          {item.status !== 'pass' && (
+                            <div className="flex items-center gap-2 mt-3 flex-wrap">
+                              <button
+                                onClick={() => openEditorSection(item.section)}
+                                className="text-[10px] px-2.5 py-1 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 transition-colors flex items-center gap-1"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">settings</span>
+                                {o?.capOpenConfig || o?.goEditor || 'Open Config Center'}
+                              </button>
+                              <span className="text-[10px] text-slate-400 dark:text-white/35">
+                                {(o?.capOpenPath || 'Section: {section}').replace('{section}', item.section)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -1117,6 +1384,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
 
   const stepContent: Record<StepKey, () => React.ReactNode> = {
     check: renderStepCheck,
+    capability: renderStepCapability,
     scenarios: renderStepScenarios,
     identity: renderStepIdentity,
     memory: renderStepMemory,
@@ -1124,7 +1392,19 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
   };
 
   const currentStepIdx = STEPS.findIndex(s => s.key === activeStep);
-  const stepTitle = (o as any)?.[`${activeStep === 'check' ? 'stepCheck' : activeStep === 'identity' ? 'identityStepTitle' : activeStep === 'memory' ? 'memoryTitle' : activeStep === 'scenarios' ? 'scenarioTitle' : 'tipsTitle'}`] || activeStep;
+  const stepTitle = (o as any)?.[
+    activeStep === 'check'
+      ? 'stepCheck'
+      : activeStep === 'capability'
+        ? 'stepCapability'
+        : activeStep === 'identity'
+          ? 'identityStepTitle'
+          : activeStep === 'memory'
+            ? 'memoryTitle'
+            : activeStep === 'scenarios'
+              ? 'scenarioTitle'
+              : 'tipsTitle'
+  ] || activeStep;
 
   // ---------------------------------------------------------------------------
   // Main render
@@ -1191,6 +1471,11 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
                 <span className="hidden sm:inline">{label}</span>
                 {idx === 0 && failCount > 0 && !isActive && (
                   <span className="w-4 h-4 rounded-full bg-mac-red/10 text-mac-red text-[10px] font-bold flex items-center justify-center">{failCount}</span>
+                )}
+                {step.key === 'capability' && capabilityIssueCount > 0 && !isActive && (
+                  <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center ${capabilityFailCount > 0 ? 'bg-mac-red/10 text-mac-red' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+                    {capabilityIssueCount}
+                  </span>
                 )}
               </button>
             );

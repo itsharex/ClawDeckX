@@ -34,5 +34,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../internal/web/dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' ||
+            (warning.message && warning.message.includes('dynamically imported'))) {
+          return;
+        }
+        warn(warning);
+      }
+    }
   },
 });

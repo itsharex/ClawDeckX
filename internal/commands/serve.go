@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/proclock"
 	"ClawDeckX/internal/sentinel"
+	"ClawDeckX/internal/service"
 	"ClawDeckX/internal/tray"
 	"ClawDeckX/internal/version"
 	"ClawDeckX/internal/web"
@@ -89,6 +91,16 @@ func RunServe(args []string) int {
 	// Init logger
 	logger.Init(cfg.Log)
 	logger.Log.Info().Str("version", version.Version).Msg(i18n.T(i18n.MsgLogServeStarting))
+
+	// Auto-install system service on first run
+	if !service.IsInstalled() && (runtime.GOOS == "linux" || runtime.GOOS == "darwin") {
+		logger.Log.Info().Msg("Installing ClawDeckX system service...")
+		if err := service.Install(cfg.Server.Port); err != nil {
+			logger.Log.Warn().Err(err).Msg("Failed to install system service (non-fatal)")
+		} else {
+			logger.Log.Info().Msg("System service installed successfully")
+		}
+	}
 
 	// Init database
 	if err := database.Init(cfg.Database, cfg.IsDebug()); err != nil {
@@ -300,6 +312,13 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/self-update/history", selfUpdateHandler.History)
 	router.POST("/api/v1/self-update/translate-notes", selfUpdateHandler.TranslateNotes)
 	router.POST("/api/v1/self-update/apply", web.RequireAdmin(selfUpdateHandler.Apply))
+
+	serviceHandler := handlers.NewServiceHandler(database.NewAuditLogRepo())
+	router.GET("/api/v1/service/status", serviceHandler.Status)
+	router.POST("/api/v1/service/openclaw/install", web.RequireAdmin(serviceHandler.InstallOpenClaw))
+	router.POST("/api/v1/service/openclaw/uninstall", web.RequireAdmin(serviceHandler.UninstallOpenClaw))
+	router.POST("/api/v1/service/clawdeckx/install", web.RequireAdmin(serviceHandler.InstallClawDeckX))
+	router.POST("/api/v1/service/clawdeckx/uninstall", web.RequireAdmin(serviceHandler.UninstallClawDeckX))
 
 	router.GET("/api/v1/server-config", serverConfigHandler.Get)
 	router.PUT("/api/v1/server-config", web.RequireAdmin(serverConfigHandler.Update))

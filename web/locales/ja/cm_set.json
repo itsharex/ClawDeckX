@@ -284,7 +284,14 @@
     "notifySaveFail": "保存に失敗しました",
     "notifyActive": "アクティブチャンネル",
     "notifyReuse": "OpenClaw チャンネルを再利用",
-    "notifyReuseHint": "OpenClaw 設定に Telegram を検出しました。Bot Token を再利用できます — Chat ID を入力するだけです。"
+    "notifyReuseHint": "OpenClaw 設定に Telegram を検出しました。Bot Token を再利用できます — Chat ID を入力するだけです。",
+    "serviceManagement": "システムサービス管理",
+    "serviceInstalled": "インストール済み",
+    "serviceNotInstalled": "未インストール",
+    "install": "インストール",
+    "uninstall": "アンインストール",
+    "installService": "サービスをインストール",
+    "serviceUninstalled": "サービスをアンインストールしました"
   },
   "hi": {
     "title": "ホスト情報",

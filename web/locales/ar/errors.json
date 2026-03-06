@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "حساب المسؤول موجود بالفعل",
   "AUTH_OLD_PASSWORD_WRONG": "كلمة المرور القديمة غير صحيحة",
   "AUTH_LOGIN_FAILED": "فشل تسجيل الدخول",
+  "IP_RATE_LIMITED": "محاولات فاشلة كثيرة من هذا العنوان، حاول لاحقاً",
   "NOT_FOUND": "المورد غير موجود",
   "INVALID_PARAM": "معامل طلب غير صالح",
   "INVALID_BODY": "نص طلب غير صالح",

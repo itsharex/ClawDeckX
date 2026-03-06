@@ -285,6 +285,13 @@
     "notifyActive": "Активные каналы",
     "notifyReuse": "Использовать канал OpenClaw",
     "notifyReuseHint": "Обнаружен Telegram в конфигурации OpenClaw. Можно использовать токен бота — просто введите Chat ID."
+    ,"serviceManagement": "Управление системными службами"
+    ,"serviceInstalled": "Установлено"
+    ,"serviceNotInstalled": "Не установлено"
+    ,"install": "Установить"
+    ,"uninstall": "Удалить"
+    ,"installService": "Установить службу"
+    ,"serviceUninstalled": "Служба удалена"
   },
   "hi": {
     "title": "Информация о хосте",

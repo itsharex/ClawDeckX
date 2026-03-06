@@ -10,6 +10,7 @@
   "AUTH_SETUP_DONE": "व्यवस्थापक खाता पहले से मौजूद है",
   "AUTH_OLD_PASSWORD_WRONG": "पुराना पासवर्ड गलत",
   "AUTH_LOGIN_FAILED": "लॉगिन विफल",
+  "IP_RATE_LIMITED": "इस IP से बहुत अधिक असफल प्रयास, बाद में पुनः प्रयास करें",
   "NOT_FOUND": "संसाधन नहीं मिला",
   "INVALID_PARAM": "अमान्य अनुरोध पैरामीटर",
   "INVALID_BODY": "अमान्य अनुरोध बॉडी",

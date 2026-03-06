@@ -91,6 +91,7 @@ const (
 	MsgAuthLogoutSuccess  = "auth.logout_success"
 	MsgAuthSessionExpired = "auth.session_expired"
 	MsgAuthUnauthorized   = "auth.unauthorized"
+	MsgAuthIPRateLimited  = "auth.ip_rate_limited"
 )
 
 // Error messages

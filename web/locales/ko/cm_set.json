@@ -285,6 +285,13 @@
     "notifyActive": "활성 채널",
     "notifyReuse": "OpenClaw 채널 재사용",
     "notifyReuseHint": "OpenClaw 설정에서 Telegram이 감지되었습니다. Bot Token을 재사용할 수 있습니다. Chat ID만 입력하세요."
+    ,"serviceManagement": "시스템 서비스 관리"
+    ,"serviceInstalled": "설치됨"
+    ,"serviceNotInstalled": "설치되지 않음"
+    ,"install": "설치"
+    ,"uninstall": "제거"
+    ,"installService": "서비스 설치"
+    ,"serviceUninstalled": "서비스가 제거되었습니다"
   },
   "hi": {
     "title": "호스트 정보",

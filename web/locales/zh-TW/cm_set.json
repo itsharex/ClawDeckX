@@ -285,6 +285,13 @@
     "notifyActive": "已啟用渠道",
     "notifyReuse": "複用 OpenClaw 頻道",
     "notifyReuseHint": "已檢測到 OpenClaw 配置了 Telegram，可直接複用 Bot Token，只需填寫接收 Chat ID"
+    ,"serviceManagement": "系統服務管理"
+    ,"serviceInstalled": "已安裝"
+    ,"serviceNotInstalled": "未安裝"
+    ,"install": "安裝"
+    ,"uninstall": "解除安裝"
+    ,"installService": "安裝服務"
+    ,"serviceUninstalled": "服務已解除安裝"
   },
   "hi": {
     "title": "宿主機資訊",

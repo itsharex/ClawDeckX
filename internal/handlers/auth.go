@@ -2,6 +2,7 @@
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"ClawDeckX/internal/database"
 	"ClawDeckX/internal/i18n"
 	"ClawDeckX/internal/logger"
+	"ClawDeckX/internal/ratelimit"
 	"ClawDeckX/internal/web"
 	"ClawDeckX/internal/webconfig"
 
@@ -24,6 +26,7 @@ type AuthHandler struct {
 	userRepo  *database.UserRepo
 	auditRepo *database.AuditLogRepo
 	cfg       *webconfig.Config
+	ipLimiter *ratelimit.IPLimiter
 }
 
 func NewAuthHandler(cfg *webconfig.Config) *AuthHandler {
@@ -31,6 +34,7 @@ func NewAuthHandler(cfg *webconfig.Config) *AuthHandler {
 		userRepo:  database.NewUserRepo(),
 		auditRepo: database.NewAuditLogRepo(),
 		cfg:       cfg,
+		ipLimiter: ratelimit.New(ratelimit.DefaultConfig),
 	}
 }
 
@@ -52,6 +56,15 @@ type loginUserInfo struct {
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	// IP-based rate limiting: block brute-force from the same IP across different usernames
+	chk := h.ipLimiter.Check(r.RemoteAddr)
+	if !chk.Allowed {
+		logger.Auth.Warn().Str("ip", r.RemoteAddr).Int64("retry_after_ms", chk.RetryAfterMs).Msg("login blocked: IP rate limited")
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", (chk.RetryAfterMs/1000)+1))
+		web.Fail(w, r, "IP_RATE_LIMITED", i18n.T(i18n.MsgAuthIPRateLimited), http.StatusTooManyRequests)
+		return
+	}
+
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		web.FailErr(w, r, web.ErrInvalidBody)
@@ -72,6 +85,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			IP:       r.RemoteAddr,
 		})
 		logger.Auth.Warn().Str("username", req.Username).Str("ip", r.RemoteAddr).Msg("login failed: user not found")
+		h.ipLimiter.RecordFailure(r.RemoteAddr)
 		web.FailErr(w, r, web.ErrInvalidPassword)
 		return
 	}
@@ -116,12 +130,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			logger.Auth.Warn().Str("username", req.Username).Str("ip", r.RemoteAddr).Msg("account locked")
 		}
 		logger.Auth.Warn().Str("username", req.Username).Str("ip", r.RemoteAddr).Msg("login failed: wrong password")
+		h.ipLimiter.RecordFailure(r.RemoteAddr)
 		web.FailErr(w, r, web.ErrInvalidPassword)
 		return
 	}
 
-	// Reset failed attempts
+	// Reset failed attempts (both per-user and per-IP)
 	h.userRepo.ResetFailedAttempts(user.ID)
+	h.ipLimiter.Reset(r.RemoteAddr)
 
 	// Generate JWT
 	token, expiresAt, err := web.GenerateJWT(user.ID, user.Username, user.Role, h.cfg.Auth.JWTSecret, h.cfg.JWTExpireDuration())

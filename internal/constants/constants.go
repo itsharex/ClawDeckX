@@ -27,6 +27,8 @@ const (
 	ActionGatewayStart           = "gateway.start"
 	ActionGatewayStop            = "gateway.stop"
 	ActionGatewayRestart         = "gateway.restart"
+	ActionServiceInstall         = "service.install"
+	ActionServiceUninstall       = "service.uninstall"
 	ActionKillSwitch             = "kill_switch"
 	ActionConfigUpdate           = "config.update"
 	ActionDoctorFix              = "doctor.fix"
