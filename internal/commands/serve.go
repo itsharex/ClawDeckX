@@ -811,10 +811,16 @@ func RunServe(args []string) int {
 				i18n.T(i18n.MsgServePortOccupiedBy, map[string]interface{}{"Process": procDesc}))
 
 			// Interactive: ask user whether to kill
+			// Use ReadLineFromTTY to read from /dev/tty (Unix) or CON (Windows),
+			// because stdin may be a pipe when launched via `curl ... | bash`.
 			fmt.Fprintf(os.Stderr, "   %s [y/N] ",
 				i18n.T(i18n.MsgServeKillProcessPrompt))
-			var answer string
-			fmt.Scanln(&answer)
+			answer, ttyErr := proclock.ReadLineFromTTY()
+			if ttyErr != nil {
+				// Cannot read from terminal — non-interactive, skip kill
+				fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePortInUseSolutions))
+				return 1
+			}
 			answer = strings.TrimSpace(strings.ToLower(answer))
 
 			if answer == "y" || answer == "yes" {
