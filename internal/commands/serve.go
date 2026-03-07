@@ -795,9 +795,17 @@ func RunServe(args []string) int {
 
 	// Pre-flight: check if the port is actually available before starting.
 	// This catches cases where proclock succeeded but another process holds the port.
+	// biPrint prints both English and Chinese lines for a given i18n key.
+	biPrint := func(key string, data ...map[string]interface{}) {
+		fmt.Fprintln(os.Stderr, i18n.TLang("en", key, data...))
+		fmt.Fprintln(os.Stderr, i18n.TLang("zh", key, data...))
+	}
+
 	if ln, err := net.Listen("tcp", addr); err != nil {
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintf(os.Stderr, "❌ %s\n", i18n.T(i18n.MsgServePortInUse, map[string]interface{}{"Port": cfg.Server.Port}))
+		portData := map[string]interface{}{"Port": cfg.Server.Port}
+		fmt.Fprintf(os.Stderr, "❌ %s\n", i18n.TLang("en", i18n.MsgServePortInUse, portData))
+		fmt.Fprintf(os.Stderr, "   %s\n", i18n.TLang("zh", i18n.MsgServePortInUse, portData))
 		fmt.Fprintf(os.Stderr, "   %s\n", err.Error())
 		fmt.Fprintln(os.Stderr)
 
@@ -807,30 +815,31 @@ func RunServe(args []string) int {
 			if info.Name != "" {
 				procDesc = fmt.Sprintf("%s (%s)", info.Name, procDesc)
 			}
-			fmt.Fprintf(os.Stderr, "   %s\n\n",
-				i18n.T(i18n.MsgServePortOccupiedBy, map[string]interface{}{"Process": procDesc}))
+			procData := map[string]interface{}{"Process": procDesc}
+			fmt.Fprintf(os.Stderr, "   %s\n", i18n.TLang("en", i18n.MsgServePortOccupiedBy, procData))
+			fmt.Fprintf(os.Stderr, "   %s\n\n", i18n.TLang("zh", i18n.MsgServePortOccupiedBy, procData))
 
 			// Interactive: ask user whether to kill
 			// Use ReadLineFromTTY to read from /dev/tty (Unix) or CON (Windows),
 			// because stdin may be a pipe when launched via `curl ... | bash`.
-			fmt.Fprintf(os.Stderr, "   %s [y/N] ",
-				i18n.T(i18n.MsgServeKillProcessPrompt))
+			fmt.Fprintf(os.Stderr, "   %s\n", i18n.TLang("en", i18n.MsgServeKillProcessPrompt))
+			fmt.Fprintf(os.Stderr, "   %s [y/N] ", i18n.TLang("zh", i18n.MsgServeKillProcessPrompt))
 			answer, ttyErr := proclock.ReadLineFromTTY()
 			if ttyErr != nil {
 				// Cannot read from terminal — non-interactive, skip kill
-				fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePortInUseSolutions))
+				biPrint(i18n.MsgServePortInUseSolutions)
 				return 1
 			}
 			answer = strings.TrimSpace(strings.ToLower(answer))
 
 			if answer == "y" || answer == "yes" {
 				if err := proclock.KillProcess(info.PID); err != nil {
-					fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n",
-						i18n.T(i18n.MsgServeKillProcessFailed), err.Error())
+					fmt.Fprintf(os.Stderr, "   ❌ %s: %s\n", i18n.TLang("en", i18n.MsgServeKillProcessFailed), err.Error())
+					fmt.Fprintf(os.Stderr, "      %s\n", i18n.TLang("zh", i18n.MsgServeKillProcessFailed))
 					return 1
 				}
-				fmt.Fprintf(os.Stderr, "   ✅ %s (PID %d)\n",
-					i18n.T(i18n.MsgServeKillProcessOk), info.PID)
+				fmt.Fprintf(os.Stderr, "   ✅ %s (PID %d)\n", i18n.TLang("en", i18n.MsgServeKillProcessOk), info.PID)
+				fmt.Fprintf(os.Stderr, "      %s\n", i18n.TLang("zh", i18n.MsgServeKillProcessOk))
 
 				// Wait for port to become available
 				portReady := false
@@ -843,17 +852,17 @@ func RunServe(args []string) int {
 					}
 				}
 				if !portReady {
-					fmt.Fprintf(os.Stderr, "   ❌ %s\n",
-						i18n.T(i18n.MsgServePortStillInUse))
+					fmt.Fprintf(os.Stderr, "   ❌ %s\n", i18n.TLang("en", i18n.MsgServePortStillInUse))
+					fmt.Fprintf(os.Stderr, "      %s\n", i18n.TLang("zh", i18n.MsgServePortStillInUse))
 					return 1
 				}
 				fmt.Fprintln(os.Stderr)
 			} else {
-				fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePortInUseSolutions))
+				biPrint(i18n.MsgServePortInUseSolutions)
 				return 1
 			}
 		} else {
-			fmt.Fprintln(os.Stderr, i18n.T(i18n.MsgServePortInUseSolutions))
+			biPrint(i18n.MsgServePortInUseSolutions)
 			logger.Log.Error().Err(err).Int("port", cfg.Server.Port).Msg(i18n.T(i18n.MsgLogServiceStartFailed))
 			return 1
 		}
