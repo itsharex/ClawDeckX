@@ -689,10 +689,36 @@ export const gwApi = {
     obj[parts[parts.length - 1]] = value;
     return rpc('config.patch', { raw: JSON.stringify(patch) });
   },
-  configSetAll: (config: Record<string, any>) => rpc('config.set', { raw: JSON.stringify(config, null, 2) }),
+  configSetAll: (config: Record<string, any>) => {
+    const cleanRedacted = (obj: any): any => {
+      if (Array.isArray(obj)) return obj.map(cleanRedacted);
+      if (obj && typeof obj === 'object') {
+        const result: any = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v !== '__OPENCLAW_REDACTED__') result[k] = cleanRedacted(v);
+        }
+        return result;
+      }
+      return obj;
+    };
+    return rpc('config.set', { raw: JSON.stringify(cleanRedacted(config), null, 2) });
+  },
   configReload: () => Promise.resolve({ ok: true }),
-  configApply: (raw: string, baseHash: string) =>
-    rpc('config.apply', { raw, baseHash }),
+  configApply: (raw: string, baseHash: string) => {
+    const cleanRedacted = (obj: any): any => {
+      if (Array.isArray(obj)) return obj.map(cleanRedacted);
+      if (obj && typeof obj === 'object') {
+        const result: any = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v !== '__OPENCLAW_REDACTED__') result[k] = cleanRedacted(v);
+        }
+        return result;
+      }
+      return obj;
+    };
+    const parsed = JSON.parse(raw);
+    return rpc('config.apply', { raw: JSON.stringify(cleanRedacted(parsed), null, 2), baseHash });
+  },
   configPatch: (raw: string, baseHash: string) =>
     rpc('config.patch', { raw, baseHash }),
   configSchema: () => rpc('config.schema'),
