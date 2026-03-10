@@ -1,0 +1,693 @@
+# ==============================================================================
+# ClawDeckX - One-Click Installer for Windows (PowerShell)
+# Usage: irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
+# ==============================================================================
+
+$ErrorActionPreference = "Stop"
+
+# Service name
+$ServiceName = "ClawDeckX"
+# Config and data directories are relative to executable location
+$ConfigDir = ""  # Will be set dynamically based on install location
+$DataDir = ""    # Will be set dynamically based on install location
+
+# Detect architecture
+$Arch = if ([System.Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+
+# Function to check if ClawDeckX is installed
+function Test-ClawDeckXInstalled {
+    # Check current directory (preferred location)
+    $CurrentDirBinary = Join-Path (Get-Location) "clawdeckx.exe"
+    if (Test-Path $CurrentDirBinary) {
+        $version = & $CurrentDirBinary --version 2>$null
+        if ($version) {
+            $script:InstalledBinary = $CurrentDirBinary
+            # Set config and data directories relative to executable location
+            $InstallDir = Split-Path -Parent $CurrentDirBinary
+            $script:ConfigDir = Join-Path $InstallDir "data"
+            $script:DataDir = Join-Path $InstallDir "data"
+            return $true
+        }
+    }
+    
+    return $false
+}
+
+# Function to get current version
+function Get-CurrentVersion {
+    if (Test-Path $InstalledBinary) {
+        try {
+            return (& $InstalledBinary --version 2>$null).Trim()
+        } catch {}
+    }
+    return "unknown"
+}
+
+# Function to check if Windows service is installed
+function Test-ServiceInstalled {
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    return $null -ne $service
+}
+
+# Function to check if ClawDeckX is running
+function Test-ClawDeckXRunning {
+    # Check if process is running
+    $process = Get-Process -Name "clawdeckx" -ErrorAction SilentlyContinue
+    if ($process) {
+        return $true
+    }
+    
+    # Check if Windows service is running
+    if (Test-ServiceInstalled) {
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') {
+            return $true
+        }
+    }
+    
+    return $false
+}
+
+# Function to stop ClawDeckX
+function Stop-ClawDeckX {
+    Write-Host "Stopping ClawDeckX... / 正在停止 ClawDeckX..." -ForegroundColor Cyan
+    
+    # Try to stop Windows service first
+    if (Test-ServiceInstalled) {
+        Write-Host "Stopping Windows service... / 正在停止 Windows 服务..." -ForegroundColor Blue
+        try {
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq 'Running') {
+                Stop-Service -Name $ServiceName -Force
+                Start-Sleep -Seconds 2
+                Write-Host "✓ Windows service stopped / Windows 服务已停止" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "⚠ Error stopping service / 停止服务时出错" -ForegroundColor Yellow
+        }
+    }
+    
+    # Kill any remaining process
+    $process = Get-Process -Name "clawdeckx" -ErrorAction SilentlyContinue
+    if ($process) {
+        Write-Host "Killing process... / 正在终止进程..." -ForegroundColor Blue
+        Stop-Process -Name "clawdeckx" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    }
+    
+    Write-Host "✓ ClawDeckX stopped / ClawDeckX 已停止" -ForegroundColor Green
+}
+
+# Function to start ClawDeckX
+function Start-ClawDeckX {
+    Write-Host "Starting ClawDeckX... / 正在启动 ClawDeckX..." -ForegroundColor Cyan
+    
+    # Try to start Windows service if installed
+    if (Test-ServiceInstalled) {
+        Write-Host "Starting Windows service... / 正在启动 Windows 服务..." -ForegroundColor Blue
+        try {
+            Start-Service -Name $ServiceName -ErrorAction Stop
+            Start-Sleep -Seconds 2
+            
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq 'Running') {
+                Write-Host "✓ Service started successfully / 服务启动成功" -ForegroundColor Green
+                return $true
+            } else {
+                Write-Host "⚠ Service failed to start / 服务启动失败" -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "⚠ Error starting service / 启动服务时出错" -ForegroundColor Yellow
+        }
+    }
+    
+    # Fallback: start binary directly
+    Write-Host "Starting binary... / 正在启动二进制文件..." -ForegroundColor Blue
+    try {
+        Start-Process -FilePath $InstalledBinary -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+        
+        $process = Get-Process -Name "clawdeckx" -ErrorAction SilentlyContinue
+        if ($process) {
+            Write-Host "✓ ClawDeckX started successfully / ClawDeckX 启动成功" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "⚠ Failed to start ClawDeckX / 启动 ClawDeckX 失败" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "⚠ Error starting binary / 启动二进制文件时出错" -ForegroundColor Yellow
+    }
+    
+    return $false
+}
+
+# Function to install Windows service
+function Install-WindowsService {
+    Write-Host "" -ForegroundColor Cyan
+    Write-Host "Installing Windows service... / 正在安装 Windows 服务..." -ForegroundColor Blue
+    
+    $InstallDirForService = Split-Path -Parent $InstalledBinary
+    
+    try {
+        # Check if service already exists
+        $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($existingService) {
+            Write-Host "Service already exists, removing first... / 服务已存在，先移除..." -ForegroundColor Yellow
+            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+            sc.exe delete $ServiceName
+            Start-Sleep -Seconds 1
+        }
+        
+        # Create service using sc.exe
+        $servicePath = "`"$InstalledBinary`""
+        sc.exe create $ServiceName binPath= $servicePath start= auto DisplayName= "ClawDeckX"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✓ Windows service installed successfully / Windows 服务安装成功" -ForegroundColor Green
+            Write-Host "  Service name / 服务名称：$ServiceName" -ForegroundColor Cyan
+            Write-Host "  Startup type / 启动类型：Automatic (Auto-start on boot) / 自动启动" -ForegroundColor Cyan
+            
+            # Enable service but don't start it
+            Write-Host "  Configuring service... / 正在配置服务..." -ForegroundColor Blue
+            sc.exe config $ServiceName start= auto
+            
+            Write-Host "✓ Service installed and configured / 服务已安装并配置" -ForegroundColor Green
+            Write-Host "✓ Service will start automatically on next system boot / 服务将在下次系统启动时自动运行" -ForegroundColor Green
+            Write-Host "⚠ Service is NOT started yet / 服务尚未启动" -ForegroundColor Yellow
+        } else {
+            Write-Host "⚠ Failed to install service / 安装服务失败" -ForegroundColor Yellow
+            Write-Host "  You can install it manually later with: / 稍后可以手动安装:" -ForegroundColor Cyan
+            Write-Host "  clawdeckx.exe service install" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "⚠ Error installing service / 安装服务时出错" -ForegroundColor Yellow
+        Write-Host "  $_" -ForegroundColor Cyan
+        Write-Host "  You can install it manually later. / 稍后可以手动安装。" -ForegroundColor Cyan
+    }
+}
+
+# Function to stop Windows service
+function Stop-WindowsService {
+    Write-Host "" -ForegroundColor Cyan
+    Write-Host "Stopping Windows service... / 正在停止 Windows 服务..." -ForegroundColor Blue
+    
+    try {
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') {
+            Stop-Service -Name $ServiceName -Force
+            Write-Host "✓ Windows service stopped / Windows 服务已停止" -ForegroundColor Green
+        } else {
+            Write-Host "⚠ Service is not running / 服务未运行" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "⚠ Error stopping service / 停止服务时出错" -ForegroundColor Yellow
+        Write-Host "  $_" -ForegroundColor Cyan
+    }
+}
+
+# Function to uninstall ClawDeckX
+function Uninstall-ClawDeckX {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host "  Uninstall ClawDeckX / 卸载 ClawDeckX" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host ""
+    
+    $currentVersion = Get-CurrentVersion
+    Write-Host "Found installation / 发现安装：$InstalledBinary" -ForegroundColor Cyan
+    Write-Host "Current version / 当前版本：$currentVersion" -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Ask for uninstall mode
+    Write-Host "Choose uninstall mode / 选择卸载模式:" -ForegroundColor Yellow
+    Write-Host "  1) Quick uninstall (remove everything) / 快速卸载（删除所有）"
+    Write-Host "  2) Custom uninstall (select what to remove) / 自定义卸载（选择删除内容）"
+    Write-Host ""
+    
+    $mode = Read-Host "Enter your choice [1-2]"
+    
+    if ($mode -eq "1") {
+        # Quick uninstall - remove everything
+        Write-Host ""
+        Write-Host "Quick uninstall will remove: / 快速卸载将删除:" -ForegroundColor Cyan
+        Write-Host "  - Binary / 二进制文件：$InstalledBinary"
+        
+        $uninstallService = $false
+        if (Test-ServiceInstalled) {
+            Write-Host "  - Windows service / Windows 服务：$ServiceName"
+            Write-Host "    Note: Service will be stopped automatically / 注意：服务将自动停止" -ForegroundColor Yellow
+            $uninstallService = $true
+        }
+        
+        if (Test-Path $ConfigDir) {
+            Write-Host "  - Config directory / 配置目录：$ConfigDir"
+        }
+        
+        if (Test-Path $DataDir) {
+            Write-Host "  - Data directory / 数据目录：$DataDir"
+        }
+        
+        Write-Host ""
+        $confirm = Read-Host "Confirm quick uninstall? / 确认快速卸载？ [y/N]"
+        
+        if ($confirm -match '^[Yy]') {
+            Perform-Uninstall -UninstallService $uninstallService -RemoveConfig $true -RemoveData $true
+        } else {
+            Write-Host "Uninstall cancelled / 卸载已取消" -ForegroundColor Yellow
+            exit 0
+        }
+    } else {
+        # Custom uninstall
+        Write-Host "" -ForegroundColor Cyan
+        Write-Host "Custom uninstall / 自定义卸载" -ForegroundColor Cyan
+        Write-Host ""
+        
+        # Check for Windows service
+        $uninstallService = $false
+        if (Test-ServiceInstalled) {
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            Write-Host "⚠  Windows service detected / 检测到 Windows 服务:" -ForegroundColor Yellow
+            Write-Host "  - $ServiceName (Status: $($service.Status))"
+            Write-Host "  Service will be stopped automatically during uninstall / 卸载时将自动停止服务" -ForegroundColor Cyan
+            Write-Host ""
+            $response = Read-Host "Also uninstall Windows service? / 同时卸载 Windows 服务？ [Y/n]"
+            if ([string]::IsNullOrEmpty($response) -or $response -match '^[Yy]$') {
+                $uninstallService = $true
+            }
+        } else {
+            Write-Host "No Windows service found / 未发现 Windows 服务" -ForegroundColor Cyan
+        }
+        
+        # Ask about config and data
+        $removeConfig = $false
+        $removeData = $false
+        
+        if (Test-Path $ConfigDir) {
+            $response = Read-Host "Also remove config directory ($ConfigDir)? / 同时删除配置目录？ [y/N]"
+            if ($response -match '^[Yy]') {
+                $removeConfig = $true
+            }
+        } else {
+            Write-Host "No config directory found / 未发现配置目录" -ForegroundColor Cyan
+        }
+        
+        if (Test-Path $DataDir) {
+            $response = Read-Host "Also remove data directory ($DataDir)? / 同时删除数据目录？ [y/N]"
+            if ($response -match '^[Yy]') {
+                $removeData = $true
+            }
+        } else {
+            Write-Host "No data directory found / 未发现数据目录" -ForegroundColor Cyan
+        }
+        
+        Write-Host ""
+        Write-Host "Summary / 摘要:" -ForegroundColor Yellow
+        Write-Host "  - Binary / 二进制文件：will be removed / 将被删除" -ForegroundColor Red
+        if ($uninstallService) {
+            Write-Host "  - Windows service / Windows 服务：will be removed / 将被删除" -ForegroundColor Red
+        }
+        if ($removeConfig) {
+            Write-Host "  - Config directory / 配置目录：will be removed / 将被删除" -ForegroundColor Red
+        }
+        if ($removeData) {
+            Write-Host "  - Data directory / 数据目录：will be removed / 将被删除" -ForegroundColor Red
+        }
+        
+        Write-Host ""
+        $confirm = Read-Host "Confirm custom uninstall? / 确认自定义卸载？ [y/N]"
+        
+        if ($confirm -match '^[Yy]') {
+            Perform-Uninstall -UninstallService $uninstallService -RemoveConfig $removeConfig -RemoveData $removeData
+        } else {
+            Write-Host "Uninstall cancelled / 卸载已取消" -ForegroundColor Yellow
+            exit 0
+        }
+    }
+}
+
+# Helper function to perform the actual uninstall
+function Perform-Uninstall {
+    param(
+        [bool]$UninstallService,
+        [bool]$RemoveConfig,
+        [bool]$RemoveData
+    )
+    
+    # Stop service if running
+    if ($UninstallService) {
+        Write-Host "Uninstalling Windows service... / 正在卸载 Windows 服务..." -ForegroundColor Blue
+        try {
+            $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($service) {
+                if ($service.Status -eq 'Running') {
+                    Write-Host "Stopping service (Status: $($service.Status))... / 正在停止服务..." -ForegroundColor Yellow
+                    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+                    Write-Host "✓ Service stopped / 服务已停止" -ForegroundColor Green
+                }
+                Write-Host "Removing service... / 正在移除服务..." -ForegroundColor Yellow
+                sc.exe delete $ServiceName | Out-Null
+                Write-Host "✓ Removed Windows service / 已删除 Windows 服务" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "Warning: Failed to remove service / 警告：删除服务失败" -ForegroundColor Yellow
+        }
+    }
+    
+    # Remove binary
+    if (Test-Path $InstalledBinary) {
+        Remove-Item -Path $InstalledBinary -Force
+        Write-Host "✓ Removed binary / 已删除二进制文件" -ForegroundColor Green
+    }
+    
+    # Remove config if requested
+    if ($RemoveConfig -and (Test-Path $ConfigDir)) {
+        Remove-Item -Path $ConfigDir -Recurse -Force
+        Write-Host "✓ Removed config directory / 已删除配置目录" -ForegroundColor Green
+    }
+    
+    # Remove data if requested
+    if ($RemoveData -and (Test-Path $DataDir)) {
+        Remove-Item -Path $DataDir -Recurse -Force
+        Write-Host "✓ Removed data directory / 已删除数据目录" -ForegroundColor Green
+    }
+    
+    # Remove from PATH
+    $UserPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($UserPath -like "*$InstallDir*") {
+        $newPath = ($UserPath -split ';' | Where-Object { $_ -ne $InstallDir }) -join ';'
+        [System.Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        Write-Host "✓ Removed from PATH / 已从 PATH 移除" -ForegroundColor Green
+    }
+    
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "  Uninstall complete! / 卸载完成！" -ForegroundColor Green
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Note: You may need to restart your terminal for PATH changes to take effect." -ForegroundColor Yellow
+    Write-Host "注意：您可能需要重启终端以使 PATH 更改生效。" -ForegroundColor Yellow
+    exit 0
+}
+
+# Function to update ClawDeckX
+function Update-ClawDeckX {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host "  Update ClawDeckX / 更新 ClawDeckX" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Yellow
+    Write-Host ""
+    
+    $currentVersion = Get-CurrentVersion
+    Write-Host "Current version / 当前版本：$currentVersion" -ForegroundColor Cyan
+    Write-Host "Latest version / 最新版本：$Version" -ForegroundColor Cyan
+    Write-Host ""
+    
+    if ($currentVersion -eq $Version) {
+        Write-Host "✓ Already up to date! / 已经是最新版本！" -ForegroundColor Green
+        Write-Host ""
+        $response = Read-Host "Force re-download? / 强制重新下载？ [y/N]"
+        if (-not ($response -match '^[Yy]')) {
+            exit 0
+        }
+    } else {
+        $response = Read-Host "Proceed with update? / 确认更新？ [Y/n]"
+        if ($response -match '^[Nn]') {
+            exit 0
+        }
+    }
+    
+    # Check if ClawDeckX is currently running
+    Write-Host ""
+    if (Test-ClawDeckXRunning) {
+        Write-Host "⚠ ClawDeckX is currently running / ClawDeckX 正在运行" -ForegroundColor Yellow
+        Write-Host "The program needs to be stopped before updating. / 更新前需要停止程序。" -ForegroundColor Yellow
+        Write-Host ""
+        $response = Read-Host "Stop ClawDeckX now and continue update? / 立即停止 ClawDeckX 并继续更新？ [Y/n]"
+        if ($response -match '^[Nn]') {
+            Write-Host "Update cancelled. / 更新已取消" -ForegroundColor Yellow
+            exit 0
+        }
+        
+        # Stop ClawDeckX
+        Stop-ClawDeckX
+        
+        # Wait a moment to ensure process is fully stopped
+        Start-Sleep -Seconds 2
+    }
+    
+    Write-Host ""
+    Write-Host "Downloading update... / 正在下载更新..." -ForegroundColor Blue
+    
+    # Continue to download and install
+    Download-And-Install
+    
+    # Ask if user wants to restart ClawDeckX
+    Write-Host ""
+    $response = Read-Host "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n]"
+    
+    if (-not ($response -match '^[Nn]')) {
+        $started = Start-ClawDeckX
+        
+        # Show access URL if running
+        if (Test-ClawDeckXRunning) {
+            Write-Host ""
+            Write-Host "You can access ClawDeckX at: / 可以访问 ClawDeckX：" -ForegroundColor Cyan
+            Write-Host "  http://localhost:18791" -ForegroundColor Green
+            Write-Host ""
+            if (Test-ServiceInstalled) {
+                Write-Host "Service management commands / 服务管理命令：" -ForegroundColor Yellow
+                Write-Host "  Get-Service $ServiceName | Select-Object Status,Name   - Check status / 查看状态" -ForegroundColor Green
+                Write-Host "  Stop-Service $ServiceName     - Stop service / 停止服务" -ForegroundColor Green
+            }
+        }
+    } else {
+        Write-Host "You can start it later with: / 稍后可以使用以下命令启动：" -ForegroundColor Yellow
+        Write-Host "  $InstalledBinary" -ForegroundColor Green
+        if (Test-ServiceInstalled) {
+            Write-Host ""
+            Write-Host "Service management commands / 服务管理命令：" -ForegroundColor Cyan
+            Write-Host "  Start-Service $ServiceName    - Start service / 启动服务" -ForegroundColor Green
+            Write-Host "  Stop-Service $ServiceName     - Stop service / 停止服务" -ForegroundColor Green
+            Write-Host "  Get-Service $ServiceName | Select-Object Status,Name   - Check status / 查看状态" -ForegroundColor Green
+        }
+    }
+    
+    exit 0
+}
+
+# Function to download and install
+function Download-And-Install {
+    Write-Host "Detected: Windows/$Arch" -ForegroundColor Green
+    
+    # Find matching asset
+    $Asset = $Release.assets | Where-Object { $_.name -like "*windows*$Arch*" } | Select-Object -First 1
+    
+    if (-not $Asset) {
+        Write-Host "Error: No release asset found for Windows/$Arch" -ForegroundColor Red
+        Write-Host "Please download manually from: https://github.com/$Repo/releases" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    $DownloadUrl = $Asset.browser_download_url
+    $FileName = $Asset.name
+    Write-Host "Found asset: $FileName" -ForegroundColor Green
+    
+    # Download to the installed location (overwrite existing binary)
+    $Dest = $InstalledBinary
+    
+    Write-Host "Downloading to $Dest ..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $Dest -UseBasicParsing
+    Write-Host "Download complete!" -ForegroundColor Green
+    
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "  ClawDeckX $Version installed successfully! / 安装成功" -ForegroundColor Green
+    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Binary location / 二进制文件位置：$InstalledBinary" -ForegroundColor Cyan
+    $InstallDirForDisplay = Split-Path -Parent $InstalledBinary
+    Write-Host "Config & Data directory / 配置和数据目录：$(Join-Path $InstallDirForDisplay "data")" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "✓ Installed in current directory / 已安装在当前目录" -ForegroundColor Green
+    Write-Host ""
+    
+    # Ask if user wants to install Windows service
+    Write-Host "Would you like to install a Windows service? / 是否要安装 Windows 服务？" -ForegroundColor Yellow
+    Write-Host "  This enables auto-start on boot and background operation. / 这将启用开机自启动和后台运行。" -ForegroundColor Cyan
+    $installService = Read-Host "Install Windows service? / 安装 Windows 服务？ [Y/n]"
+    
+    if (-not ($installService -match '^[Nn]$')) {
+        Install-WindowsService
+    }
+    
+    # Always ask if user wants to run now
+    Write-Host ""
+    $response = Read-Host "Start ClawDeckX now? / 立即启动 ClawDeckX？ [Y/n]"
+    
+    if ($response -match '^[Nn]$') {
+        Write-Host ""
+        Write-Host "You can start it later with: / 稍后可以使用以下命令启动:" -ForegroundColor Yellow
+        Write-Host "  clawdeckx.exe" -ForegroundColor Green
+        if (Test-ServiceInstalled) {
+            Write-Host ""
+            Write-Host "Service management commands / 服务管理命令:" -ForegroundColor Cyan
+            Write-Host "  clawdeckx.exe service start   - Start service / 启动服务" -ForegroundColor Green
+            Write-Host "  clawdeckx.exe service stop    - Stop service / 停止服务" -ForegroundColor Green
+            Write-Host "  clawdeckx.exe service status  - Check status / 查看状态" -ForegroundColor Green
+            Write-Host "  clawdeckx.exe service uninstall - Remove service / 卸载服务" -ForegroundColor Green
+        }
+        exit 0
+    }
+    
+    Write-Host ">> Starting ClawDeckX..." -ForegroundColor Blue
+    Write-Host "----------------------------------------"
+    & $Dest
+}
+
+Write-Host ""
+
+$Repo = "ClawDeckX/ClawDeckX"
+$ApiUrl = "https://api.github.com/repos/$Repo/releases/latest"
+
+Write-Host ":: Fetching latest release..." -ForegroundColor Yellow
+
+try {
+    $Release = Invoke-RestMethod -Uri $ApiUrl -Headers @{ "User-Agent" = "ClawDeckX-Installer" }
+    $Version = $Release.tag_name
+} catch {
+    Write-Host "Error: Failed to fetch release info. Check your internet connection." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ":: ClawDeckX Installer - $Version ::" -ForegroundColor Cyan
+Write-Host ""
+
+# Check if already installed
+if (Test-ClawDeckXInstalled) {
+    Write-Host "✓ ClawDeckX is already installed / ClawDeckX 已安装" -ForegroundColor Green
+    $currentVersion = Get-CurrentVersion
+    Write-Host "Location / 位置：$InstalledBinary" -ForegroundColor Cyan
+    Write-Host "Current version / 当前版本：$currentVersion" -ForegroundColor Cyan
+    Write-Host "Latest version / 最新版本：$Version" -ForegroundColor Cyan
+    
+    # Check service status
+    if (Test-ServiceInstalled) {
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        Write-Host "Windows service / Windows 服务：$($service.Status)" -ForegroundColor Green
+    }
+    
+    Write-Host ""
+    
+    # Check if update is available (handle both with and without 'v' prefix and 'ClawDeckX' prefix)
+    $cleanCurrent = $currentVersion -replace '^ClawDeckX\s*', '' -replace '^v', ''
+    $cleanLatest = $Version -replace '^v', ''
+    $isLatest = ($cleanCurrent -eq $cleanLatest)
+    
+    # Check service status
+    $serviceRunning = $false
+    $serviceInstalled = $false
+    if (Test-ServiceInstalled) {
+        $serviceInstalled = $true
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -eq 'Running') {
+            $serviceRunning = $true
+        }
+    }
+    
+    Write-Host "" -ForegroundColor Cyan
+    Write-Host "What would you like to do? / 您想做什么？" -ForegroundColor Yellow
+    
+    if ($isLatest) {
+        Write-Host "✓ Already up to date! / 已是最新版本！" -ForegroundColor Green
+        Write-Host "  1) Re-download current version / 重新下载当前版本"
+    } else {
+        Write-Host "New version available! / 有新版本可用！" -ForegroundColor Yellow
+        Write-Host "  1) Update to latest version / 更新到最新版本"
+    }
+    
+    # Show service management options based on status
+    if ($serviceRunning) {
+        Write-Host "  2) Stop service / 停止服务"
+        Write-Host "  3) Uninstall / 卸载"
+        Write-Host "  4) Exit / 退出"
+        $maxChoice = 4
+    } else {
+        # Service installed but stopped
+        if ($serviceInstalled) {
+            Write-Host "  2) Start service / 启动服务"
+            Write-Host "  3) Uninstall / 卸载"
+            Write-Host "  4) Exit / 退出"
+            $maxChoice = 4
+        } else {
+            Write-Host "  2) Uninstall / 卸载"
+            Write-Host "  3) Exit / 退出"
+            $maxChoice = 3
+        }
+    }
+    
+    Write-Host ""
+    
+    $choice = Read-Host "Enter your choice [1-$maxChoice]"
+    
+    switch ($choice) {
+        "1" { Update-ClawDeckX }
+        "2" { 
+            if ($serviceRunning) {
+                Stop-WindowsService
+                Write-Host "" -ForegroundColor Green
+                Write-Host "Service stopped. You can restart it with: / 服务已停止。可以使用以下命令重新启动:" -ForegroundColor Cyan
+                Write-Host "  clawdeckx.exe service start" -ForegroundColor Green
+                exit 0
+            } elseif ($serviceInstalled) {
+                # Start service
+                Write-Host "" -ForegroundColor Cyan
+                Write-Host "Starting Windows service... / 正在启动 Windows 服务..." -ForegroundColor Blue
+                
+                try {
+                    Start-Service -Name $ServiceName
+                    Start-Sleep -Seconds 2
+                    
+                    $service = Get-Service -Name $ServiceName
+                    if ($service.Status -eq 'Running') {
+                        Write-Host "✓ Service started successfully / 服务启动成功" -ForegroundColor Green
+                    } else {
+                        Write-Host "⚠ Service failed to start / 服务启动失败" -ForegroundColor Yellow
+                    }
+                } catch {
+                    Write-Host "⚠ Error starting service / 启动服务时出错" -ForegroundColor Yellow
+                    Write-Host "  $_" -ForegroundColor Cyan
+                }
+                
+                Write-Host ""
+                Write-Host "You can access ClawDeckX at: / 可以访问 ClawDeckX:" -ForegroundColor Cyan
+                Write-Host "  http://localhost:18791" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "Service management commands / 服务管理命令:" -ForegroundColor Cyan
+                Write-Host "  clawdeckx.exe service status  - Check status / 查看状态" -ForegroundColor Green
+                Write-Host "  clawdeckx.exe service stop    - Stop service / 停止服务" -ForegroundColor Green
+                exit 0
+            } else {
+                Uninstall-ClawDeckX
+            }
+        }
+        "3" { 
+            # Always uninstall (option 3 is always "Uninstall")
+            Uninstall-ClawDeckX
+        }
+        "4" {
+            # Always exit (option 4 is always "Exit")
+            Write-Host "Exiting / 退出" -ForegroundColor Yellow
+            exit 0
+        }
+        default {
+            Write-Host "Exiting / 退出" -ForegroundColor Yellow
+            exit 0
+        }
+    }
+}
+
+# Detect architecture and download
+Write-Host "Detected: Windows/$Arch" -ForegroundColor Green
+
+# Continue to download and install
+Download-And-Install

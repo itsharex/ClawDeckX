@@ -38,11 +38,13 @@ func ConfigPath() string {
 	if custom := strings.TrimSpace(os.Getenv("OCD_CONFIG")); custom != "" {
 		return custom
 	}
-	home, err := os.UserHomeDir()
+	// Use legacy scheme: ./data/ClawDeckX.json (same directory as executable)
+	exe, err := os.Executable()
 	if err != nil {
-		return ".ClawDeckX.json"
+		return "./data/ClawDeckX.json"
 	}
-	return filepath.Join(home, ".openclaw", "ClawDeckX.json")
+	exeDir := filepath.Dir(exe)
+	return filepath.Join(exeDir, "data", "ClawDeckX.json")
 }
 
 func Load(path string) (Config, error) {

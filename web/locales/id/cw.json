@@ -170,7 +170,7 @@
     "Setelah dibuat, scan kode QR untuk menambahkan bot dan mulai mengobrol"
   ],
   "wecomPitfall": "⚠️ Kesalahan umum: 1) URL Callback harus dapat diakses publik, format: http://IP:18789/wecom; 2) Harus konfigurasikan OpenClaw dan mulai gateway terlebih dahulu, lalu klik \"Buat\" di WeCom — jika tidak verifikasi gagal; 3) encodingAESKey harus tepat 43 karakter; 4) Pastikan firewall/grup keamanan mengizinkan port 18789",
-  "wecomHelpUrl": "https://work.weixin.qq.com",
+  "wecomHelpUrl": "https://open.work.weixin.qq.com/help/wap/detail?docid=21657",
   "wecom_kfPrep": [
     "Instal plugin WeCom App: openclaw plugins install @openclaw-china/wecom-app (atau bundle lengkap @openclaw-china/channels)",
     "Masuk ke konsol admin WeCom work.weixin.qq.com",

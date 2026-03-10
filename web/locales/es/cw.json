@@ -170,7 +170,7 @@
     "Tras la creación, escanee el código QR para añadir el bot y comenzar a chatear"
   ],
   "wecomPitfall": "⚠️ Errores comunes: 1) URL callback debe ser accesible públicamente: http://IP:18789/wecom; 2) Configure OpenClaw primero, luego cree en WeCom; 3) encodingAESKey = 43 caracteres; 4) Abra el puerto 18789",
-  "wecomHelpUrl": "https://work.weixin.qq.com",
+  "wecomHelpUrl": "https://open.work.weixin.qq.com/help/wap/detail?docid=21657",
   "wecom_kfPrep": [
     "Instale el plugin WeCom App: openclaw plugins install @openclaw-china/wecom-app (o paquete completo @openclaw-china/channels)",
     "Inicie sesión en la consola de admin de WeCom work.weixin.qq.com",

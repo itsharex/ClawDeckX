@@ -161,7 +161,7 @@
   "dingtalkPitfall": "فعّل صلاحيات Stream للبوت في وحدة تحكم DingTalk",
   "dingtalkHelpUrl": "دليل إعداد DingTalk",
   "wecomPrep": [
-    "Install WeCom plugin: openclaw plugins install @openclaw-china/wecom (or full bundle @openclaw-china/channels)",
+    "Install WeCom plugin: openclaw plugins install @wecom/wecom-openclaw-plugin",
     "Visit work.weixin.qq.com to register and sign in to WeCom admin console",
     "In App Management → Smart Bot, create a bot",
     "Set callback URL: http://<your-ip-or-domain>:18789/wecom (ensure port 18789 is accessible)",

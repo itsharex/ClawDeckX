@@ -170,7 +170,7 @@
     "После создания отсканируйте QR-код для добавления бота и начните общение"
   ],
   "wecomPitfall": "⚠️ Частые ошибки: 1) URL callback должен быть публичным: http://IP:18789/wecom; 2) Сначала настройте OpenClaw; 3) encodingAESKey = 43 символа; 4) Откройте порт 18789",
-  "wecomHelpUrl": "https://work.weixin.qq.com",
+  "wecomHelpUrl": "https://open.work.weixin.qq.com/help/wap/detail?docid=21657",
   "wecom_kfPrep": [
     "Установите плагин WeCom App: openclaw plugins install @openclaw-china/wecom-app (или полный пакет @openclaw-china/channels)",
     "Войдите в консоль администратора WeCom work.weixin.qq.com",

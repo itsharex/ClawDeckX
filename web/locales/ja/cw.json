@@ -170,7 +170,7 @@
     "作成後、QRコードをスキャンしてBotを追加しチャットを開始"
   ],
   "wecomPitfall": "⚠️ よくある落とし穴：1) コールバックURLはパブリックアクセス可能なアドレスである必要があります。形式：http://IP:18789/wecom；2) OpenClawの設定とゲートウェイ起動を先に完了してから、WeCom管理画面で「作成」をクリック。そうしないと検証失敗；3) encodingAESKeyは43文字である必要があります；4) サーバーのファイアウォール/セキュリティグループで18789ポートを許可してください",
-  "wecomHelpUrl": "https://work.weixin.qq.com",
+  "wecomHelpUrl": "https://open.work.weixin.qq.com/help/wap/detail?docid=21657",
   "wecom_kfPrep": [
     "WeCom Appプラグインをインストール：openclaw plugins install @openclaw-china/wecom-app（またはフルバンドル @openclaw-china/channels）",
     "WeCom管理コンソール work.weixin.qq.comにログイン",

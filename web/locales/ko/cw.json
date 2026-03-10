@@ -170,7 +170,7 @@
     "생성 후 QR 코드를 스캔하여 Bot을 추가하고 채팅을 시작하세요"
   ],
   "wecomPitfall": "⚠️ 주의: 1) 콜백 URL은 공개 접근 가능 주소여야 함, 형식: http://IP:18789/wecom; 2) OpenClaw 설정 및 게이트웨이 시작 후 WeCom에서 '만들기' 클릭, 아니면 검증 실패; 3) encodingAESKey는 43자여야 함; 4) 방화벽/보안 그룹에서 18789 포트 허용 필요",
-  "wecomHelpUrl": "https://work.weixin.qq.com",
+  "wecomHelpUrl": "https://open.work.weixin.qq.com/help/wap/detail?docid=21657",
   "wecom_kfPrep": [
     "WeCom 자체 앱 플러그인 설치: openclaw plugins install @openclaw-china/wecom-app (또는 전체 번들 @openclaw-china/channels)",
     "WeCom 관리 콘솔 work.weixin.qq.com에 로그인하세요",

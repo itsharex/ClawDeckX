@@ -21,7 +21,6 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 # Constants
 $BINARY_NAME = "clawdeckx.exe"
 $TASK_NAME = "ClawDeckX"
-$DEFAULT_PORT = 18791
 
 # Script-level variables
 $script:INSTALLED_LOCATION = ""
@@ -31,7 +30,6 @@ $script:DATA_DIR = ""
 $script:INSTALLED_BINARY = ""
 $script:TASK_INSTALLED = $false
 $script:SERVICE_RUNNING = $false
-$script:PORT = $DEFAULT_PORT
 
 # -- Color helpers -------------------------------------------------------------
 function Write-C {
@@ -179,32 +177,9 @@ function Stop-ClawDeckXService {
 function Stop-ClawDeckXProcess {
     $procs = Get-Process -Name "clawdeckx" -ErrorAction SilentlyContinue
     if ($procs) {
-        Write-C "Killing clawdeckx process... / 正在终止 clawdeckx 进程..." Blue
+        Write-C "Killing process... / 正在终止进程..." Blue
         $procs | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
-    }
-    # Also kill any process holding the configured port (e.g. stale node.exe from dev)
-    Stop-PortProcess $script:PORT
-}
-
-function Stop-PortProcess {
-    param([int]$Port)
-    try {
-        $line = netstat -ano | Select-String ":$Port\s" | Select-Object -First 1
-        if ($line) {
-            $parts = $line.ToString().Trim() -split '\s+'
-            $pid = [int]$parts[-1]
-            if ($pid -gt 0) {
-                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-                if ($proc) {
-                    Write-C "Killing process on port ${Port}: $($proc.ProcessName) (PID $pid) / 正在终止占用端口 ${Port} 的进程: $($proc.ProcessName) (PID $pid)" Yellow
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 1
-                }
-            }
-        }
-    } catch {
-        $null = $_
     }
 }
 
@@ -214,38 +189,15 @@ function Start-ClawDeckXService {
     $binaryPath = $script:INSTALLED_LOCATION
     if (-not $binaryPath) { $binaryPath = $script:INSTALLED_BINARY }
 
-    # Kill any stale process or port holder to avoid conflict
-    if (Test-ProcessRunning) {
-        Write-C "Stopping existing instance... / 正在停止已有实例..." Yellow
-        Stop-ClawDeckXProcess
-        Start-Sleep -Seconds 1
-    } else {
-        # Process name not found, but port might be held by another process
-        Stop-PortProcess $script:PORT
-    }
-
     Write-C "Launching process... / 正在启动进程..." Blue
     try {
-        $workDir = Split-Path $binaryPath -Parent
-        $errFile = Join-Path $workDir ".clawdeckx-start-err.log"
-        $proc = Start-Process -FilePath $binaryPath -WorkingDirectory $workDir -WindowStyle Hidden -RedirectStandardError $errFile -PassThru
+        Start-Process -FilePath $binaryPath -WorkingDirectory (Split-Path $binaryPath -Parent) -WindowStyle Hidden
         Start-Sleep -Seconds 3
-        if (-not $proc.HasExited -and (Test-ProcessRunning)) {
+        if (Test-ProcessRunning) {
             Write-C "✓ ClawDeckX started successfully / ClawDeckX 启动成功" Green
-            Remove-Item $errFile -Force -ErrorAction SilentlyContinue
             return $true
         } else {
             Write-C "⚠ Failed to start ClawDeckX / 启动 ClawDeckX 失败" Yellow
-            if (Test-Path $errFile) {
-                $errMsg = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
-                if ($errMsg) {
-                    Write-C "  Error output / 错误输出:" Red
-                    Write-C "  $errMsg" Red
-                }
-                Remove-Item $errFile -Force -ErrorAction SilentlyContinue
-            }
-            Write-C "  Try running manually to see full output: / 尝试手动运行查看完整输出:" Yellow
-            Write-C "  .\$BINARY_NAME" Green
             return $false
         }
     } catch {
@@ -335,7 +287,7 @@ function Update-ClawDeckX {
         if ($started -and (Test-ProcessRunning)) {
             Write-Host ""
             Write-C "You can access ClawDeckX at: / 可以访问 ClawDeckX：" Cyan
-            Write-C "  http://localhost:$($script:PORT)" Green
+            Write-C "  http://localhost:18791" Green
             Write-Host ""
             if (Test-AutoStartInstalled) { Show-ServiceCommands }
         }
@@ -477,38 +429,6 @@ function Invoke-Uninstall {
 }
 
 # -- Helpers -------------------------------------------------------------------
-function Get-ConfigPort {
-    # Priority: OCD_PORT env > data/ClawDeckX.json server.port > DEFAULT_PORT
-    if ($env:OCD_PORT) {
-        try {
-            $p = [int]$env:OCD_PORT
-            if ($p -gt 0 -and $p -le 65535) { return $p }
-        } catch { $null = $_ }
-    }
-
-    # Try to read from config file
-    $configFile = $null
-    if ($script:INSTALLED_LOCATION) {
-        $configFile = Join-Path (Split-Path $script:INSTALLED_LOCATION -Parent) "data\ClawDeckX.json"
-    } elseif ($script:INSTALLED_BINARY) {
-        $configFile = Join-Path (Split-Path $script:INSTALLED_BINARY -Parent) "data\ClawDeckX.json"
-    } else {
-        $configFile = Join-Path $PWD "data\ClawDeckX.json"
-    }
-
-    if ($configFile -and (Test-Path $configFile)) {
-        try {
-            $json = Get-Content $configFile -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-            if ($json.server -and $json.server.port) {
-                $p = [int]$json.server.port
-                if ($p -gt 0 -and $p -le 65535) { return $p }
-            }
-        } catch { $null = $_ }
-    }
-
-    return $DEFAULT_PORT
-}
-
 function Get-Architecture {
     switch ($env:PROCESSOR_ARCHITECTURE) {
         "AMD64"   { return "amd64" }
@@ -577,14 +497,10 @@ Write-Host ""
 
 # -- Already installed? --------------------------------------------------------
 if (Test-Installed) {
-    # Resolve port from config file
-    $script:PORT = Get-ConfigPort
-
     Write-C "✓ ClawDeckX is already installed / ClawDeckX 已安装" Green
     Write-C "Location / 位置：        $($script:INSTALLED_LOCATION)" Cyan
     Write-C "Current version / 当前版本： $($script:CURRENT_VERSION)" Cyan
     Write-C "Latest version / 最新版本：  $LATEST_VERSION" Cyan
-    Write-C "Port / 端口：            $($script:PORT)" Cyan
 
     $script:SERVICE_RUNNING = $false
     if (Test-AutoStartInstalled) {
@@ -645,7 +561,7 @@ if (Test-Installed) {
                 if (Test-ProcessRunning) {
                     Write-Host ""
                     Write-C "You can access ClawDeckX at: / 可以访问 ClawDeckX：" Cyan
-                    Write-C "  http://localhost:$($script:PORT)" Green
+                    Write-C "  http://localhost:18791" Green
                     Write-Host ""
                     Show-ServiceCommands
                 }
@@ -667,6 +583,20 @@ if (Test-Installed) {
             Write-C "Exiting / 退出" Yellow
             return
         }
+    }
+}
+
+# -- Check admin warning -------------------------------------------------------
+if (Test-IsAdmin) {
+    Write-Host ""
+    Write-C "⚠ Warning: Running as Administrator is not recommended" Red
+    Write-C "  不建议以管理员身份运行，可能导致权限和安全问题" Red
+    Write-Host ""
+    Write-C "You can run this script as a normal user." Yellow
+    Write-C "可以以普通用户身份运行此脚本。" Yellow
+    Write-Host ""
+    if (-not (Read-YesNo "Continue as Administrator? / 以管理员身份继续?" $false)) {
+        return
     }
 }
 
@@ -718,9 +648,6 @@ Write-C "Config & Data directory / 配置和数据目录： $(Join-Path (Split-P
 Write-Host ""
 Write-C "✓ Installed in current directory / 已安装在当前目录" Green
 Write-Host ""
-
-# Resolve port (config may not exist yet on fresh install, will use default)
-$script:PORT = Get-ConfigPort
 
 # Ask if user wants to install auto-start service
 $serviceJustInstalled = $false

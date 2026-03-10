@@ -1085,7 +1085,19 @@ func (h *WizardHandler) validateChannelTokens(channel string, tokens map[string]
 		if tokens["appSecret"] == "" {
 			return fmt.Errorf("Feishu App Secret is required")
 		}
-	case "wecom", "wecom_kf":
+	case "wecom":
+		// Long connection mode: botId + botSecret
+		// Webhook mode: corpId + secret + token + encodingAESKey
+		if tokens["botId"] == "" && tokens["corpId"] == "" {
+			return fmt.Errorf("WeCom Bot ID (long connection) or Corp ID (webhook) is required")
+		}
+		if tokens["botId"] != "" && tokens["botSecret"] == "" {
+			return fmt.Errorf("WeCom Bot Secret is required when using Bot ID")
+		}
+		if tokens["corpId"] != "" && tokens["secret"] == "" {
+			return fmt.Errorf("WeCom Secret is required when using Corp ID")
+		}
+	case "wecom_kf":
 		if tokens["corpId"] == "" {
 			return fmt.Errorf("WeCom Corp ID is required")
 		}
