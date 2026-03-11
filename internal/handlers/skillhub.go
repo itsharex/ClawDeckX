@@ -33,6 +33,20 @@ type GatewayClient interface {
 	Request(method string, params interface{}) (json.RawMessage, error)
 }
 
+// managedSkillsDir returns the openclaw managed skills directory (~/.openclaw/skills).
+// This is where the gateway's skills.status RPC scans for installed skills.
+func managedSkillsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	// Respect OPENCLAW_STATE_DIR if set
+	if dir := os.Getenv("OPENCLAW_STATE_DIR"); dir != "" {
+		return filepath.Join(dir, "skills")
+	}
+	return filepath.Join(home, ".openclaw", "skills")
+}
+
 // NewSkillHubHandler creates a new SkillHub handler
 func NewSkillHubHandler() *SkillHubHandler {
 	return &SkillHubHandler{
@@ -225,12 +239,13 @@ func (h *SkillHubHandler) InstallSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute skillhub install command
+	// Execute skillhub install command with --dir pointing to openclaw managed skills dir
+	skillsDir := managedSkillsDir()
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd.exe", "/c", "skillhub", "install", req.Slug)
+		cmd = exec.Command("cmd.exe", "/c", "skillhub", "install", "--dir", skillsDir, req.Slug)
 	} else {
-		cmd = exec.Command("skillhub", "install", req.Slug)
+		cmd = exec.Command("skillhub", "install", "--dir", skillsDir, req.Slug)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -365,11 +380,12 @@ func (h *SkillHubHandler) GetInstalledSkills(w http.ResponseWriter, r *http.Requ
 
 	// Source 2: SkillHub CLI "skillhub list" (skills installed via skillhub install)
 	func() {
+		skillsDir := managedSkillsDir()
 		var cmd *exec.Cmd
 		if runtime.GOOS == "windows" {
-			cmd = exec.Command("cmd.exe", "/c", "skillhub", "list")
+			cmd = exec.Command("cmd.exe", "/c", "skillhub", "list", "--dir", skillsDir)
 		} else {
-			cmd = exec.Command("skillhub", "list")
+			cmd = exec.Command("skillhub", "list", "--dir", skillsDir)
 		}
 		var stdout bytes.Buffer
 		cmd.Stdout = &stdout
