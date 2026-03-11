@@ -371,32 +371,16 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
     setCLIStatus('dismissed');
   }, []);
 
-  // Fetch installed skills from both gateway (openclaw built-in + ClawHub) and SkillHub CLI
+  // Fetch installed skills from backend (via OpenClaw Gateway skills.status RPC)
   const fetchInstalledSkills = useCallback(async () => {
-    const names = new Set<string>();
-    // Source 1: openclaw gateway skills.status RPC (bundled + managed + workspace)
     try {
-      const result = await gwApi.skills() as any;
-      const skills: any[] = result?.skills || (Array.isArray(result) ? result : []);
-      for (const s of skills) {
-        const name = s.name || s.skillKey || '';
-        if (name) names.add(name);
-      }
-    } catch {
-      // Gateway may not be connected
+      const result = await skillHubApi.getInstalledSkills();
+      setInstalledSkillNames(new Set(result.skills));
+    } catch (err) {
+      // Silently fail - installed status is not critical
+      console.debug('Failed to fetch installed skills:', err);
+      setInstalledSkillNames(new Set());
     }
-    // Source 2: SkillHub CLI installed skills
-    try {
-      const result = await skillHubApi.listInstalledSkills();
-      if (result?.available && Array.isArray(result.skills)) {
-        for (const s of result.skills) {
-          if (s.slug) names.add(s.slug);
-        }
-      }
-    } catch {
-      // SkillHub CLI may not be installed
-    }
-    setInstalledSkillNames(names);
   }, []);
 
   // Initial load
@@ -490,9 +474,6 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       handleCopyCLI(skill);
     }
   }, [cliStatus, handleCopyCLI]);
-
-  // Get installed skills status (placeholder for future implementation)
-  const [installedSkills, setInstalledSkills] = useState<Set<string>>(new Set());
 
   // Install skill via API (called after confirmation)
   const handleInstallSkill = useCallback(async (skill: SkillHubSkill) => {
