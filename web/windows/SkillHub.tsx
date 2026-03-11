@@ -239,13 +239,32 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
 
   const [cliStatus, setCLIStatus] = useState<'checking' | 'not-installed' | 'installing' | 'installed' | 'error' | 'dismissed'>('checking');
   const [cliError, setCLIError] = useState<string>('');
-  const [data, setData] = useState<SkillHubData | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Load cache immediately to avoid showing loading indicator
+  const initialCache = useMemo(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (!cached) return null;
+      const parsed: CacheData = JSON.parse(cached);
+      const age = Date.now() - parsed.timestamp;
+      const maxAge = CACHE_EXPIRY_HOURS * 60 * 60 * 1000;
+      if (age > maxAge) {
+        localStorage.removeItem(CACHE_KEY);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [data, setData] = useState<SkillHubData | null>(initialCache?.data || null);
+  const [loading, setLoading] = useState(!initialCache); // Only show loading if no cache
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'downloads' | 'stars'>('newest');
   const [showFeatured, setShowFeatured] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(initialCache?.timestamp || null);
   const [detailSkill, setDetailSkill] = useState<SkillHubSkill | null>(null);
   const [displayLimit, setDisplayLimit] = useState(60); // Initial load: 60 skills
 
@@ -281,17 +300,18 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
   // Fetch data
   const fetchData = useCallback(async (force = false) => {
     try {
-      // Try cache first (even when loading)
+      // Try cache first
       const cached = loadCache();
       if (!force && cached) {
-        setData(cached.data);
-        setLastUpdated(cached.timestamp);
-        setLoading(false);
+        // Cache exists, use it immediately (already loaded in initialCache)
+        // Don't show loading indicator, just return
         return;
       }
 
-      // If no cache or force refresh, show loading
-      setLoading(true);
+      // If no cache or force refresh, show loading only if we don't have data yet
+      if (!data || force) {
+        setLoading(true);
+      }
       
       const result = await skillHubApi.getData();
       setData(result);
@@ -302,7 +322,7 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       const errorMsg = err?.message || 'Unknown error';
       toast('error', `${sk.loadFailed || 'Load failed'}: ${errorMsg}`);
     }
-  }, [loadCache, saveCache, sk, toast]);
+  }, [loadCache, saveCache, sk, toast, data]);
 
   // Check CLI status
   const checkCLI = useCallback(async () => {
