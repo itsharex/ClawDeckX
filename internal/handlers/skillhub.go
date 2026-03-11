@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"ClawDeckX/internal/logger"
@@ -17,11 +18,20 @@ import (
 )
 
 // SkillHubHandler handles SkillHub-related operations
-type SkillHubHandler struct{}
+type SkillHubHandler struct {
+	// Server-side cache for proxied SkillHub data (avoids re-fetching 3-5MB JSON from CDN)
+	cacheMu   sync.Mutex
+	cacheData json.RawMessage
+	cacheURL  string
+	cacheTime time.Time
+	cacheTTL  time.Duration
+}
 
 // NewSkillHubHandler creates a new SkillHub handler
 func NewSkillHubHandler() *SkillHubHandler {
-	return &SkillHubHandler{}
+	return &SkillHubHandler{
+		cacheTTL: 1 * time.Hour,
+	}
 }
 
 // CLIStatus checks if SkillHub CLI is installed
@@ -165,7 +175,8 @@ bash "$INSTALLER" "$@"
 	}
 }
 
-// ProxyData proxies the SkillHub JSON data
+// ProxyData proxies the SkillHub JSON data with server-side caching.
+// The upstream JSON is ~3-5MB; without caching every page visit re-downloads it.
 // GET /api/v1/skillhub/data?url=<encoded_url>
 func (h *SkillHubHandler) ProxyData(w http.ResponseWriter, r *http.Request) {
 	dataURL := r.URL.Query().Get("url")
@@ -173,7 +184,18 @@ func (h *SkillHubHandler) ProxyData(w http.ResponseWriter, r *http.Request) {
 		dataURL = "https://cloudcache.tencentcs.com/qcloud/tea/app/data/skills.33d56946.json"
 	}
 
-	logger.Log.Info().Str("url", dataURL).Msg("proxying SkillHub data")
+	// Check server-side cache (same URL + within TTL)
+	h.cacheMu.Lock()
+	if h.cacheData != nil && h.cacheURL == dataURL && time.Since(h.cacheTime) < h.cacheTTL {
+		cached := h.cacheData
+		h.cacheMu.Unlock()
+		logger.Log.Debug().Str("url", dataURL).Msg("serving SkillHub data from server cache")
+		web.OK(w, r, json.RawMessage(cached))
+		return
+	}
+	h.cacheMu.Unlock()
+
+	logger.Log.Info().Str("url", dataURL).Msg("fetching SkillHub data from upstream")
 
 	// Create HTTP client with timeout (large file ~3-5MB, needs more time)
 	client := &http.Client{
@@ -203,13 +225,19 @@ func (h *SkillHubHandler) ProxyData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate JSON
-	var data interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		logger.Log.Error().Err(err).Msg("invalid JSON from SkillHub data source")
-		web.Fail(w, r, "INVALID_JSON", err.Error(), http.StatusBadGateway)
+	if !json.Valid(body) {
+		logger.Log.Error().Msg("invalid JSON from SkillHub data source")
+		web.Fail(w, r, "INVALID_JSON", "upstream returned invalid JSON", http.StatusBadGateway)
 		return
 	}
 
+	// Update server-side cache
+	h.cacheMu.Lock()
+	h.cacheData = json.RawMessage(body)
+	h.cacheURL = dataURL
+	h.cacheTime = time.Now()
+	h.cacheMu.Unlock()
+
 	// Return standard API response format
-	web.OK(w, r, data)
+	web.OK(w, r, json.RawMessage(body))
 }
