@@ -117,7 +117,7 @@ func (h *HostInfoHandler) CheckUpdate(w http.ResponseWriter, r *http.Request) {
 	// get current installed version
 	currentVersion := ""
 	if _, ver, ok := openclaw.DetectOpenClawBinary(); ok {
-		currentVersion = strings.TrimPrefix(ver, "v")
+		currentVersion = extractSemver(ver)
 	}
 
 	// query npm registry for latest version
@@ -234,6 +234,27 @@ func parseSemverParts(v string) ([3]int, bool) {
 		result[i], _ = strconv.Atoi(parts[i])
 	}
 	return result, hasPrerelease
+}
+
+// extractSemver extracts a clean semver string from raw version output.
+// e.g. "OpenCLaw 2026.3.8 (3caab92)" → "2026.3.8"
+// e.g. "v2026.3.8-beta.1" → "2026.3.8-beta.1"
+func extractSemver(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "v")
+	// Skip leading non-digit chars
+	for len(raw) > 0 && (raw[0] < '0' || raw[0] > '9') {
+		raw = raw[1:]
+	}
+	// Take until space or '(' (build metadata like "(3caab92)")
+	end := len(raw)
+	for i, c := range raw {
+		if c == ' ' || c == '(' {
+			end = i
+			break
+		}
+	}
+	return strings.TrimSpace(raw[:end])
 }
 
 // Get returns host machine info.
