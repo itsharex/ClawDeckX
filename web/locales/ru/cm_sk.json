@@ -150,7 +150,10 @@
     "marketSearchFailed": "Ошибка поиска",
     "marketRateLimited": "Превышен лимит запросов ClawHub API, попробуйте позже",
     "refreshMarket": "Обновить данные магазина",
-    "rateLimitInfo": "Лимит API"
+    "rateLimitInfo": "Лимит API",
+    "featuredSkills": "Рекомендуемые",
+    "lastUpdated": "Обновлено",
+    "installs": "Установки"
   },
   "skillsMarket": {
     "title": "Магазин навыков",

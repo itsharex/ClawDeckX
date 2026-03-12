@@ -150,7 +150,10 @@
     "marketSearchFailed": "Échec de la recherche",
     "marketRateLimited": "Limite de débit ClawHub API atteinte, veuillez réessayer plus tard",
     "refreshMarket": "Actualiser les données du marché",
-    "rateLimitInfo": "Limite de débit API"
+    "rateLimitInfo": "Limite de débit API",
+    "featuredSkills": "En vedette",
+    "lastUpdated": "Mis à jour",
+    "installs": "Installations"
   },
   "skillsMarket": {
     "title": "Marché des skills",

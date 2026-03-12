@@ -150,7 +150,10 @@
     "marketSearchFailed": "Pencarian gagal",
     "marketRateLimited": "ClawHub API dibatasi, coba lagi nanti",
     "refreshMarket": "Segarkan data pasar",
-    "rateLimitInfo": "Batas API"
+    "rateLimitInfo": "Batas API",
+    "featuredSkills": "Unggulan",
+    "lastUpdated": "Diperbarui",
+    "installs": "Instalasi"
   },
   "skillsMarket": {
     "title": "Pasar Skill",

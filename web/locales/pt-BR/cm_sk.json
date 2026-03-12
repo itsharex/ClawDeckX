@@ -150,7 +150,10 @@
     "marketSearchFailed": "Falha na busca",
     "marketRateLimited": "Limite de taxa da API ClawHub atingido, tente novamente mais tarde",
     "refreshMarket": "Atualizar dados do mercado",
-    "rateLimitInfo": "Limite de taxa API"
+    "rateLimitInfo": "Limite de taxa API",
+    "featuredSkills": "Destaques",
+    "lastUpdated": "Atualizado",
+    "installs": "Instalações"
   },
   "skillsMarket": {
     "title": "Mercado de Skills",

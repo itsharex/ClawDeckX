@@ -719,6 +719,12 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
                           {skill.downloads >= 1000 ? `${(skill.downloads / 1000).toFixed(1)}k` : skill.downloads}
                         </span>
                       )}
+                      {skill.installs > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-[10px]">check_circle</span>
+                          {skill.installs >= 1000 ? `${(skill.installs / 1000).toFixed(1)}k` : skill.installs}
+                        </span>
+                      )}
                       <a href={skill.homepage} target="_blank" rel="noopener noreferrer" className="ms-auto flex items-center text-primary/60 hover:text-primary transition-colors">
                         <span className="material-symbols-outlined text-[12px]">open_in_new</span>
                       </a>

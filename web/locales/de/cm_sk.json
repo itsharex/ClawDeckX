@@ -150,7 +150,10 @@
     "marketSearchFailed": "Suche fehlgeschlagen",
     "marketRateLimited": "ClawHub API Rate-Limit erreicht, bitte später erneut versuchen",
     "refreshMarket": "Marktdaten aktualisieren",
-    "rateLimitInfo": "API Rate-Limit"
+    "rateLimitInfo": "API Rate-Limit",
+    "featuredSkills": "Empfohlen",
+    "lastUpdated": "Aktualisiert",
+    "installs": "Installationen"
   },
   "skillsMarket": {
     "title": "Skill-Marktplatz",

@@ -150,7 +150,10 @@
     "marketSearchFailed": "खोज विफल",
     "marketRateLimited": "ClawHub API दर सीमित, कृपया बाद में पुनः प्रयास करें",
     "refreshMarket": "मार्केट डेटा रिफ्रेश करें",
-    "rateLimitInfo": "API दर सीमा"
+    "rateLimitInfo": "API दर सीमा",
+    "featuredSkills": "चुनिंदा",
+    "lastUpdated": "अपडेटेड",
+    "installs": "इंस्टॉल"
   },
   "skillsMarket": {
     "title": "स्किल्स मार्केट",

@@ -150,7 +150,10 @@
     "marketSearchFailed": "検索に失敗しました",
     "marketRateLimited": "ClawHub APIのレート制限に達しました。しばらくしてから再試行してください",
     "refreshMarket": "マーケットデータを更新",
-    "rateLimitInfo": "APIレート制限"
+    "rateLimitInfo": "APIレート制限",
+    "featuredSkills": "おすすめ",
+    "lastUpdated": "更新",
+    "installs": "インストール数"
   },
   "skillsMarket": {
     "title": "スキルマーケット",

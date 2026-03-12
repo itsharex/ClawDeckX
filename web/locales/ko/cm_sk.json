@@ -150,7 +150,10 @@
     "marketSearchFailed": "검색 실패",
     "marketRateLimited": "ClawHub API 속도 제한, 나중에 다시 시도하세요",
     "refreshMarket": "마켓 데이터 새로고침",
-    "rateLimitInfo": "API 속도 제한"
+    "rateLimitInfo": "API 속도 제한",
+    "featuredSkills": "추천",
+    "lastUpdated": "업데이트",
+    "installs": "설치 수"
   },
   "skillsMarket": {
     "title": "스킬 마켓",
