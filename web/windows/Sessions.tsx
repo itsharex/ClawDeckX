@@ -1230,6 +1230,38 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const REASONING_LEVELS = useMemo(() => ['', 'off', 'on', 'stream'], []);
   const SEND_POLICIES = useMemo(() => ['', 'allow', 'deny'], []);
 
+  // Available models for session override dropdown
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => {
+    if (!settingsOpen || !gwReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cfg = await gwApi.configGet() as any;
+        if (cancelled) return;
+        const providers = cfg?.models?.providers || cfg?.parsed?.models?.providers || cfg?.config?.models?.providers || {};
+        const opts: { value: string; label: string }[] = [
+          { value: '', label: c.inherit || 'Inherit' },
+        ];
+        const seen = new Set<string>();
+        for (const [pName, pCfg] of Object.entries(providers) as [string, any][]) {
+          const pModels = Array.isArray(pCfg?.models) ? pCfg.models : [];
+          for (const m of pModels) {
+            const id = typeof m === 'string' ? m : m?.id;
+            if (!id) continue;
+            const path = `${pName}/${id}`;
+            if (seen.has(path)) continue;
+            seen.add(path);
+            const name = typeof m === 'object' && m?.name ? m.name : id;
+            opts.push({ value: path, label: `${pName} / ${name}` });
+          }
+        }
+        setModelOptions(opts);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [settingsOpen, gwReady, c.inherit]);
+
   // Patch session override (real-time)
   const patchSession = useCallback(async (field: string, patch: Record<string, unknown>) => {
     if (!sessionKey || patchBusy) return;
@@ -1630,10 +1662,17 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                     {c.modelOverride || 'Model'}
                     {savedField === 'model' && <span className="material-symbols-outlined text-[11px] text-mac-green">check_circle</span>}
                   </span>
-                  <input defaultValue={activeSession.model || ''} disabled={patchBusy} key={`om-${sessionKey}`}
-                    placeholder={c.modelPlaceholder || 'e.g. anthropic/claude-sonnet-4-5'}
-                    onBlur={e => { const v = e.target.value.trim(); if (v !== (activeSession.model || '')) patchSession('model', { model: v || null }); }}
-                    className="w-full mt-0.5 px-2 py-1 rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                  {modelOptions.length > 1 ? (
+                    <CustomSelect value={activeSession.model || ''} disabled={patchBusy}
+                      onChange={v => patchSession('model', { model: v || null })}
+                      options={modelOptions}
+                      className="w-full mt-0.5 px-2 py-1 rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70" />
+                  ) : (
+                    <input defaultValue={activeSession.model || ''} disabled={patchBusy} key={`om-${sessionKey}`}
+                      placeholder={c.modelPlaceholder || 'e.g. anthropic/claude-sonnet-4-5'}
+                      onBlur={e => { const v = e.target.value.trim(); if (v !== (activeSession.model || '')) patchSession('model', { model: v || null }); }}
+                      className="w-full mt-0.5 px-2 py-1 rounded-lg bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-[10px] text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-primary/30" />
+                  )}
                 </label>
               </div>
             </div>
