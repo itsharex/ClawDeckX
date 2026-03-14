@@ -50,6 +50,8 @@ interface ChatMsg {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: unknown;
   timestamp?: number;
+  usage?: { input?: number; output?: number; totalTokens?: number; inputTokens?: number; outputTokens?: number; cacheRead?: number; cost?: { total?: number } };
+  cost?: { total?: number };
 }
 
 type ChatRunPhase = 'idle' | 'sending' | 'streaming' | 'error';
@@ -594,6 +596,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         role: m.role || 'assistant',
         content: m.content,
         timestamp: m.timestamp || m.ts,
+        ...(m.usage ? { usage: m.usage } : {}),
+        ...(m.cost ? { cost: m.cost } : {}),
       })));
     } catch {
       setMessages([]);
@@ -1955,23 +1959,33 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                           {c.resend || 'Edit'}
                         </button>
                       )}
-                      {/* Feedback + latency for assistant messages */}
+                      {/* Token usage + latency for assistant messages */}
                       {!isUser && !isSystem && !isTool && (
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setFeedbackMap(prev => ({ ...prev, [idx]: 'up' }))}
-                            className={`p-0.5 rounded transition-colors ${feedbackMap[idx] === 'up' ? 'text-primary' : 'text-slate-300 dark:text-white/15 hover:text-primary'}`}>
-                            <span className="material-symbols-outlined text-[12px]">thumb_up</span>
-                          </button>
-                          <button onClick={() => setFeedbackMap(prev => ({ ...prev, [idx]: 'down' }))}
-                            className={`p-0.5 rounded transition-colors ${feedbackMap[idx] === 'down' ? 'text-red-500' : 'text-slate-300 dark:text-white/15 hover:text-red-500'}`}>
-                            <span className="material-symbols-outlined text-[12px]">thumb_down</span>
-                          </button>
+                        <div className="flex items-center gap-1.5">
+                          {/* Per-message token badge */}
+                          {msg.usage && (() => {
+                            const u = msg.usage;
+                            const inTok = u.inputTokens ?? u.input ?? 0;
+                            const outTok = u.outputTokens ?? u.output ?? 0;
+                            const total = u.totalTokens ?? (inTok + outTok);
+                            const costVal = msg.cost?.total ?? u.cost?.total;
+                            if (total <= 0) return null;
+                            const fmtT = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+                            return (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-mono tabular-nums text-slate-300 dark:text-white/20" title={`In: ${inTok} Out: ${outTok}${u.cacheRead ? ` Cache: ${u.cacheRead}` : ''}${costVal ? ` Cost: $${costVal.toFixed(4)}` : ''}`}>
+                                <span className="material-symbols-outlined text-[10px]">token</span>
+                                {fmtT(total)}
+                                {costVal != null && costVal > 0 && <span className="text-emerald-400/60 ms-0.5">${costVal < 0.01 ? costVal.toFixed(4) : costVal.toFixed(2)}</span>}
+                              </span>
+                            );
+                          })()}
+                          {/* Response latency */}
                           {(() => {
                             const prevUserMsg = renderedMessages.slice(0, idx).reverse().find(m => m.role === 'user');
                             if (prevUserMsg?.timestamp && msg.timestamp) {
                               const latMs = msg.timestamp - prevUserMsg.timestamp;
                               if (latMs > 0 && latMs < 300_000) return (
-                                <span className="text-[9px] text-slate-300 dark:text-white/15 font-mono tabular-nums ms-1" title={c.latency || 'Response time'}>
+                                <span className="text-[9px] text-slate-300 dark:text-white/15 font-mono tabular-nums" title={c.latency || 'Response time'}>
                                   {latMs >= 1000 ? `${(latMs / 1000).toFixed(1)}s` : `${latMs}ms`}
                                 </span>
                               );

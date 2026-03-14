@@ -60,13 +60,20 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, input, result,
               <div className="text-[8px] font-bold uppercase text-slate-400 dark:text-white/25 mb-0.5">
                 {labels?.toolResult || 'Result'}
               </div>
-              <pre className={`text-[9px] font-mono rounded-lg p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all select-text cursor-text ${
-                isError
-                  ? 'text-red-500 dark:text-red-400/70 bg-red-50/50 dark:bg-red-500/[0.05]'
-                  : 'text-slate-500 dark:text-white/40 bg-slate-100/50 dark:bg-black/10'
-              }`}>
-                {result}
-              </pre>
+              {!isError && (!result.trim() || result.trim() === '(no output)') ? (
+                <div className="flex items-center gap-1 py-1 px-2 text-[9px] text-emerald-500/70 dark:text-emerald-400/50">
+                  <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                  <span className="font-medium">OK</span>
+                </div>
+              ) : (
+                <pre className={`text-[9px] font-mono rounded-lg p-2 overflow-auto max-h-40 whitespace-pre-wrap break-all select-text cursor-text ${
+                  isError
+                    ? 'text-red-500 dark:text-red-400/70 bg-red-50/50 dark:bg-red-500/[0.05]'
+                    : 'text-slate-500 dark:text-white/40 bg-slate-100/50 dark:bg-black/10'
+                }`}>
+                  {result}
+                </pre>
+              )}
             </div>
           )}
         </div>
