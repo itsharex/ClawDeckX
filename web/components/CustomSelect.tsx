@@ -96,7 +96,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                 className={`w-full flex items-center justify-between gap-1 text-start cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${className}`}
                 tabIndex={0}
             >
-                <span className="truncate flex-1">
+                <span className="truncate flex-1" title={selected ? selected.label : undefined}>
                     {selected ? selected.label : (placeholder || '—')}
                 </span>
                 <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/40 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}>
@@ -115,6 +115,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                         <button
                             key={o.value}
                             type="button"
+                            title={o.label}
                             onMouseEnter={() => setHl(idx)}
                             onClick={() => { onChange(o.value); setOpen(false); }}
                             className={`w-full text-start px-3 py-1.5 text-[11px] transition-colors truncate ${o.value === value
