@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"ClawDeckX/internal/logger"
 	"ClawDeckX/internal/openclaw"
 	"ClawDeckX/internal/web"
 )
@@ -298,34 +300,58 @@ func (h *GWProxyHandler) ConfigGetRemote(w http.ResponseWriter, r *http.Request)
 }
 
 // ConfigSetRemote updates remote OpenClaw config.
+// Retries automatically on optimistic concurrency conflict (INVALID_REQUEST: config changed).
 func (h *GWProxyHandler) ConfigSetRemote(w http.ResponseWriter, r *http.Request) {
 	var body map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		web.Fail(w, r, "INVALID_PARAMS", "invalid request body", http.StatusBadRequest)
 		return
 	}
-	// If caller sent { raw, baseHash? }, pass through directly.
-	// If caller sent { config }, serialize config to raw JSON string.
-	rpcParams := body
-	if _, hasRaw := body["raw"]; !hasRaw {
-		if cfg, hasConfig := body["config"]; hasConfig {
-			cfgJSON, jsonErr := json.Marshal(cfg)
-			if jsonErr != nil {
-				web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
-				return
-			}
-			rpcParams = map[string]interface{}{"raw": string(cfgJSON)}
-			if bh, ok := body["baseHash"]; ok {
-				rpcParams["baseHash"] = bh
+
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rpcParams := make(map[string]interface{})
+		for k, v := range body {
+			rpcParams[k] = v
+		}
+
+		// On retry, refresh baseHash from Gateway
+		if attempt > 0 {
+			freshHash := h.fetchFreshBaseHash()
+			if freshHash != "" {
+				rpcParams["baseHash"] = freshHash
 			}
 		}
-	}
-	data, err := h.client.RequestWithTimeout("config.set", rpcParams, 15*time.Second)
-	if err != nil {
-		web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
+
+		// If caller sent { config }, serialize to raw JSON string
+		if _, hasRaw := rpcParams["raw"]; !hasRaw {
+			if cfg, hasConfig := rpcParams["config"]; hasConfig {
+				cfgJSON, jsonErr := json.Marshal(cfg)
+				if jsonErr != nil {
+					web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
+					return
+				}
+				bh := rpcParams["baseHash"]
+				rpcParams = map[string]interface{}{"raw": string(cfgJSON)}
+				if bh != nil {
+					rpcParams["baseHash"] = bh
+				}
+			}
+		}
+
+		data, err := h.client.RequestWithTimeout("config.set", rpcParams, 15*time.Second)
+		if err != nil {
+			if isConfigConflictError(err) && attempt < maxRetries-1 {
+				logger.Config.Warn().Int("attempt", attempt+1).Msg("config.set conflict, retrying with fresh baseHash")
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
+			return
+		}
+		web.OKRaw(w, r, data)
 		return
 	}
-	web.OKRaw(w, r, data)
 }
 
 // ConfigReload triggers remote config hot-reload.
@@ -378,36 +404,9 @@ func (h *GWProxyHandler) SessionsHistory(w http.ResponseWriter, r *http.Request)
 }
 
 // SkillsConfigure configures a skill (enable/disable/env vars etc.).
+// Retries the full get→modify→set cycle on optimistic concurrency conflicts.
 func (h *GWProxyHandler) SkillsConfigure(w http.ResponseWriter, r *http.Request) {
-	// get current config
-	raw, err := h.client.Request("config.get", map[string]interface{}{})
-	if err != nil {
-		web.Fail(w, r, "GW_CONFIG_GET_FAILED", err.Error(), http.StatusBadGateway)
-		return
-	}
-
-	var wrapper map[string]interface{}
-	if json.Unmarshal(raw, &wrapper) != nil {
-		web.Fail(w, r, "GW_CONFIG_PARSE_FAILED", "failed to parse config response", http.StatusBadGateway)
-		return
-	}
-
-	var currentCfg map[string]interface{}
-	if parsed, ok := wrapper["parsed"]; ok {
-		if m, ok := parsed.(map[string]interface{}); ok {
-			currentCfg = m
-		}
-	} else if config, ok := wrapper["config"]; ok {
-		if m, ok := config.(map[string]interface{}); ok {
-			currentCfg = m
-		}
-	}
-	if currentCfg == nil {
-		web.Fail(w, r, "GW_CONFIG_PARSE_FAILED", "failed to parse current config", http.StatusBadGateway)
-		return
-	}
-
-	// parse request
+	// parse request body first (can only read r.Body once)
 	var params struct {
 		SkillKey string                 `json:"skillKey"`
 		Enabled  *bool                  `json:"enabled,omitempty"`
@@ -420,65 +419,109 @@ func (h *GWProxyHandler) SkillsConfigure(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// update skills.entries
-	skills, _ := currentCfg["skills"].(map[string]interface{})
-	if skills == nil {
-		skills = map[string]interface{}{}
-		currentCfg["skills"] = skills
-	}
-	entries, _ := skills["entries"].(map[string]interface{})
-	if entries == nil {
-		entries = map[string]interface{}{}
-		skills["entries"] = entries
-	}
-	entry, _ := entries[params.SkillKey].(map[string]interface{})
-	if entry == nil {
-		entry = map[string]interface{}{}
-	}
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// get current config (fresh on each attempt)
+		raw, err := h.client.Request("config.get", map[string]interface{}{})
+		if err != nil {
+			web.Fail(w, r, "GW_CONFIG_GET_FAILED", err.Error(), http.StatusBadGateway)
+			return
+		}
 
-	if params.Enabled != nil {
-		entry["enabled"] = *params.Enabled
-	}
-	if params.ApiKey != nil {
-		if *params.ApiKey == "" {
-			delete(entry, "apiKey")
-		} else {
-			entry["apiKey"] = *params.ApiKey
+		var wrapper map[string]interface{}
+		if json.Unmarshal(raw, &wrapper) != nil {
+			web.Fail(w, r, "GW_CONFIG_PARSE_FAILED", "failed to parse config response", http.StatusBadGateway)
+			return
 		}
-	}
-	if params.Env != nil {
-		if len(params.Env) == 0 {
-			delete(entry, "env")
-		} else {
-			entry["env"] = params.Env
-		}
-	}
-	if params.Config != nil {
-		if len(params.Config) == 0 {
-			delete(entry, "config")
-		} else {
-			entry["config"] = params.Config
-		}
-	}
-	entries[params.SkillKey] = entry
 
-	// save config
-	cfgJSON, jsonErr := json.Marshal(currentCfg)
-	if jsonErr != nil {
-		web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
+		var baseHash string
+		if h, ok := wrapper["hash"].(string); ok {
+			baseHash = h
+		}
+
+		var currentCfg map[string]interface{}
+		if parsed, ok := wrapper["parsed"]; ok {
+			if m, ok := parsed.(map[string]interface{}); ok {
+				currentCfg = m
+			}
+		} else if config, ok := wrapper["config"]; ok {
+			if m, ok := config.(map[string]interface{}); ok {
+				currentCfg = m
+			}
+		}
+		if currentCfg == nil {
+			web.Fail(w, r, "GW_CONFIG_PARSE_FAILED", "failed to parse current config", http.StatusBadGateway)
+			return
+		}
+
+		// apply skill changes to config
+		skills, _ := currentCfg["skills"].(map[string]interface{})
+		if skills == nil {
+			skills = map[string]interface{}{}
+			currentCfg["skills"] = skills
+		}
+		entries, _ := skills["entries"].(map[string]interface{})
+		if entries == nil {
+			entries = map[string]interface{}{}
+			skills["entries"] = entries
+		}
+		entry, _ := entries[params.SkillKey].(map[string]interface{})
+		if entry == nil {
+			entry = map[string]interface{}{}
+		}
+
+		if params.Enabled != nil {
+			entry["enabled"] = *params.Enabled
+		}
+		if params.ApiKey != nil {
+			if *params.ApiKey == "" {
+				delete(entry, "apiKey")
+			} else {
+				entry["apiKey"] = *params.ApiKey
+			}
+		}
+		if params.Env != nil {
+			if len(params.Env) == 0 {
+				delete(entry, "env")
+			} else {
+				entry["env"] = params.Env
+			}
+		}
+		if params.Config != nil {
+			if len(params.Config) == 0 {
+				delete(entry, "config")
+			} else {
+				entry["config"] = params.Config
+			}
+		}
+		entries[params.SkillKey] = entry
+
+		// save config with baseHash for optimistic concurrency
+		cfgJSON, jsonErr := json.Marshal(currentCfg)
+		if jsonErr != nil {
+			web.Fail(w, r, "CONFIG_SERIALIZE_FAILED", jsonErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		setParams := map[string]interface{}{
+			"raw": string(cfgJSON),
+		}
+		if baseHash != "" {
+			setParams["baseHash"] = baseHash
+		}
+		saveData, err := h.client.RequestWithTimeout("config.set", setParams, 15*time.Second)
+		if err != nil {
+			if isConfigConflictError(err) && attempt < maxRetries-1 {
+				logger.Config.Warn().Int("attempt", attempt+1).Str("skillKey", params.SkillKey).Msg("skills.configure config.set conflict, retrying")
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
+			return
+		}
+
+		web.OKRaw(w, r, saveData)
 		return
 	}
-	saveData, err := h.client.RequestWithTimeout("config.set", map[string]interface{}{
-		"raw": string(cfgJSON),
-	}, 15*time.Second)
-	if err != nil {
-		web.Fail(w, r, "GW_CONFIG_SET_FAILED", err.Error(), http.StatusBadGateway)
-		return
-	}
-
-	// Note: config.set already triggers automatic reload in the gateway, no separate reload needed.
-
-	web.OKRaw(w, r, saveData)
 }
 
 // SkillsConfigGet returns skill config (skills.entries).
@@ -517,6 +560,27 @@ func (h *GWProxyHandler) SkillsConfigGet(w http.ResponseWriter, r *http.Request)
 	web.OK(w, r, map[string]interface{}{
 		"entries": entries,
 	})
+}
+
+// isConfigConflictError checks if the error is an optimistic concurrency conflict
+// from the Gateway ("config changed since last load").
+func isConfigConflictError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "config changed since last load")
+}
+
+// fetchFreshBaseHash fetches a fresh config snapshot from Gateway and returns its hash.
+func (h *GWProxyHandler) fetchFreshBaseHash() string {
+	data, err := h.client.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
+	if err != nil {
+		return ""
+	}
+	var result map[string]interface{}
+	if json.Unmarshal(data, &result) == nil {
+		if h, ok := result["hash"].(string); ok {
+			return h
+		}
+	}
+	return ""
 }
 
 // slowMethods are RPC methods that need longer timeouts (install/update etc.).

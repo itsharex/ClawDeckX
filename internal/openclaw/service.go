@@ -347,32 +347,55 @@ func (s *Service) Restart() error {
 }
 
 func (s *Service) gwClientRestart() error {
-	cfgData, err := s.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
-	if err != nil {
-		return fmt.Errorf(i18n.T(i18n.MsgErrGetGatewayConfigFailed), err)
-	}
-	var baseHash string
-	if len(cfgData) > 0 {
-		var result map[string]interface{}
-		if err := json.Unmarshal(cfgData, &result); err == nil {
-			if h, ok := result["hash"].(string); ok {
-				baseHash = h
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		cfgData, err := s.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 10*time.Second)
+		if err != nil {
+			return fmt.Errorf(i18n.T(i18n.MsgErrGetGatewayConfigFailed), err)
+		}
+		var baseHash string
+		var rawConfig string
+		if len(cfgData) > 0 {
+			var result map[string]interface{}
+			if err := json.Unmarshal(cfgData, &result); err == nil {
+				if h, ok := result["hash"].(string); ok {
+					baseHash = h
+				}
+				if parsed, ok := result["parsed"]; ok {
+					if b, err := json.Marshal(parsed); err == nil {
+						rawConfig = string(b)
+					}
+				}
+				if rawConfig == "" {
+					if raw, ok := result["raw"].(string); ok {
+						rawConfig = raw
+					}
+				}
 			}
 		}
+		if rawConfig == "" {
+			rawConfig = "{}"
+		}
+		params := map[string]interface{}{
+			"raw":            rawConfig,
+			"restartDelayMs": 0,
+			"note":           "ClawDeckX restart",
+		}
+		if baseHash != "" {
+			params["baseHash"] = baseHash
+		}
+		_, err = s.gwClient.RequestWithTimeout("config.apply", params, 15*time.Second)
+		if err != nil {
+			if strings.Contains(err.Error(), "config changed since last load") && attempt < maxRetries-1 {
+				logger.Gateway.Warn().Int("attempt", attempt+1).Msg("config.apply conflict, retrying")
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			return fmt.Errorf(i18n.T(i18n.MsgErrGatewayRestartFailed), err)
+		}
+		return nil
 	}
-	params := map[string]interface{}{
-		"raw":            "{}",
-		"restartDelayMs": 0,
-		"note":           "ClawDeckX restart",
-	}
-	if baseHash != "" {
-		params["baseHash"] = baseHash
-	}
-	_, err = s.gwClient.RequestWithTimeout("config.patch", params, 15*time.Second)
-	if err != nil {
-		return fmt.Errorf(i18n.T(i18n.MsgErrGatewayRestartFailed), err)
-	}
-	return nil
+	return fmt.Errorf(i18n.T(i18n.MsgErrGatewayRestartFailed), errors.New("max retries exceeded"))
 }
 
 func (s *Service) ensureContainerName() string {
