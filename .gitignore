@@ -70,3 +70,8 @@ templates/cloudflare-pages/
 
 # Claude
 .claude/
+
+# Local AI/dev reference docs (not for remote)
+AGENTS.md
+COMMIT_CONVENTION.md
+.editorconfig

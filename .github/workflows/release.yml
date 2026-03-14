@@ -97,12 +97,26 @@ jobs:
       - name: Display downloaded files
         run: ls -R artifacts
 
+      - name: Read release notes
+        id: release_notes
+        run: |
+          if [ -f "RELEASE_NOTES.md" ]; then
+            echo "has_notes=true" >> $GITHUB_OUTPUT
+            # Use delimiter to handle multiline content
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            cat RELEASE_NOTES.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_notes=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/**/*
-          generate_release_notes: true
+          body: ${{ steps.release_notes.outputs.has_notes == 'true' && steps.release_notes.outputs.body || '' }}
+          generate_release_notes: ${{ steps.release_notes.outputs.has_notes != 'true' }}
           draft: false
           prerelease: false
         env:
