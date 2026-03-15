@@ -238,7 +238,7 @@
   "capOpenPath": "分區：{section}",
   "capNotConfigured": "未配置",
   "capOkFull": "目前已開放全部工具。",
-  "capProfileRecommend": "建議將 tools.profile 設為 full，或刪除此項以恢復預設配置。",
+  "capProfileRecommend": "目前 tools.profile 並非 full。若要完整使用全部功能，可以開啟 full，但這會放開更多工具能力並帶來更高風險，請在確認安全後再啟用。",
   "capAllowOk": "目前沒有工具白名單限制。",
   "capAllowRecommend": "請檢查 tools.allow。未出現在允許列表中的工具將不可用。",
   "capDenyOk": "目前沒有禁用高影響工具。",

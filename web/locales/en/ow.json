@@ -238,7 +238,7 @@
   "capOpenPath": "Section: {section}",
   "capNotConfigured": "Not configured",
   "capOkFull": "All tools are available.",
-  "capProfileRecommend": "Set tools.profile to full, or remove it to restore the default profile.",
+  "capProfileRecommend": "The current tools.profile is not full. If you need complete access to all features, you can enable full, but it unlocks more tool capabilities and carries higher risk. Only enable it after confirming the safety implications.",
   "capAllowOk": "No tool whitelist is limiting capabilities.",
   "capAllowRecommend": "Review tools.allow. Anything not on the allow list will be unavailable.",
   "capDenyOk": "No high-impact tools are denied.",
