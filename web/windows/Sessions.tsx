@@ -2653,6 +2653,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           liveElapsed: liveElapsed,
           runPhase: runPhase,
         }}
+        onModelClick={() => setSettingsOpen(true)}
       />
       {/* Inject System Message Modal */}
       {injectOpen && (

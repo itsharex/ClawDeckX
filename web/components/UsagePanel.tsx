@@ -20,12 +20,13 @@ interface UsagePanelProps {
   loadUsage: (key: string) => Promise<any>;
   labels: Record<string, string>;
   session?: SessionInfo;
+  onModelClick?: () => void;
 }
 
 const fmtTok = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n || 0);
 const fmtCost = (n: number) => n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toFixed(4)}` : '$0';
 
-export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loadUsage, labels: a, session: s }) => {
+export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loadUsage, labels: a, session: s, onModelClick }) => {
   const [usage, setUsage] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,10 +102,17 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
         {s?.model && (
           <div>
             <div className="text-[10px] font-bold text-slate-400 dark:text-white/30 uppercase mb-1.5">{a.model || 'Model'}</div>
-            <div className="px-2 py-1.5 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/10">
-              <div className="text-[11px] font-bold text-purple-600 dark:text-purple-400 truncate">{s.model}</div>
-              {s.modelProvider && <div className="text-[10px] text-slate-400 dark:text-white/25 mt-0.5">{s.modelProvider}</div>}
-            </div>
+            <button type="button" onClick={onModelClick}
+              className="w-full text-start px-2 py-1.5 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/10
+                         hover:from-purple-500/15 hover:to-blue-500/15 hover:border-purple-500/20 transition-all cursor-pointer group">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold text-purple-600 dark:text-purple-400 truncate">{s.model}</div>
+                  {s.modelProvider && <div className="text-[10px] text-slate-400 dark:text-white/25 mt-0.5">{s.modelProvider}</div>}
+                </div>
+                <span className="material-symbols-outlined text-[12px] text-purple-400/50 group-hover:text-purple-400 transition shrink-0 ms-1">swap_horiz</span>
+              </div>
+            </button>
           </div>
         )}
 
