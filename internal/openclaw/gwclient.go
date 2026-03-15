@@ -92,15 +92,15 @@ type GWEventHandler func(event string, payload json.RawMessage)
 const restartGracePeriod = 30 * time.Second
 
 type GWClient struct {
-	cfg       GWClientConfig
-	conn      *websocket.Conn
-	mu        sync.Mutex
-	pending   map[string]chan *ResponseFrame
-	connected bool
-	closed    bool
-	stopCh    chan struct{}
-	onEvent   GWEventHandler
-	lastError string // last connection/auth error for diagnostics
+	cfg           GWClientConfig
+	conn          *websocket.Conn
+	mu            sync.Mutex
+	pending       map[string]chan *ResponseFrame
+	connected     bool
+	closed        bool
+	stopCh        chan struct{}
+	onEvent       GWEventHandler
+	lastError     string    // last connection/auth error for diagnostics
 	gwVersion     string    // gateway version fetched after connect
 	gwUptimeMs    int64     // gateway uptime from hello-ok snapshot
 	gwConnectedAt time.Time // when we received hello-ok (for local elapsed calc)
@@ -426,20 +426,20 @@ func (c *GWClient) ConnectionStatus() map[string]interface{} {
 	c.healthMu.Unlock()
 
 	return map[string]interface{}{
-		"connected":          connected,
-		"host":               host,
-		"port":               port,
-		"reconnect_count":    reconnects,
-		"backoff_ms":         backoff,
-		"last_error":         lastErr,
-		"health_enabled":     healthEnabled,
-		"fail_count":         failCount,
-		"max_fails":          maxFails,
-		"interval_sec":       intervalSec,
-		"last_ok":            lastOK,
-		"grace_until":        graceStr,
-		"version":            c.gwVersion,
-		"gateway_uptime_ms":  gwUptimeMs,
+		"connected":         connected,
+		"host":              host,
+		"port":              port,
+		"reconnect_count":   reconnects,
+		"backoff_ms":        backoff,
+		"last_error":        lastErr,
+		"health_enabled":    healthEnabled,
+		"fail_count":        failCount,
+		"max_fails":         maxFails,
+		"interval_sec":      intervalSec,
+		"last_ok":           lastOK,
+		"grace_until":       graceStr,
+		"version":           c.gwVersion,
+		"gateway_uptime_ms": gwUptimeMs,
 	}
 }
 
