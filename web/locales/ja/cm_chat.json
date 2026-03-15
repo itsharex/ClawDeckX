@@ -105,6 +105,7 @@
     "toolsExpand": "ツールを展開",
     "toolsCollapse": "ツールを折りたたむ",
     "fastMode": "高速",
+    "wsReconnected": "再接続しました",
     "loading": "読込中",
     "confirmDeleteSessionMsg": "{count}件の期限切れセッションを削除しますか？この操作は元に戻せません。",
     "repair": "セッション修復",

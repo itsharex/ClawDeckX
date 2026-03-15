@@ -106,6 +106,7 @@
     "toolsExpand": "Expand tools",
     "toolsCollapse": "Collapse tools",
     "fastMode": "Fast",
+    "wsReconnected": "Reconnected",
     "loading": "Loading",
     "repair": "Session Repair",
     "repairDesc": "Diagnose and fix session issues",

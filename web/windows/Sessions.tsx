@@ -69,6 +69,11 @@ interface LiveToolCall {
   phase: 'start' | 'running' | 'done';
 }
 
+const WAITING_PHRASES = [
+  'Pondering', 'Conjuring', 'Noodling', 'Moseying', 'Hobnobbing',
+  'Kerfuffling', 'Dillydallying', 'Twiddling thumbs', 'Bamboozling',
+];
+
 function appendMessageDedup(
   prev: ChatMsg[],
   next: ChatMsg,
@@ -154,6 +159,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [wsConnected, setWsConnected] = useState(false);
   const [wsError, setWsError] = useState<string | null>(null);
   const [wsConnecting, setWsConnecting] = useState(true);
+  const wasWsDisconnectedRef = useRef(false);
   const [gwReady, setGwReady] = useState(false);
   const [gwChecked, setGwChecked] = useState(false);
   const lastGwReconnectAtRef = useRef(0);
@@ -242,6 +248,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [liveToolCalls, setLiveToolCalls] = useState<Map<string, LiveToolCall>>(new Map());
   // Global tool expand/collapse toggle
   const [toolsExpanded, setToolsExpanded] = useState(false);
+  // Fun waiting phrase (picked once per waiting session, rotates)
+  const [waitingPhrase, setWaitingPhrase] = useState('');
+  const waitingPhraseRef = useRef('');
 
   // Load model capabilities from config (for image support detection)
   useEffect(() => {
@@ -393,7 +402,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     }
     if (runPhase === 'waiting') {
       return {
-        text: c.runWaiting || 'Waiting',
+        text: waitingPhrase || c.runWaiting || 'Waiting',
         dot: 'bg-amber-400 animate-pulse',
         textClass: 'text-amber-500',
       };
@@ -424,7 +433,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       dot: 'bg-mac-green',
       textClass: 'text-mac-green',
     };
-  }, [runPhase, c.runSending, c.runWaiting, c.runStreaming, c.runRunning, c.runError, c.runIdle]);
+  }, [runPhase, waitingPhrase, c.runSending, c.runWaiting, c.runStreaming, c.runRunning, c.runError, c.runIdle]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -510,13 +519,19 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       } catch { /* ignore */ }
     }, (status) => {
       if (status === 'open') {
+        const wasDisconnected = wasWsDisconnectedRef.current;
         opened = true;
         clearTimeout(connectTimeout);
         setWsConnected(true);
         setWsConnecting(false);
         setWsError(null);
+        if (wasDisconnected) {
+          wasWsDisconnectedRef.current = false;
+          toast('info', c.wsReconnected || 'Reconnected', 3000);
+        }
       } else if (status === 'closed') {
         setWsConnected(false);
+        wasWsDisconnectedRef.current = true;
       }
     });
 
@@ -661,6 +676,28 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     handleChatEventRef.current = handleChatEvent;
     handleAgentEventRef.current = handleAgentEvent;
   }, [handleChatEvent, handleAgentEvent]);
+
+  // Fun waiting phrase rotation during 'waiting' phase
+  useEffect(() => {
+    if (runPhase !== 'waiting') {
+      if (waitingPhraseRef.current) {
+        waitingPhraseRef.current = '';
+        setWaitingPhrase('');
+      }
+      return;
+    }
+    const idx = Math.floor(Math.random() * WAITING_PHRASES.length);
+    const phrase = WAITING_PHRASES[idx] || 'Waiting';
+    waitingPhraseRef.current = phrase;
+    setWaitingPhrase(phrase);
+    const timer = setInterval(() => {
+      const nextIdx = Math.floor(Math.random() * WAITING_PHRASES.length);
+      const next = WAITING_PHRASES[nextIdx] || 'Waiting';
+      waitingPhraseRef.current = next;
+      setWaitingPhrase(next);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [runPhase]);
 
   // Live elapsed timer during streaming
   useEffect(() => {
@@ -1123,7 +1160,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       const res = await gwApi.proxy('chat.send', sendParams) as any;
       const nextRunId = res?.runId || idempotencyKey;
       setRunId(nextRunId);
-      setRunPhase('streaming');
+      setRunPhase('waiting');
       setError(null);
       pendingRunRef.current = {
         runId: nextRunId,

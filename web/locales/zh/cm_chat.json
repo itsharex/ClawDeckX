@@ -106,6 +106,7 @@
     "toolsExpand": "展开工具",
     "toolsCollapse": "折叠工具",
     "fastMode": "快速",
+    "wsReconnected": "已重新连接",
     "loading": "加载中",
     "repair": "会话修复",
     "repairDesc": "诊断并修复会话问题",

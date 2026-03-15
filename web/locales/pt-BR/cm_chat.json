@@ -106,6 +106,7 @@
     "toolsExpand": "Expandir ferramentas",
     "toolsCollapse": "Recolher ferramentas",
     "fastMode": "Rápido",
+    "wsReconnected": "Reconectado",
     "loading": "Carregando",
     "repair": "Reparo de Sessões",
     "repairDesc": "Diagnosticar e reparar problemas de sessões",

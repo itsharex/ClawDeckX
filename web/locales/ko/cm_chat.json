@@ -105,6 +105,7 @@
     "toolsExpand": "도구 펼치기",
     "toolsCollapse": "도구 접기",
     "fastMode": "빠른",
+    "wsReconnected": "재연결됨",
     "loading": "로딩 중",
     "confirmDeleteSessionMsg": "만료된 세션 {count}개를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.",
     "repair": "세션 복구",

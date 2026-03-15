@@ -106,6 +106,7 @@
     "toolsExpand": "Tools aufklappen",
     "toolsCollapse": "Tools einklappen",
     "fastMode": "Schnell",
+    "wsReconnected": "Wieder verbunden",
     "loading": "Laden",
     "repair": "Sitzungsreparatur",
     "repairDesc": "Sitzungsprobleme diagnostizieren und reparieren",

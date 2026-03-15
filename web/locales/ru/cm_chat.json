@@ -105,6 +105,7 @@
     "toolsExpand": "Развернуть инструменты",
     "toolsCollapse": "Свернуть инструменты",
     "fastMode": "Быстрый",
+    "wsReconnected": "Переподключено",
     "loading": "Загрузка",
     "confirmDeleteSessionMsg": "Удалить {count} устаревших сессий? Это действие необратимо.",
     "repair": "Восстановление сессий",
