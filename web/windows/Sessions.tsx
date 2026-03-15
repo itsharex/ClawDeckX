@@ -1464,6 +1464,19 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         return;
       }
     }
+    // Escape: dismiss btw message or abort active run
+    if (e.key === 'Escape') {
+      if (btwMessage) {
+        e.preventDefault();
+        setBtwMessage(null);
+        return;
+      }
+      if (isStreaming) {
+        e.preventDefault();
+        handleAbort();
+        return;
+      }
+    }
     // Input history recall with ↑/↓ when input is empty or navigating history
     if (e.key === 'ArrowUp' && !slashOpen && (!input || historyIdx >= 0) && inputHistory.length > 0) {
       e.preventDefault();
@@ -1483,7 +1496,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       e.preventDefault();
       sendMessage();
     }
-  }, [sendMessage, slashOpen, slashFiltered, slashHighlight, selectSlashCommand, input, historyIdx, inputHistory]);
+  }, [sendMessage, slashOpen, slashFiltered, slashHighlight, selectSlashCommand, input, historyIdx, inputHistory, btwMessage, isStreaming, handleAbort]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -2051,6 +2064,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 font-mono text-[8px] border border-slate-200/60 dark:border-white/[0.06] shadow-sm">↑</kbd> {c.historyRecall || 'History'}</span>
                   <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 font-mono text-[8px] border border-slate-200/60 dark:border-white/[0.06] shadow-sm">/</kbd> {c.slashCommands || 'Commands'}</span>
                   <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 font-mono text-[8px] border border-slate-200/60 dark:border-white/[0.06] shadow-sm">Shift+Enter</kbd> {c.newLine || 'New line'}</span>
+                  <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 font-mono text-[8px] border border-slate-200/60 dark:border-white/[0.06] shadow-sm">Esc</kbd> {c.abort || 'Abort'}</span>
                 </div>
               </div>
             )}
