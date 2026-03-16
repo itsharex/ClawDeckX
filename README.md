@@ -218,6 +218,10 @@ Open your browser at `http://localhost:18791`. The first run will auto-generate 
 
 浏览器打开 `http://localhost:18791`，首次启动会自动生成管理员账户，凭据将显示在容器日志中。
 
+ClawDeckX and OpenClaw run in the same container. On startup, ClawDeckX starts first. The container entrypoint only auto-recovers the local OpenClaw Gateway when OpenClaw is already installed and configured. If OpenClaw is missing or not configured yet, complete the existing Setup Wizard in the web UI.
+
+ClawDeckX 与 OpenClaw 运行在同一个容器中。容器启动后会先启动 ClawDeckX。容器入口脚本只会在 OpenClaw 已安装且已配置时自动恢复本地 Gateway；如果尚未安装或尚未配置，请在 Web 界面中完成现有安装向导。
+
 ```bash
 # View credentials / 查看初始凭据
 docker logs clawdeckx
@@ -240,6 +244,15 @@ To expose the Gateway port, add `- "18789:18789"` under `ports` in `docker-compo
 
 | Variable | Default | Description | 说明 |
 | :--- | :--- | :--- | :--- |
+| `OPENCLAW_HOME` | `/data/openclaw/home` | OpenClaw home root override | OpenClaw home 根目录覆盖 |
+| `OPENCLAW_STATE_DIR` | `/data/openclaw/state` | OpenClaw state directory | OpenClaw 状态目录 |
+| `OPENCLAW_CONFIG_PATH` | `/data/openclaw/state/openclaw.json` | OpenClaw config file path | OpenClaw 配置文件路径 |
+| `NPM_CONFIG_PREFIX` | `/data/openclaw/npm` | Persistent npm global install prefix | 持久化 npm 全局安装前缀 |
+| `OCD_DB_SQLITE_PATH` | `/data/clawdeckx/ClawDeckX.db` | ClawDeckX SQLite database path | ClawDeckX SQLite 数据库路径 |
+| `OCD_LOG_FILE` | `/data/clawdeckx/ClawDeckX.log` | ClawDeckX server log path | ClawDeckX 服务日志路径 |
+| `OCD_GATEWAY_LOG` | `/data/openclaw/logs/gateway.log` | Persistent OpenClaw Gateway log | 持久化 OpenClaw Gateway 日志 |
+| `OCD_SETUP_INSTALL_LOG` | `/data/openclaw/logs/install.log` | Setup/install log path | 安装向导日志路径 |
+| `OCD_SETUP_DOCTOR_LOG` | `/data/openclaw/logs/doctor.log` | Doctor/diagnostic log path | 诊断日志路径 |
 | `OCD_OPENCLAW_GATEWAY_HOST` | `host.docker.internal` | Gateway host address | Gateway 地址 |
 | `OCD_OPENCLAW_GATEWAY_PORT` | `18789` | Gateway port | Gateway 端口 |
 | `OCD_OPENCLAW_GATEWAY_TOKEN` | *(empty)* | Gateway auth token | Gateway 认证令牌 |
@@ -251,14 +264,28 @@ To expose the Gateway port, add `- "18789:18789"` under `ports` in `docker-compo
 
 | Volume | Mount Point | Description | 说明 |
 | :--- | :--- | :--- | :--- |
-| `clawdeckx-data` | `/data` | Database, logs, gateway logs | 数据库、日志、Gateway 日志 |
-| `clawdeckx-openclaw-state` | `/root/.local/state/openclaw` | OpenClaw config & session data | OpenClaw 配置与会话数据 |
-| `clawdeckx-npm-global` | `/usr/lib/node_modules` | OpenClaw npm installation | OpenClaw npm 安装目录 |
+| `clawdeckx-data` | `/data/clawdeckx` | ClawDeckX database and app logs | ClawDeckX 数据库与应用日志 |
+| `clawdeckx-openclaw-data` | `/data/openclaw` | OpenClaw install, config, state, and logs | OpenClaw 安装、配置、状态与日志 |
 
 > [!TIP]
 > OpenClaw installation and configuration are persisted across container updates. You do **not** need to reinstall OpenClaw after `docker pull` and recreate.
 >
 > OpenClaw 的安装和配置在容器更新后会保留。执行 `docker pull` 重建容器后**无需重新安装** OpenClaw。
+
+**Persistent Paths | 持久化路径：**
+
+| Path | Purpose | 说明 |
+| :--- | :--- | :--- |
+| `/data/openclaw/npm` | Global npm packages including OpenClaw | OpenClaw 等 npm 全局安装目录 |
+| `/data/openclaw/state` | OpenClaw state directory | OpenClaw 状态目录 |
+| `/data/openclaw/state/openclaw.json` | OpenClaw config file | OpenClaw 配置文件 |
+| `/data/openclaw/logs/gateway.log` | Gateway startup/runtime log | Gateway 启动与运行日志 |
+| `/data/openclaw/logs/install.log` | Setup/install log | 安装向导日志 |
+| `/data/openclaw/logs/doctor.log` | Doctor/diagnostic log | 诊断日志 |
+
+If OpenClaw is installed but not configured, ClawDeckX will guide you to the existing setup/configuration flow instead of silently auto-installing it in the container.
+
+如果 OpenClaw 已安装但尚未配置，ClawDeckX 会引导你进入现有安装/配置流程，而不是在容器中静默自动安装。
 
 **Resource Limits | 资源限制：**
 
