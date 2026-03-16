@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi, hostInfoApi } from '../services/api';
+import { fmtAgoCompact } from '../utils/time';
 import { useToast } from '../components/Toast';
 import { useGatewayEvents } from '../hooks/useGatewayEvents';
 import CustomSelect from '../components/CustomSelect';
@@ -103,28 +104,8 @@ type GroupKey = 'none' | 'platform' | 'status' | 'version';
 type ViewMode = 'grid' | 'list';
 
 // --- Utility helpers ---
-function fmtRelativeTime(seconds?: number | null, nd?: any): string {
-  if (seconds == null || seconds < 0) return '-';
-  if (seconds < 60) return nd?.justNow;
-  if (seconds < 3600) {
-    const mins = Math.floor(seconds / 60);
-    return `${mins} ${nd?.minutesAgo}`;
-  }
-  if (seconds < 86400) {
-    const hrs = Math.floor(seconds / 3600);
-    return `${hrs} ${nd?.hoursAgo}`;
-  }
-  const days = Math.floor(seconds / 86400);
-  return `${days} ${nd?.daysAgo}`;
-}
 
-function fmtAge(seconds?: number | null): string {
-  if (seconds == null || seconds < 0) return '-';
-  if (seconds < 60) return `${Math.floor(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-}
+const fmtAge = (seconds?: number | null) => fmtAgoCompact(seconds ?? undefined, undefined, 'seconds') || '-';
 
 function fmtTs(ms?: number | null): string {
   if (!ms) return '-';

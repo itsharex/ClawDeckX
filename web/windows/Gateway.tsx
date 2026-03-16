@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { eventsApi, gatewayApi, gatewayProfileApi, gwApi } from '../services/api';
+import { useVisibilityPolling } from '../hooks/useVisibilityPolling';
+import { settle as settlePromise } from '../utils/settle';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useGatewayEvents } from '../hooks/useGatewayEvents';
@@ -332,52 +334,15 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   }, [toast, gw]);
 
   // Status + health polling with visibility pause
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = setInterval(() => {
-      fetchStatus();
-      fetchHealthCheck();
-    }, 8000);
-    const onVisibility = () => {
-      if (document.hidden) {
-        if (timer) { clearInterval(timer); timer = null; }
-      } else {
-        if (!timer) {
-          timer = setInterval(() => { fetchStatus(); fetchHealthCheck(); }, 8000);
-          fetchStatus(); fetchHealthCheck();
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      if (timer) clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [fetchStatus, fetchHealthCheck]);
+  const fetchStatusAndHealth = useCallback(() => { fetchStatus(); fetchHealthCheck(); }, [fetchStatus, fetchHealthCheck]);
+  useVisibilityPolling(fetchStatusAndHealth, 8000);
 
 
-  // Log polling with visibility pause (cursor-based incremental, 3s interval)
-  useEffect(() => {
-    if (activeTab !== 'logs') return;
-    let timer: ReturnType<typeof setInterval> | null = setInterval(() => fetchLogs(), 5000);
-    const onVis = () => {
-      if (document.hidden) { if (timer) { clearInterval(timer); timer = null; } }
-      else if (!timer) { timer = setInterval(() => fetchLogs(), 5000); fetchLogs(); }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { if (timer) clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
-  }, [activeTab, fetchLogs]);
+  // Log polling with visibility pause (cursor-based incremental, 5s interval)
+  useVisibilityPolling(fetchLogs, 5000, activeTab === 'logs');
 
   // Event polling with visibility pause
-  useEffect(() => {
-    if (activeTab !== 'events') return;
-    let timer: ReturnType<typeof setInterval> | null = setInterval(() => fetchEvents(), 10000);
-    const onVis = () => {
-      if (document.hidden) { if (timer) { clearInterval(timer); timer = null; } }
-      else if (!timer) { timer = setInterval(() => fetchEvents(), 10000); fetchEvents(); }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { if (timer) clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
-  }, [activeTab, fetchEvents]);
+  useVisibilityPolling(fetchEvents, 10000, activeTab === 'events');
 
 
   // Real-time gateway events via WebSocket
@@ -618,8 +583,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   // Debug 面板操作
   const fetchDebugData = useCallback(async () => {
     setDebugLoading(true);
-    const settle = (p: Promise<any>) => p.catch(() => null);
-    const [st, hl] = await Promise.all([settle(gwApi.status()), settle(gwApi.health())]);
+    const [st, hl] = await Promise.all([settlePromise(gwApi.status()), settlePromise(gwApi.health())]);
     if (st) setDebugStatus(st);
     if (hl) setDebugHealth(hl);
     setDebugLoading(false);

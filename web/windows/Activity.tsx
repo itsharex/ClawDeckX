@@ -3,6 +3,8 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { fmtRelativeTime } from '../utils/time';
+import { useVisibilityPolling } from '../hooks/useVisibilityPolling';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -16,17 +18,6 @@ type SortField = 'updated' | 'tokens' | 'name';
 
 const AUTO_REFRESH_MS = 30_000;
 
-// i18n-aware relative time formatting
-function fmtRelative(ms?: number | null, a?: any) {
-  if (!ms || !Number.isFinite(ms)) return '-';
-  const diff = Date.now() - ms;
-  if (diff < 60_000) return a?.justNow;
-  const mins = Math.round(diff / 60_000);
-  if (mins < 60) return `${mins} ${a?.minutesAgo}`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} ${a?.hoursAgo}`;
-  return `${Math.round(hrs / 24)} ${a?.daysAgo}`;
-}
 
 
 const Activity: React.FC<ActivityProps> = ({ language, onNavigateToSession }) => {
@@ -105,11 +96,9 @@ const Activity: React.FC<ActivityProps> = ({ language, onNavigateToSession }) =>
     return () => cancelAnimationFrame(raf);
   }, [loadSessions, loadCostTrend, loadUsageAggregates]);
 
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const iv = setInterval(() => { loadSessions(); loadCostTrend(); loadUsageAggregates(); }, AUTO_REFRESH_MS);
-    return () => clearInterval(iv);
-  }, [loadSessions, loadCostTrend, loadUsageAggregates]);
+  // Auto-refresh every 30s (pauses when tab hidden)
+  const refreshAll = useCallback(() => { loadSessions(); loadCostTrend(); loadUsageAggregates(); }, [loadSessions, loadCostTrend, loadUsageAggregates]);
+  useVisibilityPolling(refreshAll, AUTO_REFRESH_MS);
 
   const sessions: any[] = result?.sessions || [];
   const storePath = result?.path || '';
@@ -421,7 +410,7 @@ const Activity: React.FC<ActivityProps> = ({ language, onNavigateToSession }) =>
                         onCompact={compactSession}
                         onReset={resetSession}
                         onDelete={deleteSession}
-                        relativeTime={fmtRelative(row.updatedAt, a)}
+                        relativeTime={fmtRelativeTime(row.updatedAt, a)}
                         labels={a}
                       />
                     </div>

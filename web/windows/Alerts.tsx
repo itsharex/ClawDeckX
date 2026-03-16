@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { fmtRelativeTime } from '../utils/time';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -67,19 +68,6 @@ function fmtRemaining(ms: number) {
   return `${Math.floor(m / 60)}h`;
 }
 
-// i18n-aware relative time formatting (#25: added days + exact date)
-function fmtRelative(ts?: number, a?: Record<string, string>) {
-  if (!ts) return '-';
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return a?.justNow || 'just now';
-  const mins = Math.round(diff / 60_000);
-  if (mins < 60) return `${mins} ${a?.minutesAgo || 'min ago'}`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} ${a?.hoursAgo || 'hr ago'}`;
-  const days = Math.round(hrs / 24);
-  if (days < 30) return `${days} ${a?.daysAgo || 'days ago'}`;
-  return new Date(ts).toLocaleDateString();
-}
 
 // #11: Simple glob pattern validator
 function isValidGlobPattern(pattern: string): boolean {
@@ -845,7 +833,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-slate-400 dark:text-white/35">
                         {entry.request?.agentId && <span>{a.agent}: {entry.request.agentId}</span>}
                         {entry.request?.host && <span>{a.host}: {entry.request.host}</span>}
-                        <span>{fmtRelative(entry.resolvedAtMs, a)}</span>
+                        <span>{fmtRelativeTime(entry.resolvedAtMs, a)}</span>
                       </div>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0 ${decisionColor(entry.decision)} ${entry.decision.includes('allow') ? 'bg-mac-green/10' : entry.decision === 'deny' ? 'bg-mac-red/10' : 'bg-slate-100 dark:bg-white/5'}`}>
@@ -1189,7 +1177,7 @@ const Alerts: React.FC<AlertsProps> = ({ language }) => {
                               onChange={e => patchForm(['agents', selectedScope, 'allowlist', String(i), 'pattern'], e.target.value)}
                               className={`w-full px-2 py-1.5 rounded-lg bg-white dark:bg-white/[0.03] border text-[10px] font-mono text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-primary/30 ${!valid && pat ? 'border-mac-red/40' : 'border-slate-200/60 dark:border-white/[0.06]'}`} />
                             <div className="flex gap-3 mt-1 text-[10px] text-slate-400 dark:text-white/35">
-                              <span>{a.lastUsed}: {entry.lastUsedAt ? fmtRelative(entry.lastUsedAt, a) : a.never}</span>
+                              <span>{a.lastUsed}: {entry.lastUsedAt ? fmtRelativeTime(entry.lastUsedAt, a) : a.never}</span>
                               {entry.lastUsedCommand && <span className="font-mono truncate">{entry.lastUsedCommand}</span>}
                               {/* #11: Pattern validation feedback */}
                               {pat && (valid

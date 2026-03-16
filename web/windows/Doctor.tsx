@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { doctorApi, gwApi } from '../services/api';
+import { fmtAgoTemplate } from '../utils/time';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import { TestCenterPanel } from '../components/maintenance';
@@ -158,16 +159,6 @@ function gaugeColor(score: number): string {
   return '#ef4444';
 }
 
-function relativeTime(ts: string, text: any): string {
-  const diff = Date.now() - new Date(ts).getTime();
-  if (diff < 60_000) return text.timelineJustNow || 'Just now';
-  if (diff < 3_600_000) {
-    const m = Math.floor(diff / 60_000);
-    return (text.timelineMinAgo || '{n}m ago').replace('{n}', String(m));
-  }
-  const h = Math.floor(diff / 3_600_000);
-  return (text.timelineHourAgo || '{n}h ago').replace('{n}', String(h));
-}
 
 function formatIssueTitle(raw?: string): string {
   if (!raw) return '';
@@ -1977,7 +1968,7 @@ const Doctor: React.FC<DoctorProps> = ({ language }) => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-slate-400 dark:text-white/35">{relativeTime(i.timestamp, text)}</span>
+                                <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtAgoTemplate(i.timestamp, text)}</span>
                                 {count > 1 && (
                                   <div className="flex items-center gap-px">
                                     {recentTimestamps.slice(0, 4).map((ts, ti) => (

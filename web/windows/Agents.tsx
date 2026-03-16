@@ -4,6 +4,7 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
+import { fmtAgoCompact } from '../utils/time';
 import { subscribeManagerWS } from '../services/manager-ws';
 import { templateSystem, WorkspaceTemplate } from '../services/template-system';
 import { useToast } from '../components/Toast';
@@ -17,15 +18,8 @@ type Panel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron' | '
 
 
 function fmtHeartbeatAgo(ts: number, template: string, never: string): string {
-  const diff = Date.now() - ts;
-  if (diff < 0) return never;
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return template.replace('{time}', `${sec}s`);
-  const min = Math.floor(sec / 60);
-  if (min < 60) return template.replace('{time}', `${min}m`);
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return template.replace('{time}', `${hr}h`);
-  return template.replace('{time}', `${Math.floor(hr / 24)}d`);
+  if (Date.now() - ts < 0) return never;
+  return template.replace('{time}', fmtAgoCompact(ts) || '0s');
 }
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;

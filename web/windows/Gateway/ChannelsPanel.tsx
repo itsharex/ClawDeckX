@@ -1,4 +1,5 @@
 import React from 'react';
+import { fmtAgoCompact } from '../../utils/time';
 
 export interface ChannelsPanelProps {
   gw: any;
@@ -9,16 +10,7 @@ export interface ChannelsPanelProps {
   handleChannelLogout: (channel: string) => void;
 }
 
-function fmtAgo(ts: number | null | undefined, gw: any): string | null {
-  if (!ts) return null;
-  const sec = Math.floor((Date.now() - ts) / 1000);
-  if (sec < 60) return `${sec}${gw.unitSec || 's'}`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}${gw.unitMin || 'm'}`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}${gw.unitHr || 'h'}`;
-  return `${Math.floor(hr / 24)}${gw.unitDay || 'd'}`;
-}
+const fmtAgo = (ts: number | null | undefined, gw: any): string | null => fmtAgoCompact(ts, gw);
 
 const ChannelsPanel: React.FC<ChannelsPanelProps> = ({
   gw, channelsList, channelsLoading, channelLogoutLoading,

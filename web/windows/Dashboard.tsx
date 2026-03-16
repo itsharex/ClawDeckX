@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef, useId } from 
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { dashboardApi, gwApi, gatewayApi, hostInfoApi, configApi, doctorApi, gatewayProfileApi } from '../services/api';
+import { settleTyped } from '../utils/settle';
 import { useGatewayEvents } from '../hooks/useGatewayEvents';
 import { subscribeManagerWS } from '../services/manager-ws';
 import { useToast } from '../components/Toast';
@@ -238,10 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
   const hostFetchingRef = useRef(false);
   const bootstrappedRef = useRef(false);
 
-  const settle = useCallback(async <T,>(p: Promise<T>): Promise<{ ok: true; data: T } | { ok: false; data: null }> => {
-    try { return { ok: true, data: await p }; }
-    catch { return { ok: false, data: null }; }
-  }, []);
+  const settle = settleTyped;
 
   const fetchFast = useCallback(async () => {
     if (fastFetchingRef.current) return;

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { fmtRelativeTime } from '../utils/time';
 import NumberStepper from '../components/NumberStepper';
 
 interface UsageProps {
@@ -138,21 +139,6 @@ function fmtTimestamp(ts: string | number | undefined | null, u?: any): string {
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
-function fmtRelativeTime(ts: string | number | undefined | null, u?: any): string {
-  if (!ts) return '-';
-  const date = typeof ts === 'number' ? new Date(ts) : new Date(ts);
-  if (isNaN(date.getTime())) return String(ts);
-  const now = Date.now();
-  const diff = now - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return u?.justNow;
-  if (mins < 60) return `${mins}${u?.minutesAgo}`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}${u?.hoursAgo}`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}${u?.daysAgo}`;
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
 
 function getDateRange(range: DateRange, customStart: string, customEnd: string): { startDate: string; endDate: string } {
   const now = new Date();

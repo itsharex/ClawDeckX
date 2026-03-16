@@ -4,6 +4,10 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
+import { fmtRelativeFuture } from '../utils/time';
+import { useVisibilityPolling } from '../hooks/useVisibilityPolling';
+import { useAutoError } from '../hooks/useAutoError';
+import { readStorage, writeStorage } from '../utils/storage';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -35,17 +39,6 @@ const DEFAULT_FORM: CronForm = {
   sessionKey: '', accountId: '', bestEffort: false,
 };
 
-// i18n-aware relative time formatting
-function fmtRelative(ms?: number, s?: any) {
-  if (!ms || !Number.isFinite(ms)) return s?.na || '-';
-  const diff = ms - Date.now();
-  if (Math.abs(diff) < 60_000) return s?.justNow;
-  const mins = Math.abs(Math.round(diff / 60_000));
-  if (mins < 60) return diff > 0 ? `${mins} ${s?.inMinutes}` : `${mins} ${s?.minutesAgo}`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return diff > 0 ? `${hrs} ${s?.inHours}` : `${hrs} ${s?.hoursAgo}`;
-  return new Date(ms).toLocaleString();
-}
 
 function fmtSchedule(job: any, l?: any) {
   const schedule = job.schedule;
@@ -171,23 +164,14 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const { ready: gwReady, checked: gwChecked, refresh: gwRefresh } = useGatewayStatus();
 
   const SCHEDULER_CACHE_KEY = 'scheduler.cache.v1';
-  const readCachedScheduler = (): { status: any; jobs: any[]; jobsTotal: number } | null => {
-    try {
-      const raw = localStorage.getItem(SCHEDULER_CACHE_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch { return null; }
-  };
-  const writeCachedScheduler = (status: any, jobs: any[], jobsTotal: number) => {
-    try { localStorage.setItem(SCHEDULER_CACHE_KEY, JSON.stringify({ status, jobs, jobsTotal })); } catch { /* ignore */ }
-  };
+  const readCachedScheduler = () => readStorage<{ status: any; jobs: any[]; jobsTotal: number }>(SCHEDULER_CACHE_KEY);
+  const writeCachedScheduler = (status: any, jobs: any[], jobsTotal: number) => writeStorage(SCHEDULER_CACHE_KEY, { status, jobs, jobsTotal });
   const _cachedSch = useMemo(() => readCachedScheduler(), []);
   const [status, setStatus] = useState<any>(_cachedSch?.status ?? null);
   const [jobs, setJobs] = useState<any[]>(_cachedSch?.jobs ?? []);
   const [jobsTotal, setJobsTotal] = useState(_cachedSch?.jobsTotal ?? 0);
   const [loading, setLoading] = useState(!_cachedSch);
-  const [error, setError] = useState<string | null>(null);
-  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setErrorWithAutoClear, clearError] = useAutoError();
 
   // Form state
   const [form, setForm] = useState<CronForm>({ ...DEFAULT_FORM });
@@ -216,11 +200,6 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
 
   const na = s?.na || '-';
 
-  const setErrorWithAutoClear = useCallback((msg: string) => {
-    setError(msg);
-    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    errorTimerRef.current = setTimeout(() => setError(null), 8000);
-  }, []);
 
   const toErrorText = useCallback((e: any) => {
     const raw = String(e?.message || e || '');
@@ -237,7 +216,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   // Load jobs + status
   const loadAll = useCallback(async () => {
     if (!gwReady) return;
-    setLoading(true); setError(null);
+    setLoading(true); clearError();
     try {
       const [statusData, jobsData] = await Promise.all([
         gwApi.cronStatus().catch(() => null),
@@ -256,14 +235,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   }, [gwReady, sortBy, sortDir, searchQuery, filterEnabled, setErrorWithAutoClear]);
 
   // Auto-refresh every 10s + on mount
-  useEffect(() => {
-    if (!gwReady) return;
-    loadAll();
-    const timer = setInterval(loadAll, 10000);
-    const onVis = () => { if (!document.hidden) loadAll(); };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
-  }, [gwReady, loadAll]);
+  useVisibilityPolling(loadAll, 10000, gwReady);
 
   const patchForm = useCallback((patch: Partial<CronForm>) => {
     setForm(prev => ({ ...prev, ...patch }));
@@ -292,7 +264,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     if (formBusy) return;
     const errs = validateForm();
     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
-    setFormBusy(true); setError(null); setFieldErrors({});
+    setFormBusy(true); clearError(); setFieldErrors({});
     try {
       const payload = formToJobPayload(form);
       await gwApi.cronAdd(payload);
@@ -313,7 +285,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     if (formBusy || !editingJobId) return;
     const errs = validateForm();
     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
-    setFormBusy(true); setError(null); setFieldErrors({});
+    setFormBusy(true); clearError(); setFieldErrors({});
     try {
       const payload = formToJobPayload(form);
       await gwApi.cronUpdate(editingJobId, payload);
@@ -507,7 +479,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 p-3 text-center">
                 <p className="text-[11px] font-bold text-slate-400 dark:text-white/40 uppercase">{s.nextWake}</p>
-                <p className="text-[10px] font-bold text-primary mt-0.5">{fmtRelative(status?.nextWakeAtMs, s)}</p>
+                <p className="text-[10px] font-bold text-primary mt-0.5">{fmtRelativeFuture(status?.nextWakeAtMs, s)}</p>
               </div>
               {!showForm && (
                 <div className="rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 p-3 text-center">
@@ -759,8 +731,8 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
                           <span className="text-slate-400 dark:text-white/35">{s.status}: </span>
                           <span className={`font-bold ${lastStatus === 'ok' ? 'text-mac-green' : lastStatus === 'error' ? 'text-mac-red' : 'text-slate-400'}`}>{lastStatus || s.na}</span>
                         </div>
-                        <div className="text-[11px] text-slate-400 dark:text-white/35">{s.nextRun}: {fmtRelative(job.state?.nextRunAtMs, s)}</div>
-                        <div className="text-[11px] text-slate-400 dark:text-white/35">{s.last}: {fmtRelative(job.state?.lastRunAtMs, s)}</div>
+                        <div className="text-[11px] text-slate-400 dark:text-white/35">{s.nextRun}: {fmtRelativeFuture(job.state?.nextRunAtMs, s)}</div>
+                        <div className="text-[11px] text-slate-400 dark:text-white/35">{s.last}: {fmtRelativeFuture(job.state?.lastRunAtMs, s)}</div>
                         {job.state?.consecutiveErrors > 0 && (
                           <div className="text-[11px] text-mac-red font-bold">{s.consecutiveErrors}: {job.state.consecutiveErrors}</div>
                         )}
