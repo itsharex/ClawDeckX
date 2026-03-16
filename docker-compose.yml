@@ -30,6 +30,12 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
     # Log rotation: prevent unbounded log growth
     logging:
       driver: json-file

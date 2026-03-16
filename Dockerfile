@@ -39,18 +39,27 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
     # Build tools for native npm modules (better-sqlite3, bcrypt, etc.)
+    # Installed and kept for runtime npm install of OpenClaw
     apt-get install -y --no-install-recommends python3 make g++ && \
     rm -rf /var/lib/apt/lists/*
+
+LABEL org.opencontainers.image.title="ClawDeckX" \
+      org.opencontainers.image.description="Desktop management dashboard for OpenClaw AI gateway" \
+      org.opencontainers.image.url="https://github.com/ClawDeckX/ClawDeckX" \
+      org.opencontainers.image.source="https://github.com/ClawDeckX/ClawDeckX"
+
 WORKDIR /app
 COPY --from=backend /clawdeckx ./clawdeckx
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x ./clawdeckx /app/docker-entrypoint.sh
 VOLUME ["/data"]
-EXPOSE 18791
+EXPOSE 18791 18789
 ENV OCD_DB_SQLITE_PATH=/data/ClawDeckX.db \
     OCD_LOG_FILE=/data/ClawDeckX.log \
     OCD_BIND=0.0.0.0 \
-    OCD_PORT=18791
+    OCD_PORT=18791 \
+    TZ=UTC
+STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -sf http://localhost:${OCD_PORT:-18791}/api/v1/health || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--"]
