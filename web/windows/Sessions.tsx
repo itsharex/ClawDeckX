@@ -934,7 +934,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       // Priority: show chat history ASAP, then refresh sidebar sessions
       loadHistory().then(() => {
         setInitialDetecting(false);
-        return loadSessions();
+        return loadSessions({ silent: true });
       }).then(() => {
         // Auto-select first session if current session has no messages
         if (!hasAutoSelectedRef.current) {
@@ -953,7 +953,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         }
       });
     } else {
-      loadSessions();
+      loadSessions({ silent: true });
     }
     let timer: ReturnType<typeof setInterval> | null = setInterval(() => loadSessions({ silent: true }), 30000);
     const onVisibility = () => {
@@ -1097,13 +1097,16 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     });
   }, []);
 
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   useEffect(() => {
-    if (!gwReady || !sessionKey) return;
-    if (!sessions.some(s => s.key === sessionKey)) {
+    if (!gwReadyRef.current || !sessionKey) return;
+    if (!sessionsRef.current.some(s => s.key === sessionKey)) {
       ensureSessionPresent(sessionKey);
-      loadSessions();
+      loadSessions({ silent: true });
     }
-  }, [gwReady, sessionKey, sessions, ensureSessionPresent, loadSessions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionKey]);
 
   // Reconnect banner
   useEffect(() => {
