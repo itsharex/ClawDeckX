@@ -177,6 +177,14 @@ function fmtTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function getMessageRenderKey(msg: ChatMsg, idx: number): string {
+  const text = extractText(msg.content).slice(0, 80);
+  const toolId = typeof msg.content === 'object' && msg.content && !Array.isArray(msg.content)
+    ? String((msg.content as any).tool_use_id || (msg.content as any).id || '')
+    : '';
+  return [msg.role, msg.timestamp || 0, msg.model || '', toolId, text, idx].join(':');
+}
+
 const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSessionKeyConsumed }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const c = t.chat as any;
@@ -235,6 +243,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   // Chat
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [stream, setStream] = useState<string | null>(null);
@@ -902,6 +911,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       if (showSpinner && historyRequestSeqRef.current === requestSeq && sessionKeyRef.current === targetSessionKey) {
         setChatLoading(false);
       }
+      if (historyRequestSeqRef.current === requestSeq && sessionKeyRef.current === targetSessionKey) {
+        setIsSwitchingSession(false);
+      }
     }
   }, [gwReady, sessionKey]);
 
@@ -1433,10 +1445,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // Select session
   const selectSession = useCallback((key: string) => {
+    if (key === sessionKey) {
+      setDrawerOpen(false);
+      return;
+    }
     // Save current draft before switching
     saveDraft(sessionKey, input);
+    setIsSwitchingSession(true);
     setSessionKey(key);
-    setMessages([]);
     clearStream();
     setRunId(null);
     setRunPhase('idle');
@@ -1453,8 +1469,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   // New session
   const handleNewSession = useCallback(() => {
     const key = `web-${Date.now()}`;
+    setIsSwitchingSession(true);
     setSessionKey(key);
-    setMessages([]);
     clearStream();
     setRunId(null);
     setRunPhase('idle');
@@ -1699,6 +1715,16 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         <div className="text-center max-w-sm px-6">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-500/10 flex items-center justify-center">
             <span className="material-symbols-outlined text-[32px] text-red-400">cloud_off</span>
+            {isSwitchingSession && (
+              <div className="absolute inset-0 bg-white/55 dark:bg-[#0d1117]/55 backdrop-blur-[2px] pointer-events-none">
+                <div className="max-w-4xl mx-auto p-4 md:p-6">
+                  <div className="rounded-xl border border-slate-200/70 dark:border-white/[0.06] bg-white/80 dark:bg-white/[0.03] px-3 py-2 inline-flex items-center gap-2 shadow-sm">
+                    <span className="material-symbols-outlined text-[14px] text-primary animate-spin">progress_activity</span>
+                    <span className="text-[11px] text-slate-600 dark:text-white/55">{c.connecting}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <h3 className="text-sm font-bold text-slate-800 dark:text-white mb-2">{c.disconnected}</h3>
           <p className="text-xs text-slate-500 dark:text-white/40 mb-4">{wsError}</p>
@@ -2201,6 +2227,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               const isTool = msg.role === 'tool';
               const showAvatar = isFirstInGroup(msgGroups, idx);
               const isLast = isLastInGroup(msgGroups, idx);
+              const messageKey = getMessageRenderKey(msg, idx);
 
               // Filter empty bubbles (P0 fix)
               if (!text.trim() && tools.length === 0 && !isTool && images.length === 0) return null;
@@ -2230,7 +2257,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
               if (isSystem) {
                 return (
-                  <React.Fragment key={idx}>
+                  <React.Fragment key={messageKey}>
                     {dateSeparator}
                     <div className="flex justify-center">
                       <div className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 text-[10px] text-slate-500 dark:text-white/40 font-medium max-w-md truncate">
@@ -2245,7 +2272,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 const toolName = (msg as any).name || (msg as any).tool_use_id || c.toolResult || 'Tool Result';
                 const isErr = (msg as any).is_error === true;
                 return (
-                  <React.Fragment key={idx}>
+                  <React.Fragment key={messageKey}>
                     {dateSeparator}
                     <div className="ms-10 md:ms-12">
                       <ToolCallCard
@@ -2266,7 +2293,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
               const displayText = isLong && !isMsgExpanded ? text.slice(0, 1500) : text;
 
               return (
-                <React.Fragment key={idx}>
+                <React.Fragment key={messageKey}>
                 {dateSeparator}
                 <div className={`flex items-start gap-2.5 md:gap-3 ${isUser ? 'flex-row-reverse' : ''} ${!showAvatar ? 'mt-0.5' : ''}`}>
                   {showAvatar ? (
@@ -2291,7 +2318,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                       {thinkingBlocks.length > 0 && (
                         <div className="mb-2">
                           {thinkingBlocks.map((tb, ti) => (
-                            <ThinkingBlock key={`think-${idx}-${ti}`} content={tb} labels={{ thinking: c.thinkingLabel }} />
+                            <ThinkingBlock key={`think-${messageKey}-${ti}`} content={tb} labels={{ thinking: c.thinkingLabel }} />
                           ))}
                         </div>
                       )}
@@ -2335,7 +2362,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                             }
                             return (
                               <ToolCallCard
-                                key={ti}
+                                key={`${messageKey}-tool-${ti}`}
                                 name={tool.name}
                                 input={tool.input}
                                 result={result}
