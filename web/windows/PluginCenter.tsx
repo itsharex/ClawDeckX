@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { pluginApi, gwApi, gatewayApi, PluginStatusPlugin, PluginDiagnostic, PluginStatusResponse } from '../services/api';
@@ -77,6 +77,8 @@ interface PluginCenterProps { language: Language; }
 const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const sk = (t as any).sk || {};
+  const skRef = useRef(sk);
+  skRef.current = sk;
   const { toast } = useToast();
   const { confirm } = useConfirm();
   const isZh = language === 'zh' || language === 'zh-TW';
@@ -205,61 +207,61 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
   }, [fetchPlugins]);
 
   const handleInstall = useCallback(async (plugin: MergedPlugin) => {
-    if (!canInstall) { toast('error', sk.pluginLocalOnlyAction || sk.pluginLocalOnly); return; }
+    if (!canInstall) { toast('error', skRef.current.pluginLocalOnlyAction || skRef.current.pluginLocalOnly); return; }
     setInstallingSpec(plugin.spec); setInstallPhase('installing');
     try {
       const res = await pluginApi.install(plugin.spec);
       if (res.success) {
         setInstallPhase('restarting');
         try { await gatewayApi.restart(); } catch { /* ignore */ }
-        pollGatewayAndRefresh(() => { toast('success', sk.pluginInstallOk); setInstallingSpec(null); setInstallPhase(null); });
-      } else { toast('error', `${sk.pluginInstallFail}: ${extractFailureMessage(res.output)}`); setInstallingSpec(null); setInstallPhase(null); }
-    } catch (err: any) { toast('error', `${sk.pluginInstallFail}: ${err?.message || ''}`); setInstallingSpec(null); setInstallPhase(null); }
-  }, [canInstall, sk, toast, pollGatewayAndRefresh]);
+        pollGatewayAndRefresh(() => { toast('success', skRef.current.pluginInstallOk); setInstallingSpec(null); setInstallPhase(null); });
+      } else { toast('error', `${skRef.current.pluginInstallFail}: ${extractFailureMessage(res.output)}`); setInstallingSpec(null); setInstallPhase(null); }
+    } catch (err: any) { toast('error', `${skRef.current.pluginInstallFail}: ${err?.message || ''}`); setInstallingSpec(null); setInstallPhase(null); }
+  }, [canInstall, toast, pollGatewayAndRefresh]);
 
   const handleUninstall = useCallback(async (plugin: MergedPlugin) => {
-    if (!canInstall) { toast('error', sk.pluginLocalOnlyAction); return; }
-    const ok = await confirm({ title: sk.pluginUninstallBtn || 'Uninstall', message: sk.pluginUninstallConfirm || `Uninstall "${plugin.name}"?`, danger: true, confirmText: sk.pluginUninstallBtn || 'Uninstall' });
+    if (!canInstall) { toast('error', skRef.current.pluginLocalOnlyAction); return; }
+    const ok = await confirm({ title: skRef.current.pluginUninstallBtn || 'Uninstall', message: skRef.current.pluginUninstallConfirm || `Uninstall "${plugin.name}"?`, danger: true, confirmText: skRef.current.pluginUninstallBtn || 'Uninstall' });
     if (!ok) return;
     setUninstallingId(plugin.id);
     try {
       const res = await pluginApi.uninstall(plugin.id);
       if (res.success) {
-        toast('success', sk.pluginUninstallOk);
+        toast('success', skRef.current.pluginUninstallOk);
         try { await gatewayApi.restart(); } catch { /* ignore */ }
         pollGatewayAndRefresh(() => setUninstallingId(null));
-      } else { toast('error', `${sk.pluginUninstallFail}: ${res.output || ''}`); setUninstallingId(null); }
-    } catch (err: any) { toast('error', `${sk.pluginUninstallFail}: ${err?.message || ''}`); setUninstallingId(null); }
-  }, [canInstall, sk, toast, confirm, pollGatewayAndRefresh]);
+      } else { toast('error', `${skRef.current.pluginUninstallFail}: ${res.output || ''}`); setUninstallingId(null); }
+    } catch (err: any) { toast('error', `${skRef.current.pluginUninstallFail}: ${err?.message || ''}`); setUninstallingId(null); }
+  }, [canInstall, toast, confirm, pollGatewayAndRefresh]);
 
   const handleUpdate = useCallback(async (pluginId?: string, all?: boolean) => {
-    if (!canInstall) { toast('error', sk.pluginLocalOnlyAction); return; }
+    if (!canInstall) { toast('error', skRef.current.pluginLocalOnlyAction); return; }
     setUpdatingId(all ? '__all__' : pluginId || null);
     try {
       const res = await pluginApi.update(pluginId, all);
       if (res.success) {
-        toast('success', all ? sk.pluginUpdateAllOk : sk.pluginUpdateOk);
+        toast('success', all ? skRef.current.pluginUpdateAllOk : skRef.current.pluginUpdateOk);
         try { await gatewayApi.restart(); } catch { /* ignore */ }
         pollGatewayAndRefresh(() => setUpdatingId(null));
-      } else { toast('error', `${sk.pluginUpdateFail}: ${extractFailureMessage(res.output)}`); setUpdatingId(null); }
-    } catch (err: any) { toast('error', `${sk.pluginUpdateFail}: ${err?.message || ''}`); setUpdatingId(null); }
-  }, [canInstall, sk, toast, pollGatewayAndRefresh]);
+      } else { toast('error', `${skRef.current.pluginUpdateFail}: ${extractFailureMessage(res.output)}`); setUpdatingId(null); }
+    } catch (err: any) { toast('error', `${skRef.current.pluginUpdateFail}: ${err?.message || ''}`); setUpdatingId(null); }
+  }, [canInstall, toast, pollGatewayAndRefresh]);
 
   // Toggle enable/disable — works on both local & remote (via config.patch RPC)
   const handleToggle = useCallback(async (plugin: MergedPlugin) => {
     const willEnable = !plugin.enabled;
-    if (!willEnable) { const ok = await confirm({ title: sk.pluginDisableBtn, message: `${sk.pluginDisableBtn} "${plugin.name}"?`, danger: true, confirmText: sk.pluginDisableBtn }); if (!ok) return; }
+    if (!willEnable) { const ok = await confirm({ title: skRef.current.pluginDisableBtn, message: `${skRef.current.pluginDisableBtn} "${plugin.name}"?`, danger: true, confirmText: skRef.current.pluginDisableBtn }); if (!ok) return; }
     setTogglingId(plugin.id);
     try {
       await gwApi.proxy('config.patch', { raw: JSON.stringify({ plugins: { entries: { [plugin.id]: { enabled: willEnable } } } }) });
-      toast('success', sk.pluginToggleOk); fetchPlugins();
-    } catch (err: any) { toast('error', `${sk.pluginToggleFail}: ${err?.message || ''}`); }
+      toast('success', skRef.current.pluginToggleOk); fetchPlugins();
+    } catch (err: any) { toast('error', `${skRef.current.pluginToggleFail}: ${err?.message || ''}`); }
     setTogglingId(null);
-  }, [sk, toast, confirm, fetchPlugins]);
+  }, [toast, confirm, fetchPlugins]);
 
   const handleCopySpec = useCallback((spec: string) => {
-    copyToClipboard(spec).then(() => toast('success', sk.pluginCopied)).catch(() => {});
-  }, [sk, toast]);
+    copyToClipboard(spec).then(() => toast('success', skRef.current.pluginCopied)).catch(() => {});
+  }, [toast]);
 
   const statusBadge = (s?: string) => s === 'loaded' ? 'bg-mac-green/15 text-mac-green' : s === 'error' ? 'bg-mac-red/15 text-mac-red' : 'bg-slate-200 dark:bg-white/10 text-slate-500';
   const statusLabel = (s?: string) => s === 'loaded' ? (sk.pluginStatusLoaded || 'Loaded') : s === 'error' ? (sk.pluginStatusError || 'Error') : (sk.pluginStatusDisabled || 'Disabled');

@@ -157,6 +157,8 @@ function formToJobPayload(f: CronForm) {
 const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const s = (t as any).sch as any;
+  const sRef = useRef(s);
+  sRef.current = s;
   const { toast } = useToast();
   const { confirm } = useConfirm();
 
@@ -250,14 +252,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
   // Validate form and return field-level errors
   const validateForm = useCallback((): Record<string, string> => {
     const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = s.errNameRequired;
-    if (form.scheduleKind === 'at' && !Number.isFinite(Date.parse(form.scheduleAt))) errs.scheduleAt = s.errInvalidTime;
-    if (form.scheduleKind === 'every' && (parseInt(form.everyAmount) || 0) <= 0) errs.everyAmount = s.errInvalidInterval;
-    if (form.scheduleKind === 'cron' && !form.cronExpr.trim()) errs.cronExpr = s.errCronRequired;
-    if (form.payloadKind === 'systemEvent' && !form.payloadText.trim()) errs.payloadText = s.errSystemTextRequired;
-    if (form.payloadKind === 'agentTurn' && !form.payloadText.trim()) errs.payloadText = s.errAgentMessageRequired;
+    if (!form.name.trim()) errs.name = sRef.current.errNameRequired;
+    if (form.scheduleKind === 'at' && !Number.isFinite(Date.parse(form.scheduleAt))) errs.scheduleAt = sRef.current.errInvalidTime;
+    if (form.scheduleKind === 'every' && (parseInt(form.everyAmount) || 0) <= 0) errs.everyAmount = sRef.current.errInvalidInterval;
+    if (form.scheduleKind === 'cron' && !form.cronExpr.trim()) errs.cronExpr = sRef.current.errCronRequired;
+    if (form.payloadKind === 'systemEvent' && !form.payloadText.trim()) errs.payloadText = sRef.current.errSystemTextRequired;
+    if (form.payloadKind === 'agentTurn' && !form.payloadText.trim()) errs.payloadText = sRef.current.errAgentMessageRequired;
     return errs;
-  }, [form, s]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
 
   // Add job
   const addJob = useCallback(async () => {
@@ -271,14 +274,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       setForm({ ...DEFAULT_FORM });
       setShowForm(false);
       await loadAll();
-      toast('success', s.jobAdded);
+      toast('success', sRef.current.jobAdded);
     } catch (e: any) {
       const msg = toErrorText(e);
       setErrorWithAutoClear(msg);
       toast('error', msg);
     }
     setFormBusy(false);
-  }, [formBusy, form, loadAll, toast, s, toErrorText, validateForm, setErrorWithAutoClear]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formBusy, form, loadAll, toast, toErrorText, validateForm, setErrorWithAutoClear]);
 
   // Edit (update) job
   const updateJob = useCallback(async () => {
@@ -293,14 +297,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       setShowForm(false);
       setEditingJobId(null);
       await loadAll();
-      toast('success', s.jobUpdated);
+      toast('success', sRef.current.jobUpdated);
     } catch (e: any) {
       const msg = toErrorText(e);
       setErrorWithAutoClear(msg);
       toast('error', msg);
     }
     setFormBusy(false);
-  }, [formBusy, editingJobId, form, loadAll, toast, s, toErrorText, validateForm, setErrorWithAutoClear]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formBusy, editingJobId, form, loadAll, toast, toErrorText, validateForm, setErrorWithAutoClear]);
 
   // Open edit form
   const openEditForm = useCallback((job: any) => {
@@ -349,14 +354,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     try {
       await gwApi.cronUpdate(job.id, { enabled: !job.enabled });
       await loadAll();
-      toast('success', s.jobToggled);
+      toast('success', sRef.current.jobToggled);
     } catch (e: any) {
       const msg = toErrorText(e);
       setErrorWithAutoClear(msg);
       toast('error', msg);
     }
     setBusyJobs(prev => { const n = new Set(prev); n.delete(job.id); return n; });
-  }, [busyJobs, loadAll, toast, s, toErrorText, setErrorWithAutoClear]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busyJobs, loadAll, toast, toErrorText, setErrorWithAutoClear]);
 
   const runJob = useCallback(async (job: any) => {
     if (busyJobs.has(job.id)) return;
@@ -364,21 +370,22 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
     try {
       await gwApi.cronRun(job.id);
       await loadRuns(job.id);
-      toast('success', s.jobRunning);
+      toast('success', sRef.current.jobRunning);
     } catch (e: any) {
       const msg = toErrorText(e);
       setErrorWithAutoClear(msg);
       toast('error', msg);
     }
     setBusyJobs(prev => { const n = new Set(prev); n.delete(job.id); return n; });
-  }, [busyJobs, loadRuns, toast, s, toErrorText, setErrorWithAutoClear]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busyJobs, loadRuns, toast, toErrorText, setErrorWithAutoClear]);
 
   const removeJob = useCallback(async (job: any) => {
     if (busyJobs.has(job.id)) return;
     const ok = await confirm({
-      title: s.confirmRemoveTitle,
-      message: (s.confirmRemoveMsg || '').replace('{name}', job.name || job.id),
-      confirmText: s.remove,
+      title: sRef.current.confirmRemoveTitle,
+      message: (sRef.current.confirmRemoveMsg || '').replace('{name}', job.name || job.id),
+      confirmText: sRef.current.remove,
       danger: true,
     });
     if (!ok) return;
@@ -387,14 +394,15 @@ const Scheduler: React.FC<SchedulerProps> = ({ language }) => {
       await gwApi.cronRemove(job.id);
       if (runsJobId === job.id) { setRunsJobId(null); setRuns([]); }
       await loadAll();
-      toast('success', s.jobRemoved);
+      toast('success', sRef.current.jobRemoved);
     } catch (e: any) {
       const msg = toErrorText(e);
       setErrorWithAutoClear(msg);
       toast('error', msg);
     }
     setBusyJobs(prev => { const n = new Set(prev); n.delete(job.id); return n; });
-  }, [busyJobs, runsJobId, loadAll, toast, s, toErrorText, confirm, setErrorWithAutoClear]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busyJobs, runsJobId, loadAll, toast, toErrorText, confirm, setErrorWithAutoClear]);
 
   // Auto-refresh runs every 10s when viewing
   useEffect(() => {

@@ -248,11 +248,13 @@ const CLIBanner: React.FC<{
 const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const sk = (t as any).sk || {};
+  const skRef = useRef(sk);
+  skRef.current = sk;
   const { toast } = useToast();
 
   const [cliStatus, setCLIStatus] = useState<'checking' | 'not-installed' | 'installing' | 'installed' | 'error' | 'dismissed'>('checking');
   const [cliError, setCLIError] = useState<string>('');
-  
+
   const [data, setData] = useState<SkillHubData | null>(null);
   const [skills, setSkills] = useState<SkillHubSkill[]>([]);
   const [totalSkills, setTotalSkills] = useState(0);
@@ -346,10 +348,10 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
         await fetchDataFallback();
       } else {
         setLoading(false);
-        toast('error', `${sk.loadFailed || 'Load failed'}: ${err?.message || ''}`);
+        toast('error', `${skRef.current.loadFailed || 'Load failed'}: ${err?.message || ''}`);
       }
     }
-  }, [sortBy, category, showFeatured, applyPageResponse, sk, toast]);
+  }, [sortBy, category, showFeatured, applyPageResponse, toast]);
 
   // Server-side search
   const fetchSearch = useCallback(async (q: string) => {
@@ -383,9 +385,9 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       setLoading(false);
     } catch (err: any) {
       setLoading(false);
-      toast('error', `${sk.loadFailed || 'Load failed'}: ${err?.message || ''}`);
+      toast('error', `${skRef.current.loadFailed || 'Load failed'}: ${err?.message || ''}`);
     }
-  }, [loadCache, saveCache, sk, toast]);
+  }, [loadCache, saveCache, toast]);
 
   // Unified fetch entry point
   const fetchData = useCallback(async (force = false) => {
@@ -421,7 +423,7 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
     try {
       const result = await skillHubApi.install();
       if (result.success) {
-        toast('success', sk.installSuccess || 'SkillHub CLI installed successfully!');
+        toast('success', skRef.current.installSuccess || 'SkillHub CLI installed successfully!');
         setCLIStatus('installed');
         localStorage.setItem('skillhub_cli_installed', 'true');
       } else {
@@ -432,15 +434,15 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       const errorMsg = err?.message || 'Installation failed';
       let localizedError = errorMsg;
       if (errorMsg.includes('PERMISSION_DENIED')) {
-        localizedError = sk.permissionDenied || 'Permission denied. Please run with sudo.';
+        localizedError = skRef.current.permissionDenied || 'Permission denied. Please run with sudo.';
       } else if (errorMsg.includes('PLATFORM_NOT_SUPPORTED')) {
-        localizedError = sk.platformNotSupported || 'Platform not supported. Please install manually.';
+        localizedError = skRef.current.platformNotSupported || 'Platform not supported. Please install manually.';
       }
       setCLIError(localizedError);
       setCLIStatus('error');
-      toast('error', `${sk.installFailed || 'Install failed'}: ${localizedError}`);
+      toast('error', `${skRef.current.installFailed || 'Install failed'}: ${localizedError}`);
     }
-  }, [sk, toast]);
+  }, [toast]);
 
   // Dismiss banner
   const handleDismissBanner = useCallback(() => {
@@ -458,139 +460,139 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       console.debug('Failed to fetch installed skills:', err);
       setInstalledSkillNames(new Set());
     }
-  }, []);
+}, []);
 
-  // Initial load
-  useEffect(() => {
-    const dismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
-    const wasInstalled = localStorage.getItem('skillhub_cli_installed') === 'true';
-    if (dismissed === 'true' || wasInstalled) {
-      setCLIStatus(wasInstalled ? 'installed' : 'dismissed');
-    } else {
-      checkCLI();
-    }
-    fetchData();
-    fetchInstalledSkills();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+// Initial load
+useEffect(() => {
+  const dismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
+  const wasInstalled = localStorage.getItem('skillhub_cli_installed') === 'true';
+  if (dismissed === 'true' || wasInstalled) {
+    setCLIStatus(wasInstalled ? 'installed' : 'dismissed');
+  } else {
+    checkCLI();
+  }
+  fetchData();
+  fetchInstalledSkills();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // Only run once on mount
 
-  // Client-side filtering (only used in fallback mode when paginated API is unavailable)
-  const filteredSkills = useMemo(() => {
-    if (usePaginatedApi || !data) return [];
-    let list = data.skills;
+// Client-side filtering (only used in fallback mode when paginated API is unavailable)
+const filteredSkills = useMemo(() => {
+  if (usePaginatedApi || !data) return [];
+  let list = data.skills;
 
-    if (showFeatured) {
-      const featuredSet = new Set(data.featured);
-      list = list.filter(s => featuredSet.has(s.slug));
-    }
-    if (category !== 'all') {
-      const categoryTags = data.categories[category] || [];
-      const tagSet = new Set(categoryTags.map(t => t.toLowerCase()));
-      list = list.filter(s => s.tags.some(t => tagSet.has(t.toLowerCase())));
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(s =>
-        s.name.toLowerCase().includes(q) ||
-        s.slug.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q) ||
-        s.description_zh?.toLowerCase().includes(q)
-      );
-    }
-    list = [...list].sort((a, b) => {
-      if (sortBy === 'downloads') return b.downloads - a.downloads;
-      if (sortBy === 'stars') return b.stars - a.stars;
-      return b.updated_at - a.updated_at;
-    });
-    return list;
-  }, [data, showFeatured, category, searchQuery, sortBy, usePaginatedApi]);
+  if (showFeatured) {
+    const featuredSet = new Set(data.featured);
+    list = list.filter(s => featuredSet.has(s.slug));
+  }
+  if (category !== 'all') {
+    const categoryTags = data.categories[category] || [];
+    const tagSet = new Set(categoryTags.map(t => t.toLowerCase()));
+    list = list.filter(s => s.tags.some(t => tagSet.has(t.toLowerCase())));
+  }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.slug.toLowerCase().includes(q) ||
+      s.description.toLowerCase().includes(q) ||
+      s.description_zh?.toLowerCase().includes(q)
+    );
+  }
+  list = [...list].sort((a, b) => {
+    if (sortBy === 'downloads') return b.downloads - a.downloads;
+    if (sortBy === 'stars') return b.stars - a.stars;
+    return b.updated_at - a.updated_at;
+  });
+  return list;
+}, [data, showFeatured, category, searchQuery, sortBy, usePaginatedApi]);
 
-  // Unified rendered skills list
-  const renderedSkills = useMemo(() => {
-    if (usePaginatedApi) return skills;
-    return filteredSkills.slice(0, 60);
-  }, [usePaginatedApi, skills, filteredSkills]);
+// Unified rendered skills list
+const renderedSkills = useMemo(() => {
+  if (usePaginatedApi) return skills;
+  return filteredSkills.slice(0, 60);
+}, [usePaginatedApi, skills, filteredSkills]);
 
-  // Re-fetch when sort/category/featured change (paginated mode)
-  useEffect(() => {
-    if (!usePaginatedApi) return;
-    if (searchQuery.trim()) return; // search has its own handler
+// Re-fetch when sort/category/featured change (paginated mode)
+useEffect(() => {
+  if (!usePaginatedApi) return;
+  if (searchQuery.trim()) return; // search has its own handler
+  fetchPage(1);
+}, [sortBy, category, showFeatured]);
+
+// Debounced server-side search
+useEffect(() => {
+  if (!usePaginatedApi) return;
+  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  if (!searchQuery.trim()) {
     fetchPage(1);
-  }, [sortBy, category, showFeatured]);
+    return;
+  }
+  searchDebounceRef.current = setTimeout(() => {
+    fetchSearch(searchQuery.trim());
+  }, 300);
+  return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+}, [searchQuery]);
 
-  // Debounced server-side search
-  useEffect(() => {
-    if (!usePaginatedApi) return;
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (!searchQuery.trim()) {
-      fetchPage(1);
-      return;
+// Copy prompt
+const handleCopyPrompt = useCallback((skill: SkillHubSkill) => {
+  const prompt = `请先检查是否已安装 SkillHub 商店，若未安装，请根据 https://skillhub-1251783334.cos.ap-guangzhou.myqcloud.com/install/skillhub.md 安装 SkillHub 商店，然后安装 ${skill.slug} 技能。\n\n若已安装，则直接安装 ${skill.slug} 技能。`;
+  copyToClipboard(prompt).then(() => {
+    toast('success', skRef.current.copiedHint || 'Copied to clipboard');
+  }).catch(() => {
+    toast('error', skRef.current.copyFailed || 'Copy failed');
+  });
+}, [toast]);
+
+// Copy CLI command
+const handleCopyCLI = useCallback((skill: SkillHubSkill) => {
+  const command = `skillhub install ${skill.slug}`;
+  copyToClipboard(command).then(() => {
+    toast('success', skRef.current.copiedHint || 'Copied to clipboard');
+  }).catch(() => {
+    toast('error', skRef.current.copyFailed || 'Copy failed');
+  });
+}, [toast]);
+
+// Right button action: if CLI installed → show confirm dialog; else → copy CLI command
+const handleRightButton = useCallback((skill: SkillHubSkill) => {
+  if (cliStatus === 'installed') {
+    setConfirmSkill(skill);
+  } else {
+    handleCopyCLI(skill);
+  }
+}, [cliStatus, handleCopyCLI]);
+
+// Install skill via API (called after confirmation)
+const handleInstallSkill = useCallback(async (skill: SkillHubSkill) => {
+  if (installingSlug) return;
+  setConfirmSkill(null);
+  setInstallingSlug(skill.slug);
+  try {
+    const result = await skillHubApi.installSkill(skill.slug);
+    if (result.success) {
+      toast('success', `${skill.name} ${skRef.current.installSuccess || 'installed successfully'}`);
+      fetchInstalledSkills();
     }
-    searchDebounceRef.current = setTimeout(() => {
-      fetchSearch(searchQuery.trim());
-    }, 300);
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchQuery]);
-
-  // Copy prompt
-  const handleCopyPrompt = useCallback((skill: SkillHubSkill) => {
-    const prompt = `请先检查是否已安装 SkillHub 商店，若未安装，请根据 https://skillhub-1251783334.cos.ap-guangzhou.myqcloud.com/install/skillhub.md 安装 SkillHub 商店，然后安装 ${skill.slug} 技能。\n\n若已安装，则直接安装 ${skill.slug} 技能。`;
-    copyToClipboard(prompt).then(() => {
-      toast('success', sk.copiedHint || 'Copied to clipboard');
-    }).catch(() => {
-      toast('error', sk.copyFailed || 'Copy failed');
-    });
-  }, [sk, toast]);
-
-  // Copy CLI command
-  const handleCopyCLI = useCallback((skill: SkillHubSkill) => {
-    const command = `skillhub install ${skill.slug}`;
-    copyToClipboard(command).then(() => {
-      toast('success', sk.copiedHint || 'Copied to clipboard');
-    }).catch(() => {
-      toast('error', sk.copyFailed || 'Copy failed');
-    });
-  }, [sk, toast]);
-
-  // Right button action: if CLI installed → show confirm dialog; else → copy CLI command
-  const handleRightButton = useCallback((skill: SkillHubSkill) => {
-    if (cliStatus === 'installed') {
-      setConfirmSkill(skill);
+  } catch (err: any) {
+    const msg = err?.message || 'Install failed';
+    if (msg.includes('CLI_NOT_INSTALLED')) {
+      toast('error', skRef.current.skillHubBannerNotInstalled || 'SkillHub CLI not installed');
+    } else if (msg.includes('PLATFORM_NOT_SUPPORTED')) {
+      toast('error', skRef.current.platformNotSupported || 'Platform not supported. Please install manually.');
     } else {
-      handleCopyCLI(skill);
+      toast('error', `${skRef.current.installFailed || 'Install failed'}: ${msg}`);
     }
-  }, [cliStatus, handleCopyCLI]);
+  } finally {
+    setInstallingSlug(null);
+  }
+}, [installingSlug, toast, fetchInstalledSkills]);
 
-  // Install skill via API (called after confirmation)
-  const handleInstallSkill = useCallback(async (skill: SkillHubSkill) => {
-    if (installingSlug) return;
-    setConfirmSkill(null);
-    setInstallingSlug(skill.slug);
-    try {
-      const result = await skillHubApi.installSkill(skill.slug);
-      if (result.success) {
-        toast('success', `${skill.name} ${sk.installSuccess || 'installed successfully'}`);
-        fetchInstalledSkills();
-      }
-    } catch (err: any) {
-      const msg = err?.message || 'Install failed';
-      if (msg.includes('CLI_NOT_INSTALLED')) {
-        toast('error', sk.skillHubBannerNotInstalled || 'SkillHub CLI not installed');
-      } else if (msg.includes('PLATFORM_NOT_SUPPORTED')) {
-        toast('error', sk.platformNotSupported || 'Platform not supported. Please install manually.');
-      } else {
-        toast('error', `${sk.installFailed || 'Install failed'}: ${msg}`);
-      }
-    } finally {
-      setInstallingSlug(null);
-    }
-  }, [installingSlug, sk, toast, fetchInstalledSkills]);
-
-  const categories = useMemo(() => {
-    if (usePaginatedApi) return Object.keys(categoriesList);
-    if (!data) return [];
-    return Object.keys(data.categories);
-  }, [usePaginatedApi, categoriesList, data]);
+const categories = useMemo(() => {
+  if (usePaginatedApi) return Object.keys(categoriesList);
+  if (!data) return [];
+  return Object.keys(data.categories);
+}, [usePaginatedApi, categoriesList, data]);
 
   const cacheAge = useMemo(() => {
     if (!lastUpdated) return '';

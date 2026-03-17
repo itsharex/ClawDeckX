@@ -165,6 +165,8 @@ function groupNodes(list: NodeEntry[], key: GroupKey, nd: any): { label: string;
 const Nodes: React.FC<NodesProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const nd = (t as any).nd;
+  const ndRef = useRef(nd);
+  ndRef.current = nd;
   const { toast } = useToast();
 
   const [tab, setTab] = useState<TabId>('nodes');
@@ -308,13 +310,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       setAlerts(a => [...newAlerts, ...a].slice(0, 50));
       for (const al of newAlerts) {
         const msg = al.type === 'offline'
-          ? (nd?.alertNodeOffline || '').replace('{name}', al.nodeName)
-          : (nd?.alertNodeBack || '').replace('{name}', al.nodeName);
+          ? (ndRef.current?.alertNodeOffline || '').replace('{name}', al.nodeName)
+          : (ndRef.current?.alertNodeBack || '').replace('{name}', al.nodeName);
         toast(al.type === 'offline' ? 'error' : 'success', msg);
       }
     }
     prevNodesRef.current = nodes;
-  }, [nodes, nd, toast]);
+  }, [nodes, toast]);
 
   // Auto-refresh timer
   useEffect(() => {
@@ -427,16 +429,17 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
           } catch { fail++; }
         }
         toast(fail === 0 ? 'success' : 'error',
-          (nd?.batchInvokeOk || '').replace('{count}', String(ok)) + (fail > 0 ? ` (${fail} failed)` : ''));
+          (ndRef.current?.batchInvokeOk || '').replace('{count}', String(ok)) + (fail > 0 ? ` (${fail} failed)` : ''));
         setBatching(false);
         setSelectedIds(new Set());
       },
     });
-  }, [selectedIds, batchCmd, batchParams, batching, nd, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds, batchCmd, batchParams, batching, toast]);
 
   const handleCopy = useCallback((text: string) => {
-    copyToClipboard(text).then(() => toast('success', nd.copied)).catch(() => toast('error', 'Copy failed'));
-  }, [toast, nd.copied]);
+    copyToClipboard(text).then(() => toast('success', ndRef.current.copied)).catch(() => toast('error', 'Copy failed'));
+  }, [toast]);
 
   const fetchDevices = useCallback(async () => {
     setDevicesLoading(true); setDevicesError('');
@@ -463,9 +466,9 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     try {
       const res = await gwApi.proxy('node.describe', { nodeId }) as NodeDetail;
       setNodeDetail(res);
-    } catch (err: any) { toast('error', err?.message || nd.invokeFailed); }
+    } catch (err: any) { toast('error', err?.message || ndRef.current.invokeFailed); }
     finally { setDetailLoading(false); }
-  }, [toast, nd]);
+  }, [toast]);
 
   const handleSelectNode = useCallback((node: NodeEntry) => {
     if (selectedNode?.nodeId === node.nodeId) {
@@ -494,12 +497,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         timeoutMs: invokeTimeout ? Number(invokeTimeout) : undefined,
         idempotencyKey: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       }) as any;
-      setInvokeResult({ ok: true, text: nd.invokeOk, payload: res?.payload ?? res?.payloadJSON ?? null });
+      setInvokeResult({ ok: true, text: ndRef.current.invokeOk, payload: res?.payload ?? res?.payloadJSON ?? null });
     } catch (err: any) {
-      setInvokeResult({ ok: false, text: nd.invokeFailed + ': ' + (err?.message || '') });
+      setInvokeResult({ ok: false, text: ndRef.current.invokeFailed + ': ' + (err?.message || '') });
     }
     setInvoking(false);
-  }, [selectedNode, invokeCmd, invokeParams, invokeTimeout, invoking, nd]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNode, invokeCmd, invokeParams, invokeTimeout, invoking]);
 
   const handlePairRequest = useCallback(async () => {
     if (!pairNodeId.trim() || pairing) return;
@@ -507,15 +511,16 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setPairResult(null);
     try {
       await gwApi.nodePairRequest({ nodeId: pairNodeId.trim(), displayName: pairName.trim() || undefined, platform: pairPlatform.trim() || undefined });
-      setPairResult({ ok: true, text: nd.pairOk });
+      setPairResult({ ok: true, text: ndRef.current.pairOk });
       setEventLog(prev => [`[${new Date().toLocaleTimeString()}] pair.request → ${pairNodeId.trim()}`, ...prev.slice(0, 49)]);
       setPairNodeId(''); setPairName(''); setPairPlatform('');
       fetchDevices();
     } catch (err: any) {
-      setPairResult({ ok: false, text: nd.pairFailed + ': ' + (err?.message || '') });
+      setPairResult({ ok: false, text: ndRef.current.pairFailed + ': ' + (err?.message || '') });
     }
     setPairing(false);
-  }, [pairNodeId, pairName, pairPlatform, pairing, nd, fetchDevices]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairNodeId, pairName, pairPlatform, pairing, fetchDevices]);
 
   const handlePairVerify = useCallback(async () => {
     if (!verifyNodeId.trim() || !verifyToken.trim() || verifying) return;
@@ -523,12 +528,13 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     setVerifyResult(null);
     try {
       const res = await gwApi.nodePairVerify(verifyNodeId.trim(), verifyToken.trim()) as any;
-      setVerifyResult({ ok: true, text: nd.pairVerifyOk + (res?.valid === false ? ` (${nd.invalid})` : '') });
+      setVerifyResult({ ok: true, text: ndRef.current.pairVerifyOk + (res?.valid === false ? ` (${ndRef.current.invalid})` : '') });
     } catch (err: any) {
-      setVerifyResult({ ok: false, text: nd.pairVerifyFailed + ': ' + (err?.message || '') });
+      setVerifyResult({ ok: false, text: ndRef.current.pairVerifyFailed + ': ' + (err?.message || '') });
     }
     setVerifying(false);
-  }, [verifyNodeId, verifyToken, verifying, nd]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifyNodeId, verifyToken, verifying]);
 
   const handleRename = useCallback(async (nodeId: string) => {
     if (!renameName.trim() || renaming) return;
@@ -538,9 +544,10 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
       setRenameNodeId(null);
       setRenameName('');
       fetchNodes();
-    } catch (err: any) { toast('error', err?.message || nd?.renameFailed); }
+    } catch (err: any) { toast('error', err?.message || ndRef.current?.renameFailed); }
     setRenaming(false);
-  }, [renameName, renaming, fetchNodes, toast, nd]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renameName, renaming, fetchNodes, toast]);
 
   const fetchConfig = useCallback(async () => {
     setConfigLoading(true);
@@ -579,94 +586,94 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
   const handleApprove = useCallback((requestId: string, displayName?: string) => {
     setConfirmDialog({
-      title: nd?.confirmApproveTitle || 'Approve',
-      desc: (nd?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
+      title: ndRef.current?.confirmApproveTitle || 'Approve',
+      desc: (ndRef.current?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
       variant: 'success',
       onOk: async () => {
         try {
           await gwApi.devicePairApprove(requestId);
-          toast('success', nd.approved);
+          toast('success', ndRef.current.approved);
           fetchDevices();
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [fetchDevices, toast, nd]);
+  }, [fetchDevices, toast]);
 
   const handleReject = useCallback((requestId: string, displayName?: string) => {
     setConfirmDialog({
-      title: nd?.confirmRejectTitle || 'Reject',
-      desc: (nd?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
+      title: ndRef.current?.confirmRejectTitle || 'Reject',
+      desc: (ndRef.current?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
       onOk: async () => {
         try {
           await gwApi.devicePairReject(requestId);
-          toast('success', nd.rejected);
+          toast('success', ndRef.current.rejected);
           fetchDevices();
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [fetchDevices, nd, toast]);
+  }, [fetchDevices, toast]);
 
   const handleNodePairApprove = useCallback((requestId: string, displayName?: string) => {
     setConfirmDialog({
-      title: nd?.confirmApproveTitle || 'Approve',
-      desc: (nd?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
+      title: ndRef.current?.confirmApproveTitle || 'Approve',
+      desc: (ndRef.current?.confirmApproveDesc || 'Approve pairing request from {name}?').replace('{name}', displayName || requestId),
       variant: 'success',
       onOk: async () => {
         try {
           await gwApi.nodePairApprove(requestId);
-          toast('success', nd.approved);
+          toast('success', ndRef.current.approved);
           setTimeout(() => fetchDevices(), 500);
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [fetchDevices, toast, nd]);
+  }, [fetchDevices, toast]);
 
   const handleNodePairReject = useCallback((requestId: string, displayName?: string) => {
     setConfirmDialog({
-      title: nd?.confirmRejectTitle || 'Reject',
-      desc: (nd?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
+      title: ndRef.current?.confirmRejectTitle || 'Reject',
+      desc: (ndRef.current?.confirmRejectDesc || 'Reject pairing request from {name}?').replace('{name}', displayName || requestId),
       onOk: async () => {
         try {
           await gwApi.nodePairReject(requestId);
-          toast('success', nd.rejected);
+          toast('success', ndRef.current.rejected);
           setTimeout(() => fetchDevices(), 500);
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [fetchDevices, nd, toast]);
+  }, [fetchDevices, toast]);
 
   const handleRotate = useCallback(async (deviceId: string, role: string, scopes?: string[]) => {
     try {
       const res = await gwApi.deviceTokenRotate(deviceId, role, scopes) as any;
       if (res?.token) {
         await copyToClipboard(res.token);
-        toast('success', nd.tokenRotated + ' - ' + nd.copied);
+        toast('success', ndRef.current.tokenRotated + ' - ' + ndRef.current.copied);
       }
       fetchDevices();
     } catch (e: any) {
       toast('error', String(e));
       setDevicesError(String(e));
     }
-  }, [fetchDevices, toast, nd]);
+  }, [fetchDevices, toast]);
 
   const handleRevoke = useCallback((deviceId: string, role: string) => {
     setConfirmDialog({
-      title: nd?.confirmRevokeTitle || 'Revoke',
-      desc: nd?.confirmRevokeDesc || nd.confirmRevoke || 'Revoke this token?',
+      title: ndRef.current?.confirmRevokeTitle || 'Revoke',
+      desc: ndRef.current?.confirmRevokeDesc || ndRef.current.confirmRevoke || 'Revoke this token?',
       onOk: async () => {
         try {
           await gwApi.deviceTokenRevoke(deviceId, role);
-          toast('success', nd.revoked);
+          toast('success', ndRef.current.revoked);
           fetchDevices();
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [fetchDevices, nd, toast]);
+  }, [fetchDevices, toast]);
 
   const clearEventLog = useCallback(() => setEventLog([]), []);
   const dismissAlert = useCallback((id: string) => setAlerts(a => a.filter(x => x.id !== id)), []);
@@ -724,39 +731,39 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const handleBatchApprove = useCallback(() => {
     if (selectedPendingIds.size === 0) return;
     setConfirmDialog({
-      title: nd?.confirmApproveTitle || 'Approve',
-      desc: (nd?.batchApproveConfirm || 'Approve {count} requests?').replace('{count}', String(selectedPendingIds.size)),
+      title: ndRef.current?.confirmApproveTitle || 'Approve',
+      desc: (ndRef.current?.batchApproveConfirm || 'Approve {count} requests?').replace('{count}', String(selectedPendingIds.size)),
       variant: 'success',
       onOk: async () => {
         let ok = 0;
         for (const rid of selectedPendingIds) {
           try { await gwApi.devicePairApprove(rid); ok++; } catch { /* skip */ }
         }
-        toast('success', (nd?.batchApproveOk || '').replace('{count}', String(ok)));
+        toast('success', (ndRef.current?.batchApproveOk || '').replace('{count}', String(ok)));
         setSelectedPendingIds(new Set());
         fetchDevices();
         setConfirmDialog(null);
       },
     });
-  }, [selectedPendingIds, nd, toast, fetchDevices]);
+  }, [selectedPendingIds, toast, fetchDevices]);
 
   const handleBatchReject = useCallback(() => {
     if (selectedPendingIds.size === 0) return;
     setConfirmDialog({
-      title: nd?.confirmRejectTitle || 'Reject',
-      desc: (nd?.batchRejectConfirm || 'Reject {count} requests?').replace('{count}', String(selectedPendingIds.size)),
+      title: ndRef.current?.confirmRejectTitle || 'Reject',
+      desc: (ndRef.current?.batchRejectConfirm || 'Reject {count} requests?').replace('{count}', String(selectedPendingIds.size)),
       onOk: async () => {
         let ok = 0;
         for (const rid of selectedPendingIds) {
           try { await gwApi.devicePairReject(rid); ok++; } catch { /* skip */ }
         }
-        toast('success', (nd?.batchRejectOk || '').replace('{count}', String(ok)));
+        toast('success', (ndRef.current?.batchRejectOk || '').replace('{count}', String(ok)));
         setSelectedPendingIds(new Set());
         fetchDevices();
         setConfirmDialog(null);
       },
     });
-  }, [selectedPendingIds, nd, toast, fetchDevices]);
+  }, [selectedPendingIds, toast, fetchDevices]);
 
   const togglePendingSelect = useCallback((rid: string) => {
     setSelectedPendingIds(prev => {
@@ -769,30 +776,30 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   // === Devices: enhanced confirm dialog wrappers ===
   const handleRevokeWithDialog = useCallback((deviceId: string, role: string) => {
     setConfirmDialog({
-      title: nd?.confirmRevokeTitle || 'Revoke',
-      desc: nd?.confirmRevokeDesc || '',
+      title: ndRef.current?.confirmRevokeTitle || 'Revoke',
+      desc: ndRef.current?.confirmRevokeDesc || '',
       onOk: async () => {
         try {
           await gwApi.deviceTokenRevoke(deviceId, role);
-          toast('success', nd.revoked);
+          toast('success', ndRef.current.revoked);
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] token.revoke → ${deviceId}:${role}`, ...prev.slice(0, 49)]);
           fetchDevices();
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [nd, toast, fetchDevices]);
+  }, [toast, fetchDevices]);
 
   const handleRotateWithDialog = useCallback((deviceId: string, role: string, scopes?: string[]) => {
     setConfirmDialog({
-      title: nd?.confirmRotateTitle || 'Rotate',
-      desc: nd?.confirmRotateDesc || '',
+      title: ndRef.current?.confirmRotateTitle || 'Rotate',
+      desc: ndRef.current?.confirmRotateDesc || '',
       onOk: async () => {
         try {
           const res = await gwApi.deviceTokenRotate(deviceId, role, scopes) as any;
           if (res?.token) {
             await copyToClipboard(res.token);
-            toast('success', nd.tokenRotated + ' - ' + nd.copied);
+            toast('success', ndRef.current.tokenRotated + ' - ' + ndRef.current.copied);
           }
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] token.rotate → ${deviceId}:${role}`, ...prev.slice(0, 49)]);
           fetchDevices();
@@ -800,42 +807,44 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
         setConfirmDialog(null);
       },
     });
-  }, [nd, toast, fetchDevices]);
+  }, [toast, fetchDevices]);
 
   const handleRejectWithDialog = useCallback((requestId: string, deviceName?: string) => {
     setConfirmDialog({
-      title: nd?.confirmRejectTitle || 'Reject',
-      desc: nd?.confirmRejectDesc || '',
+      title: ndRef.current?.confirmRejectTitle || 'Reject',
+      desc: ndRef.current?.confirmRejectDesc || '',
       onOk: async () => {
         try {
           await gwApi.devicePairReject(requestId);
-          toast('success', nd.rejected);
+          toast('success', ndRef.current.rejected);
           setEventLog(prev => [`[${new Date().toLocaleTimeString()}] pair.reject → ${deviceName || requestId}`, ...prev.slice(0, 49)]);
           fetchDevices();
         } catch (e: any) { toast('error', String(e)); }
         setConfirmDialog(null);
       },
     });
-  }, [nd, toast, fetchDevices]);
+  }, [toast, fetchDevices]);
 
   // === Devices: form validation ===
   const validatePairNodeId = useCallback((v: string) => {
-    if (!v.trim()) { setPairNodeIdError(nd?.pairFieldRequired || ''); return false; }
-    if (!/^[\w-]+$/.test(v.trim())) { setPairNodeIdError(nd?.pairNodeIdFormat || ''); return false; }
+    if (!v.trim()) { setPairNodeIdError(ndRef.current?.pairFieldRequired || ''); return false; }
+    if (!/^[\w-]+$/.test(v.trim())) { setPairNodeIdError(ndRef.current?.pairNodeIdFormat || ''); return false; }
     setPairNodeIdError(''); return true;
-  }, [nd]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const validateVerifyToken = useCallback((v: string) => {
-    if (!v.trim()) { setVerifyTokenError(nd?.pairFieldRequired || ''); return false; }
+    if (!v.trim()) { setVerifyTokenError(ndRef.current?.pairFieldRequired || ''); return false; }
     setVerifyTokenError(''); return true;
-  }, [nd]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // === Devices: batch rotate ===
   const handleBatchRotate = useCallback(() => {
     if (paired.length === 0) return;
     setConfirmDialog({
-      title: nd?.confirmRotateTitle || 'Rotate',
-      desc: (nd?.batchRotateConfirm || 'Rotate {count} tokens?').replace('{count}', String(paired.length)),
+      title: ndRef.current?.confirmRotateTitle || 'Rotate',
+      desc: (ndRef.current?.batchRotateConfirm || 'Rotate {count} tokens?').replace('{count}', String(paired.length)),
       onOk: async () => {
         let ok = 0;
         for (const d of paired) {
@@ -846,12 +855,12 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
             }
           }
         }
-        toast('success', (nd?.batchRotateOk || '').replace('{count}', String(ok)));
+        toast('success', (ndRef.current?.batchRotateOk || '').replace('{count}', String(ok)));
         fetchDevices();
         setConfirmDialog(null);
       },
     });
-  }, [paired, nd, toast, fetchDevices]);
+  }, [paired, toast, fetchDevices]);
 
   // === Devices: advanced filtering for paired devices ===
   const roleOptions = useMemo(() => {
@@ -926,15 +935,15 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   const handleSaveTemplate = useCallback(() => {
     if (!templateName.trim() || !config) return;
     setBindingTemplates(prev => [...prev, { name: templateName.trim(), config: JSON.parse(JSON.stringify(config)) }]);
-    toast('success', nd?.bindingTemplateSaved || '');
+    toast('success', ndRef.current?.bindingTemplateSaved || '');
     setTemplateName('');
-  }, [templateName, config, toast, nd]);
+  }, [templateName, config, toast]);
 
   const handleApplyTemplate = useCallback((tmpl: { name: string; config: any }) => {
     setConfig(JSON.parse(JSON.stringify(tmpl.config)));
     setConfigDirty(true);
-    toast('success', nd?.bindingTemplateApplied || '');
-  }, [toast, nd]);
+    toast('success', ndRef.current?.bindingTemplateApplied || '');
+  }, [toast]);
 
   // === Bindings: save to history before saving ===
   const handleSaveBindingsEnhanced = useCallback(async () => {
@@ -951,16 +960,16 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
 
   const handleRollback = useCallback((entry: { ts: number; config: any }) => {
     setConfirmDialog({
-      title: nd?.bindingRollbackTitle || 'Rollback',
-      desc: nd?.bindingRollbackConfirm || 'Rollback to this configuration?',
+      title: ndRef.current?.bindingRollbackTitle || 'Rollback',
+      desc: ndRef.current?.bindingRollbackConfirm || 'Rollback to this configuration?',
       onOk: () => {
         setConfig(JSON.parse(JSON.stringify(entry.config)));
         setConfigDirty(true);
-        toast('success', nd?.bindingRollbackOk || '');
+        toast('success', ndRef.current?.bindingRollbackOk || '');
         setConfirmDialog(null);
       },
     });
-  }, [nd, toast]);
+  }, [toast]);
 
   // === Bindings: drag-sort agents ===
   const handleDragStart = useCallback((idx: number) => setDragIndex(idx), []);

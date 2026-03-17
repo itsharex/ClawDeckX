@@ -24,6 +24,8 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
   const { toast } = useToast();
   const { confirm } = useConfirm();
   const sk = useMemo(() => (getTranslation(language) as any).sk || {}, [language]);
+  const sRef = useRef(s);
+  sRef.current = s;
 
   // ── OpenClaw 更新 ──
   const [ocUpdateChecking, setOcUpdateChecking] = useState(false);
@@ -91,9 +93,9 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
     try {
       const res = updateChannel === 'beta' ? await selfUpdateApi.checkChannel('beta') : await selfUpdateApi.check();
       setSelfUpdateInfo(res);
-    } catch { setSelfUpdateInfo({ available: false, currentVersion: '', latestVersion: '', error: s.networkError }); }
+    } catch { setSelfUpdateInfo({ available: false, currentVersion: '', latestVersion: '', error: sRef.current.networkError }); }
     setSelfUpdateChecking(false);
-  }, [updateChannel, s]);
+  }, [updateChannel]);
 
   const handleSelfUpdateApply = useCallback(async () => {
     if (!selfUpdateInfo?.downloadUrl) return;
@@ -122,7 +124,7 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
                 const p = JSON.parse(line.slice(6));
                 setSelfUpdateProgress(p);
                 if (p.done) {
-                  toast('success', s.selfUpdateDone);
+                  toast('success', sRef.current.selfUpdateDone);
                   setTimeout(() => window.location.reload(), 3000);
                 }
                 if (p.error) {
@@ -134,11 +136,11 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
         }
       }
     } catch (err: any) {
-      setSelfUpdateProgress({ stage: 'error', percent: 0, error: err?.message || s.unknownError });
-      toast('error', s.selfUpdateFailed);
+      setSelfUpdateProgress({ stage: 'error', percent: 0, error: err?.message || sRef.current.unknownError });
+      toast('error', sRef.current.selfUpdateFailed);
     }
     setSelfUpdating(false);
-  }, [selfUpdateInfo, s, toast]);
+  }, [selfUpdateInfo, toast]);
 
   // Release notes translation — cached in SQLite via backend
   const handleTranslateNotes = useCallback(async (text: string, product?: string, ver?: string) => {
@@ -149,10 +151,10 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
       setTranslatedNotes(res.translated);
       setShowTranslated(true);
     } catch {
-      toast('error', s.translateFailed || 'Translation failed');
+      toast('error', sRef.current.translateFailed || 'Translation failed');
     }
     setNotesTranslating(false);
-  }, [language, s, toast]);
+  }, [language, toast]);
 
   // OpenClaw update handlers
   const handleOcUpdateCheck = useCallback(async () => {
@@ -177,29 +179,29 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
         setOcNotesTranslating(false);
       }
     } catch {
-      setOcUpdateInfo({ available: false, error: s.networkError });
+      setOcUpdateInfo({ available: false, error: sRef.current.networkError });
       setOcUpdateChecking(false);
     }
-  }, [language, s]);
+  }, [language]);
 
   const handleOcUpdateRun = useCallback(async () => {
     const ok = await confirm({
-      title: s.openclawUpdateRun || 'Update OpenClaw',
-      message: `${s.openclawUpdateConfirm || 'Update OpenClaw from'} v${ocUpdateInfo?.currentVersion || '?'} → v${ocUpdateInfo?.latestVersion || '?'}`,
-      confirmText: s.openclawUpdateRun || 'Update',
+      title: sRef.current.openclawUpdateRun || 'Update OpenClaw',
+      message: `${sRef.current.openclawUpdateConfirm || 'Update OpenClaw from'} v${ocUpdateInfo?.currentVersion || '?'} → v${ocUpdateInfo?.latestVersion || '?'}`,
+      confirmText: sRef.current.openclawUpdateRun || 'Update',
       danger: false,
     });
     if (!ok) return;
     try {
       await runOcUpdate();
-      toast('success', s.openclawUpdateOk);
+      toast('success', sRef.current.openclawUpdateOk);
       await new Promise(r => setTimeout(r, 1500));
       const res = await hostInfoApi.checkUpdate();
       setOcUpdateInfo({ ...res, available: false });
     } catch {
-      toast('error', s.openclawUpdateFailed);
+      toast('error', sRef.current.openclawUpdateFailed);
     }
-  }, [runOcUpdate, s, toast, confirm, ocUpdateInfo]);
+  }, [runOcUpdate, toast, confirm, ocUpdateInfo]);
 
   // OpenClaw 升级日志自动滚动
   useEffect(() => {
@@ -225,10 +227,10 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
         const res = await gatewayApi.daemonInstall();
         // Immediately reflect the installed state from the response
         setServiceStatus(prev => prev ? { ...prev, openclaw_installed: res.installed } : { openclaw_installed: res.installed, clawdeckx_installed: false });
-        toast('success', s.serviceInstalled || 'OpenClaw service installed');
+        toast('success', sRef.current.serviceInstalled || 'OpenClaw service installed');
       } else {
         await serviceApi.installClawDeckX();
-        toast('success', s.serviceInstalled || 'ClawDeckX service installed');
+        toast('success', sRef.current.serviceInstalled || 'ClawDeckX service installed');
       }
       await loadServiceStatus();
     } catch (err: any) {
@@ -236,7 +238,7 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
     } finally {
       setServiceLoading(false);
     }
-  }, [s, toast, loadServiceStatus]);
+  }, [toast, loadServiceStatus]);
 
   const handleServiceUninstall = useCallback(async (service: 'openclaw' | 'clawdeckx') => {
     setServiceLoading(true);
@@ -245,10 +247,10 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
         const res = await gatewayApi.daemonUninstall();
         // Immediately reflect the uninstalled state from the response
         setServiceStatus(prev => prev ? { ...prev, openclaw_installed: res.installed } : { openclaw_installed: res.installed, clawdeckx_installed: false });
-        toast('success', s.serviceUninstalled || 'OpenClaw service uninstalled');
+        toast('success', sRef.current.serviceUninstalled || 'OpenClaw service uninstalled');
       } else {
         await serviceApi.uninstallClawDeckX();
-        toast('success', s.serviceUninstalled || 'ClawDeckX service uninstalled');
+        toast('success', sRef.current.serviceUninstalled || 'ClawDeckX service uninstalled');
       }
       await loadServiceStatus();
     } catch (err: any) {
@@ -256,7 +258,7 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
     } finally {
       setServiceLoading(false);
     }
-  }, [s, toast, loadServiceStatus]);
+  }, [toast, loadServiceStatus]);
 
   // 初始化数据加载
   useEffect(() => {
