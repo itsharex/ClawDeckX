@@ -88,5 +88,5 @@ ENV OCD_DB_SQLITE_PATH=/data/clawdeckx/ClawDeckX.db \
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -sf http://localhost:${OCD_PORT:-18791}/api/v1/health || exit 1
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
 CMD ["/app/docker-entrypoint.sh"]
