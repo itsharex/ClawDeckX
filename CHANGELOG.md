@@ -25,6 +25,7 @@ _2026-03-18_
 
 ### 🐛 Bug Fixes / 修复
 
+- replace openclaw onboard with minimal config write
 - move app port to 18788
 - accept generated config
 - wait for docker health
@@ -178,6 +179,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 

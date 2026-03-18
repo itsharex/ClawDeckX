@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 # Installation paths - prefer current directory
 BINARY_NAME="clawdeckx"
-DEFAULT_PORT=18791
+DEFAULT_PORT=18788
 PORT=$DEFAULT_PORT
 # Config and data directories are relative to executable location
 CONFIG_DIR=""
