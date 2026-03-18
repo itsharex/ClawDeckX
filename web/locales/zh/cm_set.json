@@ -412,7 +412,10 @@
     "startupSessions": "会话",
     "startupEditor": "编辑器",
     "startupSkills": "技能",
-    "startupAgents": "智能体"
+    "startupAgents": "智能体",
+    "wallpaperPreviewAlt": "壁纸预览",
+    "wallpaperHistoryAlt": "壁纸历史项",
+    "wallpaperFavoriteAlt": "收藏壁纸项"
   },
   "hi": {
     "title": "宿主机信息",

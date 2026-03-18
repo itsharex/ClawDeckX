@@ -412,7 +412,10 @@
     "startupSessions": "セッション",
     "startupEditor": "エディタ",
     "startupSkills": "スキル",
-    "startupAgents": "エージェント"
+    "startupAgents": "エージェント",
+    "wallpaperPreviewAlt": "壁紙のプレビュー",
+    "wallpaperHistoryAlt": "壁紙履歴アイテム",
+    "wallpaperFavoriteAlt": "お気に入りの壁紙アイテム"
   },
   "hi": {
     "title": "ホスト情報",

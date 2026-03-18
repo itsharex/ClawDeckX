@@ -412,7 +412,10 @@
     "startupSessions": "الجلسات",
     "startupEditor": "المحرر",
     "startupSkills": "المهارات",
-    "startupAgents": "الوكلاء"
+    "startupAgents": "الوكلاء",
+    "wallpaperPreviewAlt": "Wallpaper preview",
+    "wallpaperHistoryAlt": "Wallpaper history item",
+    "wallpaperFavoriteAlt": "Favorite wallpaper item"
   },
   "hi": {
     "title": "معلومات المضيف",

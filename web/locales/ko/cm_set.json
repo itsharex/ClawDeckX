@@ -330,20 +330,20 @@
     "notifyActive": "활성 채널",
     "notifyReuse": "OpenClaw 채널 재사용",
     "notifyReuseHint": "OpenClaw 설정에서 Telegram이 감지되었습니다. Bot Token을 재사용할 수 있습니다. Chat ID만 입력하세요.",
-    "notifyEventsTitle": "알림 이벤트"
-    ,"serviceManagement": "시스템 서비스 관리"
-    ,"serviceInstalled": "설치됨"
-    ,"serviceNotInstalled": "설치되지 않음"
-    ,"install": "설치"
-    ,"uninstall": "제거"
-    ,"installService": "설치"
-    ,"uninstallService": "제거"
-    ,"serviceUninstalled": "서비스가 제거되었습니다"
-    ,"serviceAutoStartDesc": "시스템 서비스로 등록하여 부팅 시 자동 시작합니다. 설치 후 게이트웨이가 백그라운드에서 자동 실행됩니다."
-    ,"serviceAutoStartEnabled": "자동 시작 활성화됨"
-    ,"serviceAutoStartDisabled": "미등록, 수동 시작 필요"
-    ,"serviceDockerManaged": "Docker에서 관리"
-    ,"serviceDockerDesc": "Docker 컨테이너 내에서 실행 중입니다. 자동 시작은 Docker 재시작 정책과 컨테이너 엔트리포인트 스크립트에 의해 관리됩니다. 시스템 서비스 등록이 필요하지 않습니다."
+    "notifyEventsTitle": "알림 이벤트",
+    "serviceManagement": "시스템 서비스 관리",
+    "serviceInstalled": "설치됨",
+    "serviceNotInstalled": "설치되지 않음",
+    "install": "설치",
+    "uninstall": "제거",
+    "installService": "설치",
+    "uninstallService": "제거",
+    "serviceUninstalled": "서비스가 제거되었습니다",
+    "serviceAutoStartDesc": "시스템 서비스로 등록하여 부팅 시 자동 시작합니다. 설치 후 게이트웨이가 백그라운드에서 자동 실행됩니다.",
+    "serviceAutoStartEnabled": "자동 시작 활성화됨",
+    "serviceAutoStartDisabled": "미등록, 수동 시작 필요",
+    "serviceDockerManaged": "Docker에서 관리",
+    "serviceDockerDesc": "Docker 컨테이너 내에서 실행 중입니다. 자동 시작은 Docker 재시작 정책과 컨테이너 엔트리포인트 스크립트에 의해 관리됩니다. 시스템 서비스 등록이 필요하지 않습니다."
   },
   "pref": {
     "title": "기능 설정",
@@ -412,7 +412,10 @@
     "startupSessions": "세션",
     "startupEditor": "에디터",
     "startupSkills": "스킬",
-    "startupAgents": "에이전트"
+    "startupAgents": "에이전트",
+    "wallpaperPreviewAlt": "배경화면 미리보기",
+    "wallpaperHistoryAlt": "배경화면 기록 항목",
+    "wallpaperFavoriteAlt": "즐겨찾는 배경화면 항목"
   },
   "hi": {
     "title": "호스트 정보",

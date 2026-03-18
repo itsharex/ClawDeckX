@@ -412,7 +412,10 @@
     "startupSessions": "Sitzungen",
     "startupEditor": "Editor",
     "startupSkills": "Skills",
-    "startupAgents": "Agenten"
+    "startupAgents": "Agenten",
+    "wallpaperPreviewAlt": "Wallpaper preview",
+    "wallpaperHistoryAlt": "Wallpaper history item",
+    "wallpaperFavoriteAlt": "Favorite wallpaper item"
   },
   "hi": {
     "title": "Hostinformationen",

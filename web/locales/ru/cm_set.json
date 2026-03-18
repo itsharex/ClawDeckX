@@ -412,7 +412,10 @@
     "startupSessions": "Сессии",
     "startupEditor": "Редактор",
     "startupSkills": "Навыки",
-    "startupAgents": "Агенты"
+    "startupAgents": "Агенты",
+    "wallpaperPreviewAlt": "Wallpaper preview",
+    "wallpaperHistoryAlt": "Wallpaper history item",
+    "wallpaperFavoriteAlt": "Favorite wallpaper item"
   },
   "hi": {
     "title": "Информация о хосте",

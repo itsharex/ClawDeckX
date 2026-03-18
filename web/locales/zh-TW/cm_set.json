@@ -330,20 +330,20 @@
     "notifyActive": "已啟用渠道",
     "notifyReuse": "複用 OpenClaw 頻道",
     "notifyReuseHint": "已檢測到 OpenClaw 配置了 Telegram，可直接複用 Bot Token，只需填寫接收 Chat ID",
-    "notifyEventsTitle": "通知事件"
-    ,"serviceManagement": "系統服務管理"
-    ,"serviceInstalled": "已安裝"
-    ,"serviceNotInstalled": "未安裝"
-    ,"install": "安裝"
-    ,"uninstall": "解除安裝"
-    ,"installService": "安裝"
-    ,"uninstallService": "解除安裝"
-    ,"serviceUninstalled": "服務已解除安裝"
-    ,"serviceAutoStartDesc": "註冊為系統服務，實現開機自啟。安裝後閘道將在背景自動執行，無需手動干預。"
-    ,"serviceAutoStartEnabled": "已啟用開機自啟"
-    ,"serviceAutoStartDisabled": "未註冊，需手動啟動"
-    ,"serviceDockerManaged": "由 Docker 管理"
-    ,"serviceDockerDesc": "目前運行在 Docker 容器中。自動啟動由 Docker 重啟策略和容器入口腳本管理，無需註冊系統服務。"
+    "notifyEventsTitle": "通知事件",
+    "serviceManagement": "系統服務管理",
+    "serviceInstalled": "已安裝",
+    "serviceNotInstalled": "未安裝",
+    "install": "安裝",
+    "uninstall": "解除安裝",
+    "installService": "安裝",
+    "uninstallService": "解除安裝",
+    "serviceUninstalled": "服務已解除安裝",
+    "serviceAutoStartDesc": "註冊為系統服務，實現開機自啟。安裝後閘道將在背景自動執行，無需手動干預。",
+    "serviceAutoStartEnabled": "已啟用開機自啟",
+    "serviceAutoStartDisabled": "未註冊，需手動啟動",
+    "serviceDockerManaged": "由 Docker 管理",
+    "serviceDockerDesc": "目前運行在 Docker 容器中。自動啟動由 Docker 重啟策略和容器入口腳本管理，無需註冊系統服務。"
   },
   "pref": {
     "title": "功能設定",
@@ -412,7 +412,10 @@
     "startupSessions": "對話",
     "startupEditor": "編輯器",
     "startupSkills": "技能",
-    "startupAgents": "智慧體"
+    "startupAgents": "智慧體",
+    "wallpaperPreviewAlt": "桌布預覽",
+    "wallpaperHistoryAlt": "桌布歷史項目",
+    "wallpaperFavoriteAlt": "收藏桌布項目"
   },
   "hi": {
     "title": "宿主機資訊",
