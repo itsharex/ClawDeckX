@@ -27,11 +27,9 @@ RUN COMPAT=$(grep -o '"openclawCompat"[[:space:]]*:[[:space:]]*"[^"]*"' web/pack
 FROM ubuntu:22.04 AS openclaw-builder
 ENV DEBIAN_FRONTEND=noninteractive
 ARG OPENCLAW_VERSION=latest
-ENV NPM_CONFIG_PREFIX=/opt/openclaw-npm
-ENV PATH=/opt/openclaw-npm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg python3 make g++ && \
+        ca-certificates curl git gnupg python3 make g++ && \
     mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
@@ -41,30 +39,29 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}" && \
-    openclaw --version > /opt/openclaw-npm/.openclaw-version && \
-    find /opt/openclaw-npm/lib -name '*.md' -o -name '*.map' -o -name 'LICENSE*' -o -name 'CHANGELOG*' | xargs rm -f 2>/dev/null || true
+    OPENCLAW_TARGET="$(npm root -g)/openclaw/openclaw.mjs" && \
+    test -f "${OPENCLAW_TARGET}" && \
+    printf '%s\n' '#!/bin/sh' "exec ${OPENCLAW_TARGET} \"\$@\"" > /usr/local/bin/openclaw && \
+    chmod +x /usr/local/bin/openclaw && \
+    /usr/local/bin/openclaw --version > /tmp/openclaw-version && \
+    find /usr/lib/node_modules -name '*.md' -o -name '*.map' -o -name 'LICENSE*' -o -name 'CHANGELOG*' | xargs rm -f 2>/dev/null || true
 
 # Stage 4: Runtime (no build tools)
-FROM ubuntu:22.04
+FROM openclaw-builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates tzdata tini curl wget git jq ripgrep make \
-        procps lsof python3 python3-pip ffmpeg golang && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nodejs && \
-    python3 -m pip install --no-cache-dir uv && \
-    rm -rf /var/lib/apt/lists/*
+        tzdata tini wget git jq ripgrep procps lsof ffmpeg golang && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Install uv via official standalone installer (no pip needed)
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
 ARG BUILD_VERSION=0.0.0
 ARG BUILD_REVISION=unknown
 ARG BUILD_DATE=unknown
 ARG OPENCLAW_VERSION=latest
+ARG BUILD_NUMBER=0
+ARG VERSION=0.0.1
 ARG OPENCLAW_COMPAT=unknown
 LABEL org.opencontainers.image.title="ClawDeckX" \
       org.opencontainers.image.description="Desktop management dashboard for OpenClaw AI gateway" \
@@ -81,10 +78,8 @@ LABEL org.opencontainers.image.title="ClawDeckX" \
 WORKDIR /app
 COPY --from=backend /clawdeckx ./clawdeckx
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-COPY --from=openclaw-builder /opt/openclaw-npm /opt/openclaw-npm
 RUN mkdir -p /data/clawdeckx /data/openclaw/npm /data/openclaw/state /data/openclaw/logs /data/openclaw/bootstrap && \
-    chmod +x ./clawdeckx /app/docker-entrypoint.sh && \
-    ln -sf /opt/openclaw-npm/bin/openclaw /usr/local/bin/openclaw
+    chmod +x ./clawdeckx /app/docker-entrypoint.sh
 VOLUME ["/data"]
 EXPOSE 18791 18789
 ENV OCD_DB_SQLITE_PATH=/data/clawdeckx/ClawDeckX.db \
@@ -96,7 +91,7 @@ ENV OCD_DB_SQLITE_PATH=/data/clawdeckx/ClawDeckX.db \
     OCD_GATEWAY_LOG=/data/openclaw/logs/gateway.log \
     OCD_SETUP_INSTALL_LOG=/data/openclaw/logs/install.log \
     OCD_SETUP_DOCTOR_LOG=/data/openclaw/logs/doctor.log \
-    PATH=/data/openclaw/npm/bin:/opt/openclaw-npm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PATH=/data/openclaw/npm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     OCD_BIND=0.0.0.0 \
     OCD_PORT=18791 \
     TZ=UTC

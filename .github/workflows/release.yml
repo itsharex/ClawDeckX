@@ -34,10 +34,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
@@ -51,7 +51,7 @@ jobs:
           npm run build
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.24'
           cache: true
@@ -87,10 +87,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -128,10 +128,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js (for reading package.json)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -151,13 +151,13 @@ jobs:
           fi
 
       - name: Download linux/amd64 binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: clawdeckx-linux-amd64
           path: dist/
 
       - name: Download linux/arm64 binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: clawdeckx-linux-arm64
           path: dist/
@@ -232,18 +232,22 @@ jobs:
           }
           trap cleanup EXIT
           echo "==> Verifying OpenClaw is bundled..."
-          docker run --rm --platform linux/amd64 "$IMAGE" openclaw --version
+          docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -lc '
+            set -eux
+            command -v openclaw
+            openclaw --version
+          '
           echo "==> Verifying preinstalled runtime tools..."
-          docker run --rm --platform linux/amd64 "$IMAGE" go version
-          docker run --rm --platform linux/amd64 "$IMAGE" python3 --version
-          docker run --rm --platform linux/amd64 "$IMAGE" uv --version
-          docker run --rm --platform linux/amd64 "$IMAGE" ffmpeg -version
-          docker run --rm --platform linux/amd64 "$IMAGE" jq --version
-          docker run --rm --platform linux/amd64 "$IMAGE" rg --version
-          docker run --rm --platform linux/amd64 "$IMAGE" wget --version
-          docker run --rm --platform linux/amd64 "$IMAGE" make --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/go "$IMAGE" version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/python3 "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/uv "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/ffmpeg "$IMAGE" -version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/jq "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/rg "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/wget "$IMAGE" --version
+          docker run --rm --platform linux/amd64 --entrypoint /usr/bin/make "$IMAGE" --version
           echo "==> Verifying ClawDeckX binary..."
-          docker run --rm --platform linux/amd64 "$IMAGE" /app/clawdeckx --version || true
+          docker run --rm --platform linux/amd64 --entrypoint /app/clawdeckx "$IMAGE" --version || true
           echo "==> Starting container for health check..."
           CID=$(docker run -d --platform linux/amd64 -p 28791:18791 "$IMAGE")
           sleep 10
@@ -269,16 +273,20 @@ jobs:
           }
           trap cleanup EXIT
           echo "==> Verifying OpenClaw is bundled..."
-          docker run --rm --platform linux/arm64 "$IMAGE" openclaw --version
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh "$IMAGE" -lc '
+            set -eux
+            command -v openclaw
+            openclaw --version
+          '
           echo "==> Verifying preinstalled runtime tools..."
-          docker run --rm --platform linux/arm64 "$IMAGE" go version
-          docker run --rm --platform linux/arm64 "$IMAGE" python3 --version
-          docker run --rm --platform linux/arm64 "$IMAGE" uv --version
-          docker run --rm --platform linux/arm64 "$IMAGE" ffmpeg -version
-          docker run --rm --platform linux/arm64 "$IMAGE" jq --version
-          docker run --rm --platform linux/arm64 "$IMAGE" rg --version
-          docker run --rm --platform linux/arm64 "$IMAGE" wget --version
-          docker run --rm --platform linux/arm64 "$IMAGE" make --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/go "$IMAGE" version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/python3 "$IMAGE" --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/local/bin/uv "$IMAGE" --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/ffmpeg "$IMAGE" -version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/jq "$IMAGE" --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/rg "$IMAGE" --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/wget "$IMAGE" --version
+          docker run --rm --platform linux/arm64 --entrypoint /usr/bin/make "$IMAGE" --version
           echo "==> Starting container for health check..."
           CID=$(docker run -d --platform linux/arm64 -p 28792:18791 "$IMAGE")
           sleep 15
