@@ -130,9 +130,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      - name: Setup Node.js (for reading package.json)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Extract version and OpenClaw compat info
+        id: meta
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          echo "REVISION=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+          COMPAT=$(node -p "require('./web/package.json').openclawCompat" 2>/dev/null || echo "")
+          echo "OPENCLAW_COMPAT=${COMPAT}" >> $GITHUB_OUTPUT
+          MIN_VER=$(node -e "const compat = process.argv[1] || ''; const match = compat.match(/\d+\.\d+\.\d+(?:[-+._A-Za-z0-9]*)?/); process.stdout.write(match ? match[0] : '')" "$COMPAT")
+          if [ -z "$MIN_VER" ]; then
+            echo "OPENCLAW_VERSION=latest" >> $GITHUB_OUTPUT
+          else
+            echo "OPENCLAW_VERSION=${MIN_VER}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Download linux/amd64 binary
         uses: actions/download-artifact@v4
@@ -171,17 +187,17 @@ jobs:
           file: Dockerfile.prebuilt
           platforms: linux/amd64
           push: true
-          build-args: TARGETARCH=amd64
+          build-args: |
+            TARGETARCH=amd64
+            OPENCLAW_VERSION=${{ steps.meta.outputs.OPENCLAW_VERSION }}
+            OPENCLAW_COMPAT=${{ steps.meta.outputs.OPENCLAW_COMPAT }}
+            BUILD_VERSION=${{ steps.meta.outputs.VERSION }}
+            BUILD_REVISION=${{ steps.meta.outputs.REVISION }}
+            BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
           cache-from: type=gha,scope=docker-amd64
           cache-to: type=gha,mode=max,scope=docker-amd64
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx:${{ steps.version.outputs.VERSION }}-amd64
-          labels: |
-            org.opencontainers.image.title=ClawDeckX
-            org.opencontainers.image.description=Desktop management dashboard for OpenClaw AI gateway
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.source=https://github.com/ClawDeckX/ClawDeckX
-            org.opencontainers.image.licenses=MIT
+            ${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx:${{ steps.meta.outputs.VERSION }}-amd64
 
       - name: Build and push (arm64)
         uses: docker/build-push-action@v6
@@ -190,21 +206,93 @@ jobs:
           file: Dockerfile.prebuilt
           platforms: linux/arm64
           push: true
-          build-args: TARGETARCH=arm64
+          build-args: |
+            TARGETARCH=arm64
+            OPENCLAW_VERSION=${{ steps.meta.outputs.OPENCLAW_VERSION }}
+            OPENCLAW_COMPAT=${{ steps.meta.outputs.OPENCLAW_COMPAT }}
+            BUILD_VERSION=${{ steps.meta.outputs.VERSION }}
+            BUILD_REVISION=${{ steps.meta.outputs.REVISION }}
+            BUILD_DATE=${{ steps.meta.outputs.BUILD_DATE }}
           cache-from: type=gha,scope=docker-arm64
           cache-to: type=gha,mode=max,scope=docker-arm64
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx:${{ steps.version.outputs.VERSION }}-arm64
-          labels: |
-            org.opencontainers.image.title=ClawDeckX
-            org.opencontainers.image.description=Desktop management dashboard for OpenClaw AI gateway
-            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
-            org.opencontainers.image.source=https://github.com/ClawDeckX/ClawDeckX
-            org.opencontainers.image.licenses=MIT
+            ${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx:${{ steps.meta.outputs.VERSION }}-arm64
+
+      - name: Smoke test Docker image (amd64)
+        run: |
+          set -euo pipefail
+          REPO=${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx
+          VERSION=${{ steps.meta.outputs.VERSION }}
+          IMAGE="${REPO}:${VERSION}-amd64"
+          CID=""
+          cleanup() {
+            if [ -n "$CID" ]; then
+              docker rm -f "$CID" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+          echo "==> Verifying OpenClaw is bundled..."
+          docker run --rm --platform linux/amd64 "$IMAGE" openclaw --version
+          echo "==> Verifying preinstalled runtime tools..."
+          docker run --rm --platform linux/amd64 "$IMAGE" go version
+          docker run --rm --platform linux/amd64 "$IMAGE" python3 --version
+          docker run --rm --platform linux/amd64 "$IMAGE" uv --version
+          docker run --rm --platform linux/amd64 "$IMAGE" ffmpeg -version
+          docker run --rm --platform linux/amd64 "$IMAGE" jq --version
+          docker run --rm --platform linux/amd64 "$IMAGE" rg --version
+          docker run --rm --platform linux/amd64 "$IMAGE" wget --version
+          docker run --rm --platform linux/amd64 "$IMAGE" make --version
+          echo "==> Verifying ClawDeckX binary..."
+          docker run --rm --platform linux/amd64 "$IMAGE" /app/clawdeckx --version || true
+          echo "==> Starting container for health check..."
+          CID=$(docker run -d --platform linux/amd64 -p 28791:18791 "$IMAGE")
+          sleep 10
+          echo "==> Checking /api/v1/health..."
+          curl -sf http://localhost:28791/api/v1/health | head -c 500
+          echo ""
+          echo "==> Checking /api/v1/health?detailed=true..."
+          curl -sf "http://localhost:28791/api/v1/health?detailed=true" | head -c 1000
+          echo ""
+          echo "==> Smoke test passed"
+
+      - name: Smoke test Docker image (arm64)
+        run: |
+          set -euo pipefail
+          REPO=${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx
+          VERSION=${{ steps.meta.outputs.VERSION }}
+          IMAGE="${REPO}:${VERSION}-arm64"
+          CID=""
+          cleanup() {
+            if [ -n "$CID" ]; then
+              docker rm -f "$CID" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+          echo "==> Verifying OpenClaw is bundled..."
+          docker run --rm --platform linux/arm64 "$IMAGE" openclaw --version
+          echo "==> Verifying preinstalled runtime tools..."
+          docker run --rm --platform linux/arm64 "$IMAGE" go version
+          docker run --rm --platform linux/arm64 "$IMAGE" python3 --version
+          docker run --rm --platform linux/arm64 "$IMAGE" uv --version
+          docker run --rm --platform linux/arm64 "$IMAGE" ffmpeg -version
+          docker run --rm --platform linux/arm64 "$IMAGE" jq --version
+          docker run --rm --platform linux/arm64 "$IMAGE" rg --version
+          docker run --rm --platform linux/arm64 "$IMAGE" wget --version
+          docker run --rm --platform linux/arm64 "$IMAGE" make --version
+          echo "==> Starting container for health check..."
+          CID=$(docker run -d --platform linux/arm64 -p 28792:18791 "$IMAGE")
+          sleep 15
+          echo "==> Checking /api/v1/health..."
+          curl -sf http://localhost:28792/api/v1/health | head -c 500
+          echo ""
+          echo "==> Checking /api/v1/health?detailed=true..."
+          curl -sf "http://localhost:28792/api/v1/health?detailed=true" | head -c 1000
+          echo ""
+          echo "==> Smoke test passed"
 
       - name: Create and push multi-arch manifest
         run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
+          VERSION=${{ steps.meta.outputs.VERSION }}
           REPO=${{ secrets.DOCKERHUB_USERNAME }}/clawdeckx
           docker buildx imagetools create \
             --tag ${REPO}:${VERSION} \

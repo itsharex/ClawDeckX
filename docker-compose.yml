@@ -8,8 +8,9 @@ services:
       - "18791:18791"
     volumes:
       - clawdeckx-data:/data/clawdeckx
-      # Persist OpenClaw installation, config, and logs across container updates
-      # 持久化 OpenClaw 安装、配置与日志，容器更新后无需重装
+      # Persist OpenClaw config, state, and logs across container updates
+      # OpenClaw is preinstalled in the image; this volume keeps config and runtime data
+      # 持久化 OpenClaw 配置、状态与日志，OpenClaw 已预装在镜像中
       - clawdeckx-openclaw-data:/data/openclaw
     environment:
       OPENCLAW_HOME: /data/openclaw/home
@@ -21,22 +22,16 @@ services:
       OCD_GATEWAY_LOG: /data/openclaw/logs/gateway.log
       OCD_SETUP_INSTALL_LOG: /data/openclaw/logs/install.log
       OCD_SETUP_DOCTOR_LOG: /data/openclaw/logs/doctor.log
-      # OpenClaw Gateway connection config
-      # If Gateway runs on host, use host.docker.internal (Mac/Windows)
-      # or host's real IP (Linux)
-      # 如果 Gateway 运行在宿主机，使用 host.docker.internal（Mac/Windows）
-      # 或使用宿主机实际 IP（Linux）
-      OCD_OPENCLAW_GATEWAY_HOST: host.docker.internal
+      # OpenClaw Gateway connection config (default: local in-container gateway)
+      # 如需连接宿主机或外部 Gateway，可覆盖为 host.docker.internal 或实际 IP
+      OCD_OPENCLAW_GATEWAY_HOST: 127.0.0.1
       OCD_OPENCLAW_GATEWAY_PORT: 18789
       # OCD_OPENCLAW_GATEWAY_TOKEN: your_token_here
-    extra_hosts:
-      # Required on Linux; Mac/Windows already resolve host.docker.internal
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:18791/api/v1/health"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
     # Resource limits
     deploy:

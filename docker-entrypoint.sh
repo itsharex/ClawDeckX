@@ -7,45 +7,82 @@ OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-${OPENCLAW_HOME:-$HOME}/.openclaw}"
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}"
 NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$OPENCLAW_DATA_DIR/npm}"
 GATEWAY_LOG="${OCD_GATEWAY_LOG:-$OPENCLAW_DATA_DIR/logs/gateway.log}"
+GATEWAY_PORT="${OCD_OPENCLAW_GATEWAY_PORT:-18789}"
+BOOTSTRAP_DIR="${OPENCLAW_DATA_DIR}/bootstrap"
+BOOTSTRAP_FILE="${BOOTSTRAP_DIR}/gateway-bootstrap.json"
 
-mkdir -p "$CLAWDECKX_DATA_DIR" "$OPENCLAW_DATA_DIR" "$OPENCLAW_STATE_DIR" "$OPENCLAW_DATA_DIR/logs" "$NPM_CONFIG_PREFIX"
+mkdir -p "$CLAWDECKX_DATA_DIR" "$OPENCLAW_DATA_DIR" "$OPENCLAW_STATE_DIR" "$OPENCLAW_DATA_DIR/logs" "$NPM_CONFIG_PREFIX" "$BOOTSTRAP_DIR"
 export NPM_CONFIG_PREFIX
 export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
 export OPENCLAW_STATE_DIR
 export OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG"
 
+# write_bootstrap writes a JSON bootstrap status file for ClawDeckX to read
+write_bootstrap() {
+    local status="$1" reason="$2" pid="${3:-0}" openclaw_bin="${4:-}" openclaw_ver="${5:-}"
+    BOOTSTRAP_FILE="$BOOTSTRAP_FILE" \
+    BOOTSTRAP_STATUS="$status" \
+    BOOTSTRAP_REASON="$reason" \
+    BOOTSTRAP_PID="$pid" \
+    BOOTSTRAP_OPENCLAW_BIN="$openclaw_bin" \
+    BOOTSTRAP_OPENCLAW_VERSION="$openclaw_ver" \
+    BOOTSTRAP_CONFIG_PATH="$OPENCLAW_CONFIG" \
+    BOOTSTRAP_STATE_DIR="$OPENCLAW_STATE_DIR" \
+    BOOTSTRAP_GATEWAY_LOG="$GATEWAY_LOG" \
+    BOOTSTRAP_GATEWAY_PORT="$GATEWAY_PORT" \
+    BOOTSTRAP_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    node -e 'const fs = require("fs"); const payload = { status: process.env.BOOTSTRAP_STATUS, reason: process.env.BOOTSTRAP_REASON, gatewayPid: Number(process.env.BOOTSTRAP_PID || "0"), gatewayPort: Number(process.env.BOOTSTRAP_GATEWAY_PORT || "0"), openclawBin: process.env.BOOTSTRAP_OPENCLAW_BIN || "", openclawVersion: process.env.BOOTSTRAP_OPENCLAW_VERSION || "", configPath: process.env.BOOTSTRAP_CONFIG_PATH || "", stateDir: process.env.BOOTSTRAP_STATE_DIR || "", gatewayLog: process.env.BOOTSTRAP_GATEWAY_LOG || "", timestamp: process.env.BOOTSTRAP_TIMESTAMP || "" }; fs.writeFileSync(process.env.BOOTSTRAP_FILE, JSON.stringify(payload, null, 2));'
+}
+
 # Start OpenClaw Gateway in background if installed
+OPENCLAW_BIN=""
+OPENCLAW_VER=""
 if command -v openclaw &>/dev/null; then
+    OPENCLAW_BIN="$(command -v openclaw)"
+    OPENCLAW_VER="$(openclaw --version 2>/dev/null || echo 'unknown')"
+    echo "[docker-entrypoint] OpenClaw detected: ${OPENCLAW_BIN} (${OPENCLAW_VER})"
+    echo "[docker-entrypoint] State dir: $OPENCLAW_STATE_DIR"
+    echo "[docker-entrypoint] Config path: $OPENCLAW_CONFIG"
+    echo "[docker-entrypoint] Gateway log: $GATEWAY_LOG"
+
     if [ -f "$OPENCLAW_CONFIG" ]; then
-        echo "[docker-entrypoint] OpenClaw detected at $(command -v openclaw)"
-        echo "[docker-entrypoint] Using OpenClaw state: $OPENCLAW_STATE_DIR"
-        echo "[docker-entrypoint] Using OpenClaw config: $OPENCLAW_CONFIG"
         echo "[docker-entrypoint] Starting OpenClaw gateway..."
-        nohup openclaw gateway run --port 18789 > "$GATEWAY_LOG" 2>&1 &
+        nohup openclaw gateway run --port "$GATEWAY_PORT" > "$GATEWAY_LOG" 2>&1 &
         GATEWAY_PID=$!
-        # Wait briefly for gateway to be ready
+        # Wait for gateway to be ready (up to 15s)
         GATEWAY_STARTED=false
-        for i in $(seq 1 10); do
-            if curl -sf http://127.0.0.1:18789/health &>/dev/null; then
+        for i in $(seq 1 15); do
+            if curl -sf "http://127.0.0.1:${GATEWAY_PORT}/health" &>/dev/null; then
                 echo "[docker-entrypoint] OpenClaw gateway started successfully (pid=$GATEWAY_PID)"
                 GATEWAY_STARTED=true
                 break
             fi
+            # Check if process exited early
+            if ! kill -0 "$GATEWAY_PID" 2>/dev/null; then
+                echo "[docker-entrypoint] ERROR: OpenClaw gateway process exited prematurely" >&2
+                tail -10 "$GATEWAY_LOG" 2>/dev/null >&2 || true
+                write_bootstrap "failed" "gateway process exited prematurely" 0 "$OPENCLAW_BIN" "$OPENCLAW_VER"
+                break
+            fi
             sleep 1
         done
-        if [ "$GATEWAY_STARTED" = false ]; then
-            echo "[docker-entrypoint] WARNING: OpenClaw gateway failed to start within 10s" >&2
-            echo "[docker-entrypoint] Check logs: $GATEWAY_LOG" >&2
-            # Print last few lines of gateway log for debugging
-            tail -5 "$GATEWAY_LOG" 2>/dev/null >&2 || true
+        if [ "$GATEWAY_STARTED" = true ]; then
+            write_bootstrap "running" "gateway started successfully" "$GATEWAY_PID" "$OPENCLAW_BIN" "$OPENCLAW_VER"
+        elif kill -0 "$GATEWAY_PID" 2>/dev/null; then
+            echo "[docker-entrypoint] WARNING: OpenClaw gateway not ready within 15s (pid=$GATEWAY_PID)" >&2
+            echo "[docker-entrypoint] Last gateway log lines:" >&2
+            tail -10 "$GATEWAY_LOG" 2>/dev/null >&2 || true
+            write_bootstrap "timeout" "gateway not ready within 15s" "$GATEWAY_PID" "$OPENCLAW_BIN" "$OPENCLAW_VER"
         fi
     else
         echo "[docker-entrypoint] OpenClaw installed but not configured, skipping gateway auto-start"
-        echo "[docker-entrypoint] Expected config path: $OPENCLAW_CONFIG"
+        echo "[docker-entrypoint] Run the Setup Wizard in ClawDeckX web UI to configure OpenClaw"
+        write_bootstrap "unconfigured" "config file not found at ${OPENCLAW_CONFIG}" 0 "$OPENCLAW_BIN" "$OPENCLAW_VER"
     fi
 else
-    echo "[docker-entrypoint] OpenClaw not installed, skipping gateway auto-start"
-    echo "[docker-entrypoint] Persistent npm prefix: $NPM_CONFIG_PREFIX"
+    echo "[docker-entrypoint] OpenClaw not found in PATH, skipping gateway auto-start"
+    echo "[docker-entrypoint] npm prefix: $NPM_CONFIG_PREFIX"
+    write_bootstrap "not_installed" "openclaw command not found in PATH" 0 "" ""
 fi
 
 # Start ClawDeckX (exec replaces shell so tini can manage signals)

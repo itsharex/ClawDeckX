@@ -218,9 +218,17 @@ Open your browser at `http://localhost:18791`. The first run will auto-generate 
 
 浏览器打开 `http://localhost:18791`，首次启动会自动生成管理员账户，凭据将显示在容器日志中。
 
-ClawDeckX and OpenClaw run in the same container. On startup, ClawDeckX starts first. The container entrypoint only auto-recovers the local OpenClaw Gateway when OpenClaw is already installed and configured. If OpenClaw is missing or not configured yet, complete the existing Setup Wizard in the web UI.
+ClawDeckX and OpenClaw run in the same container. OpenClaw is **preinstalled** in the official Docker image with version-pinned compatibility. On startup, the container entrypoint auto-starts the OpenClaw Gateway if a configuration file exists. If OpenClaw is not yet configured, complete the Setup Wizard in the web UI — no manual installation is needed.
 
-ClawDeckX 与 OpenClaw 运行在同一个容器中。容器启动后会先启动 ClawDeckX。容器入口脚本只会在 OpenClaw 已安装且已配置时自动恢复本地 Gateway；如果尚未安装或尚未配置，请在 Web 界面中完成现有安装向导。
+ClawDeckX 与 OpenClaw 运行在同一个容器中。官方 Docker 镜像已**预装 OpenClaw**，版本与兼容性已锁定。容器启动时，入口脚本会在配置文件存在时自动启动 OpenClaw Gateway。如果尚未配置，请在 Web 界面中完成安装向导即可，无需手动安装。
+
+The official Docker image also preinstalls common skill/runtime dependencies including `go`, `python3`, `uv`, `ffmpeg`, `jq`, `ripgrep`, `wget`, and `make`, so many OpenClaw skills can run out of the box without extra system package installation.
+
+官方 Docker 镜像还预装了常见技能/运行时依赖，包括 `go`、`python3`、`uv`、`ffmpeg`、`jq`、`ripgrep`、`wget` 与 `make`，因此许多 OpenClaw 技能在首次启动后即可直接使用，无需额外安装系统包。
+
+By default, the bundled ClawDeckX service connects to the local in-container Gateway at `127.0.0.1:18789`. If you need to use a host or external Gateway instead, override `OCD_OPENCLAW_GATEWAY_HOST` and `OCD_OPENCLAW_GATEWAY_PORT` in `docker-compose.yml`.
+
+默认情况下，镜像内的 ClawDeckX 服务会连接容器内本地 Gateway：`127.0.0.1:18789`。如果你需要改为连接宿主机或外部 Gateway，请在 `docker-compose.yml` 中覆盖 `OCD_OPENCLAW_GATEWAY_HOST` 与 `OCD_OPENCLAW_GATEWAY_PORT`。
 
 ```bash
 # View credentials / 查看初始凭据
@@ -247,45 +255,66 @@ To expose the Gateway port, add `- "18789:18789"` under `ports` in `docker-compo
 | `OPENCLAW_HOME` | `/data/openclaw/home` | OpenClaw home root override | OpenClaw home 根目录覆盖 |
 | `OPENCLAW_STATE_DIR` | `/data/openclaw/state` | OpenClaw state directory | OpenClaw 状态目录 |
 | `OPENCLAW_CONFIG_PATH` | `/data/openclaw/state/openclaw.json` | OpenClaw config file path | OpenClaw 配置文件路径 |
-| `NPM_CONFIG_PREFIX` | `/data/openclaw/npm` | Persistent npm global install prefix | 持久化 npm 全局安装前缀 |
+| `NPM_CONFIG_PREFIX` | `/data/openclaw/npm` | Persistent npm prefix for user-installed upgrades | 持久化 npm 前缀（用于用户自行升级安装） |
 | `OCD_DB_SQLITE_PATH` | `/data/clawdeckx/ClawDeckX.db` | ClawDeckX SQLite database path | ClawDeckX SQLite 数据库路径 |
 | `OCD_LOG_FILE` | `/data/clawdeckx/ClawDeckX.log` | ClawDeckX server log path | ClawDeckX 服务日志路径 |
 | `OCD_GATEWAY_LOG` | `/data/openclaw/logs/gateway.log` | Persistent OpenClaw Gateway log | 持久化 OpenClaw Gateway 日志 |
 | `OCD_SETUP_INSTALL_LOG` | `/data/openclaw/logs/install.log` | Setup/install log path | 安装向导日志路径 |
 | `OCD_SETUP_DOCTOR_LOG` | `/data/openclaw/logs/doctor.log` | Doctor/diagnostic log path | 诊断日志路径 |
-| `OCD_OPENCLAW_GATEWAY_HOST` | `host.docker.internal` | Gateway host address | Gateway 地址 |
+| `OCD_OPENCLAW_GATEWAY_HOST` | `127.0.0.1` | Gateway host address | Gateway 地址 |
 | `OCD_OPENCLAW_GATEWAY_PORT` | `18789` | Gateway port | Gateway 端口 |
 | `OCD_OPENCLAW_GATEWAY_TOKEN` | *(empty)* | Gateway auth token | Gateway 认证令牌 |
 | `OCD_PORT` | `18791` | ClawDeckX listen port | ClawDeckX 监听端口 |
 | `OCD_BIND` | `0.0.0.0` | ClawDeckX bind address | ClawDeckX 绑定地址 |
 | `TZ` | `UTC` | Container timezone (e.g. `Asia/Shanghai`) | 容器时区（如 `Asia/Shanghai`） |
 
+**Preinstalled Runtime Tools | 预装运行时工具：**
+
+- **`go`**
+- **`python3`**
+- **`uv`**
+- **`ffmpeg`**
+- **`jq`**
+- **`ripgrep`**
+- **`wget`**
+- **`make`**
+
+> [!NOTE]
+> The Docker image is larger than a minimal runtime because it includes the full runtime toolchain for OpenClaw skills. This ensures many skills can run out of the box without requiring you to install system packages inside the container.
+>
+> Docker 镜像体积大于最小化运行时，因为它包含了 OpenClaw 技能的完整运行时工具链。这样可以确保许多技能开箱即用，无需在容器内额外安装系统包。
+
 **Volumes | 数据卷：**
 
 | Volume | Mount Point | Description | 说明 |
 | :--- | :--- | :--- | :--- |
 | `clawdeckx-data` | `/data/clawdeckx` | ClawDeckX database and app logs | ClawDeckX 数据库与应用日志 |
-| `clawdeckx-openclaw-data` | `/data/openclaw` | OpenClaw install, config, state, and logs | OpenClaw 安装、配置、状态与日志 |
+| `clawdeckx-openclaw-data` | `/data/openclaw` | OpenClaw config, state, logs, and user-installed upgrades | OpenClaw 配置、状态、日志与用户升级安装数据 |
 
 > [!TIP]
-> OpenClaw installation and configuration are persisted across container updates. You do **not** need to reinstall OpenClaw after `docker pull` and recreate.
+> OpenClaw is bundled in the image and its configuration is persisted via Docker volumes. After `docker pull` and recreate, OpenClaw remains available and your configuration is preserved.
 >
-> OpenClaw 的安装和配置在容器更新后会保留。执行 `docker pull` 重建容器后**无需重新安装** OpenClaw。
+> OpenClaw 已内置在镜像中，配置通过 Docker 卷持久化。执行 `docker pull` 重建容器后，OpenClaw 仍然可用，配置也会保留。
 
 **Persistent Paths | 持久化路径：**
 
 | Path | Purpose | 说明 |
 | :--- | :--- | :--- |
-| `/data/openclaw/npm` | Global npm packages including OpenClaw | OpenClaw 等 npm 全局安装目录 |
+| `/data/openclaw/npm` | User-installed npm packages (upgrades) | 用户安装的 npm 包（升级用） |
 | `/data/openclaw/state` | OpenClaw state directory | OpenClaw 状态目录 |
 | `/data/openclaw/state/openclaw.json` | OpenClaw config file | OpenClaw 配置文件 |
 | `/data/openclaw/logs/gateway.log` | Gateway startup/runtime log | Gateway 启动与运行日志 |
 | `/data/openclaw/logs/install.log` | Setup/install log | 安装向导日志 |
 | `/data/openclaw/logs/doctor.log` | Doctor/diagnostic log | 诊断日志 |
+| `/data/openclaw/bootstrap/gateway-bootstrap.json` | Entrypoint bootstrap status | 入口脚本启动状态文件 |
 
-If OpenClaw is installed but not configured, ClawDeckX will guide you to the existing setup/configuration flow instead of silently auto-installing it in the container.
+OpenClaw is preinstalled in the Docker image. If it is not yet configured, ClawDeckX will guide you through the Setup Wizard to complete the initial configuration.
 
-如果 OpenClaw 已安装但尚未配置，ClawDeckX 会引导你进入现有安装/配置流程，而不是在容器中静默自动安装。
+OpenClaw 已预装在 Docker 镜像中。如果尚未配置，ClawDeckX 会引导你通过安装向导完成初始配置。
+
+The container health check uses `/api/v1/health` for liveness. For diagnostics, you can call `/api/v1/health?detailed=true` to inspect ClawDeckX, OpenClaw, Gateway, and bootstrap state together.
+
+容器健康检查使用 `/api/v1/health` 作为存活探测。排障时可调用 `/api/v1/health?detailed=true`，同时查看 ClawDeckX、OpenClaw、Gateway 与启动状态文件的信息。
 
 **Resource Limits | 资源限制：**
 

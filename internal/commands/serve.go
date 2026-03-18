@@ -628,6 +628,10 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/ws", wsHub.HandleWS(cfg.Auth.JWTSecret))
 
 	router.GET("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("detailed") == "true" {
+			web.OK(w, r, buildDetailedHealth(svc))
+			return
+		}
 		web.OK(w, r, map[string]interface{}{
 			"status":  "ok",
 			"version": version.Version,
@@ -1206,6 +1210,86 @@ func getPublicIP() string {
 		}
 	}
 	return ""
+}
+
+// buildDetailedHealth returns a comprehensive health status for Docker deployments.
+// It uses only existing public APIs from the openclaw package.
+func buildDetailedHealth(svc *openclaw.Service) map[string]interface{} {
+	result := map[string]interface{}{
+		"clawdeckx": map[string]interface{}{
+			"status":  "ok",
+			"version": version.Version,
+		},
+	}
+
+	// OpenClaw installation check
+	cmd, ver, installed := openclaw.DetectOpenClawBinary()
+	result["openclaw"] = map[string]interface{}{
+		"installed":  installed,
+		"command":    cmd,
+		"version":    ver,
+		"configured": openclaw.ConfigFileExists(),
+	}
+
+	// Gateway runtime check
+	st := svc.Status()
+	portUp := st.Running
+	healthOK := false
+	if portUp {
+		gwHost := strings.TrimSpace(svc.GatewayHost)
+		if gwHost == "" {
+			gwHost = "127.0.0.1"
+		}
+		gwPort := svc.GatewayPort
+		if gwPort <= 0 {
+			gwPort = 18789
+		}
+		hc := &http.Client{Timeout: 2 * time.Second}
+		resp, err := hc.Get(fmt.Sprintf("http://%s:%d/health", gwHost, gwPort))
+		if err == nil {
+			resp.Body.Close()
+			healthOK = resp.StatusCode < 500
+		}
+	}
+
+	detail := ""
+	if !installed {
+		detail = "openclaw not installed"
+	} else if !openclaw.ConfigFileExists() {
+		detail = "openclaw installed but not configured"
+	} else if !portUp {
+		detail = "gateway not running"
+	} else if healthOK {
+		detail = "gateway running and healthy"
+	} else {
+		detail = "gateway port open but health check failed"
+	}
+
+	result["gateway"] = map[string]interface{}{
+		"running":       portUp,
+		"portListening": portUp,
+		"healthOk":      healthOK,
+		"detail":        detail,
+	}
+
+	// Read bootstrap status file written by docker-entrypoint.sh
+	bootstrapPaths := []string{"/data/openclaw/bootstrap/gateway-bootstrap.json"}
+	if dataDir := strings.TrimSpace(os.Getenv("OPENCLAW_DATA_DIR")); dataDir != "" {
+		bootstrapPaths = append([]string{dataDir + "/bootstrap/gateway-bootstrap.json"}, bootstrapPaths...)
+	}
+	for _, p := range bootstrapPaths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var bs map[string]interface{}
+		if err := json.Unmarshal(data, &bs); err == nil {
+			result["bootstrap"] = bs
+			break
+		}
+	}
+
+	return result
 }
 
 // detectLoopbackRouteConflict checks if localhost and 127.0.0.1 route to different services.
