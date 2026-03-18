@@ -34,6 +34,32 @@ write_bootstrap() {
     node -e 'const fs = require("fs"); const payload = { status: process.env.BOOTSTRAP_STATUS, reason: process.env.BOOTSTRAP_REASON, gatewayPid: Number(process.env.BOOTSTRAP_PID || "0"), gatewayPort: Number(process.env.BOOTSTRAP_GATEWAY_PORT || "0"), openclawBin: process.env.BOOTSTRAP_OPENCLAW_BIN || "", openclawVersion: process.env.BOOTSTRAP_OPENCLAW_VERSION || "", configPath: process.env.BOOTSTRAP_CONFIG_PATH || "", stateDir: process.env.BOOTSTRAP_STATE_DIR || "", gatewayLog: process.env.BOOTSTRAP_GATEWAY_LOG || "", timestamp: process.env.BOOTSTRAP_TIMESTAMP || "" }; fs.writeFileSync(process.env.BOOTSTRAP_FILE, JSON.stringify(payload, null, 2));'
 }
 
+ensure_default_openclaw_config() {
+    if [ -f "$OPENCLAW_CONFIG" ]; then
+        return 0
+    fi
+
+    echo "[docker-entrypoint] OpenClaw config not found, generating initial config..."
+    mkdir -p "$OPENCLAW_STATE_DIR"
+    if openclaw onboard \
+        --non-interactive \
+        --accept-risk \
+        --mode local \
+        --gateway-port "$GATEWAY_PORT" \
+        --gateway-bind loopback \
+        --anthropic-api-key sk-ant-placeholder-replace-me \
+        --skip-channels \
+        --skip-skills \
+        --skip-health >> "$GATEWAY_LOG" 2>&1; then
+        echo "[docker-entrypoint] Initial OpenClaw config generated at $OPENCLAW_CONFIG"
+        return 0
+    fi
+
+    echo "[docker-entrypoint] ERROR: Failed to generate initial OpenClaw config" >&2
+    tail -10 "$GATEWAY_LOG" 2>/dev/null >&2 || true
+    return 1
+}
+
 # Start OpenClaw Gateway in background if installed
 OPENCLAW_BIN=""
 OPENCLAW_VER=""
@@ -45,7 +71,7 @@ if command -v openclaw &>/dev/null; then
     echo "[docker-entrypoint] Config path: $OPENCLAW_CONFIG"
     echo "[docker-entrypoint] Gateway log: $GATEWAY_LOG"
 
-    if [ -f "$OPENCLAW_CONFIG" ]; then
+    if ensure_default_openclaw_config; then
         echo "[docker-entrypoint] Starting OpenClaw gateway..."
         nohup openclaw gateway run --port "$GATEWAY_PORT" > "$GATEWAY_LOG" 2>&1 &
         GATEWAY_PID=$!
@@ -75,9 +101,7 @@ if command -v openclaw &>/dev/null; then
             write_bootstrap "timeout" "gateway not ready within 15s" "$GATEWAY_PID" "$OPENCLAW_BIN" "$OPENCLAW_VER"
         fi
     else
-        echo "[docker-entrypoint] OpenClaw installed but not configured, skipping gateway auto-start"
-        echo "[docker-entrypoint] Run the Setup Wizard in ClawDeckX web UI to configure OpenClaw"
-        write_bootstrap "unconfigured" "config file not found at ${OPENCLAW_CONFIG}" 0 "$OPENCLAW_BIN" "$OPENCLAW_VER"
+        write_bootstrap "failed" "failed to generate initial config at ${OPENCLAW_CONFIG}" 0 "$OPENCLAW_BIN" "$OPENCLAW_VER"
     fi
 else
     echo "[docker-entrypoint] OpenClaw not found in PATH, skipping gateway auto-start"
