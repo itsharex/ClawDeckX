@@ -517,6 +517,47 @@ export const snapshotApi = {
   pruneKeepN: (keepN: number) => post<{ deleted: string[]; kept: number }>('/api/v1/snapshots/prune', { keepN }),
 };
 
+// ==================== OpenClaw 原生备份 ====================
+export interface OcBackupArchive {
+  name: string;
+  path: string;
+  size: number;
+  modTime: string;
+}
+export interface OcBackupCreateResult {
+  createdAt: string;
+  archiveRoot: string;
+  archivePath: string;
+  dryRun: boolean;
+  includeWorkspace: boolean;
+  onlyConfig: boolean;
+  verified: boolean;
+  assets: { kind: string; sourcePath: string; displayPath: string }[];
+}
+export const ocBackupApi = {
+  create: (data: { includeWorkspace?: boolean; onlyConfig?: boolean; verify?: boolean }) =>
+    post<OcBackupCreateResult>('/api/v1/openclaw-backup/create', data),
+  list: () => get<{ backupDir: string; archives: OcBackupArchive[]; installed: boolean }>('/api/v1/openclaw-backup/list'),
+  download: async (path: string): Promise<void> => {
+    const res = await fetch('/api/v1/openclaw-backup/download', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new ApiError(json.error_code || 'DOWNLOAD_FAILED', json.message || 'Download failed', res.status);
+    }
+    const disp = res.headers.get('content-disposition') || '';
+    const fnMatch = disp.match(/filename="?([^";\s]+)"?/);
+    const filename = fnMatch?.[1] || 'openclaw-backup.tar.gz';
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
+  remove: (path: string) => post<{ deleted: boolean }>('/api/v1/openclaw-backup/delete', { path }),
+};
+
 // ==================== 配置备份 (.bak) ====================
 export interface ConfigBackupFile {
   name: string;

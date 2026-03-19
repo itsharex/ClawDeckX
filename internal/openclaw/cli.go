@@ -398,6 +398,117 @@ func PairingList(channel string) (*PairingListResult, error) {
 	return &result, nil
 }
 
+// BackupCreateOptions configures the openclaw backup create command.
+type BackupCreateOptions struct {
+	Output           string `json:"output,omitempty"`
+	IncludeWorkspace bool   `json:"includeWorkspace"`
+	OnlyConfig       bool   `json:"onlyConfig"`
+	Verify           bool   `json:"verify"`
+}
+
+// BackupCreateResult is the JSON output from openclaw backup create --json.
+type BackupCreateResult struct {
+	CreatedAt        string              `json:"createdAt"`
+	ArchiveRoot      string              `json:"archiveRoot"`
+	ArchivePath      string              `json:"archivePath"`
+	DryRun           bool                `json:"dryRun"`
+	IncludeWorkspace bool                `json:"includeWorkspace"`
+	OnlyConfig       bool                `json:"onlyConfig"`
+	Verified         bool                `json:"verified"`
+	Assets           []BackupCreateAsset `json:"assets"`
+}
+
+type BackupCreateAsset struct {
+	Kind        string `json:"kind"`
+	SourcePath  string `json:"sourcePath"`
+	DisplayPath string `json:"displayPath"`
+}
+
+// BackupCreate runs `openclaw backup create` with the given options and returns the parsed result.
+func BackupCreate(opts BackupCreateOptions) (*BackupCreateResult, error) {
+	if !IsOpenClawInstalled() {
+		return nil, fmt.Errorf("openclaw CLI is unavailable")
+	}
+
+	args := []string{"backup", "create", "--json"}
+	if opts.Output != "" {
+		args = append(args, "--output", opts.Output)
+	}
+	if opts.OnlyConfig {
+		args = append(args, "--only-config")
+	}
+	if !opts.IncludeWorkspace {
+		args = append(args, "--no-include-workspace")
+	}
+	if opts.Verify {
+		args = append(args, "--verify")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	out, err := RunCLI(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	var result BackupCreateResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		return nil, fmt.Errorf("parse backup create json: %w\nraw output: %s", err, out)
+	}
+	return &result, nil
+}
+
+// BackupListArchives lists .tar.gz backup archives in the given directory.
+func BackupListArchives(dir string) ([]BackupArchiveInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var archives []BackupArchiveInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		if !strings.Contains(e.Name(), "openclaw-backup") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		archives = append(archives, BackupArchiveInfo{
+			Name:    e.Name(),
+			Path:    filepath.Join(dir, e.Name()),
+			Size:    info.Size(),
+			ModTime: info.ModTime().Format(time.RFC3339),
+		})
+	}
+	return archives, nil
+}
+
+type BackupArchiveInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"modTime"`
+}
+
+// DefaultBackupDir returns the default directory for storing OpenClaw native backups.
+func DefaultBackupDir() string {
+	stateDir := ResolveStateDir()
+	if stateDir == "" {
+		home, _ := os.UserHomeDir()
+		if home == "" {
+			return ""
+		}
+		stateDir = filepath.Join(home, ".openclaw")
+	}
+	dir := filepath.Join(stateDir, "backups")
+	os.MkdirAll(dir, 0o700)
+	return dir
+}
+
 func PairingApprove(channel, code string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

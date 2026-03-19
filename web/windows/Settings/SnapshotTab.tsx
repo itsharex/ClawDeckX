@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { snapshotApi, type SnapshotStatsResponse } from '../../services/api';
+import { snapshotApi, ocBackupApi, type SnapshotStatsResponse, type OcBackupArchive } from '../../services/api';
 import { useToast } from '../../components/Toast';
 import { useConfirm } from '../../components/ConfirmDialog';
 import CustomSelect from '../../components/CustomSelect';
@@ -35,6 +35,14 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
   const [snapshotPassword, setSnapshotPassword] = useState('');
   const [snapshotNote, setSnapshotNote] = useState('');
   const [snapshotModeTab, setSnapshotModeTab] = useState<'manual' | 'scheduled' | 'config-history'>('manual');
+  const [backupMethod, setBackupMethod] = useState<'clawdeckx' | 'openclaw'>('clawdeckx');
+  const [ocBackupCreating, setOcBackupCreating] = useState(false);
+  const [ocIncludeWorkspace, setOcIncludeWorkspace] = useState(true);
+  const [ocOnlyConfig, setOcOnlyConfig] = useState(false);
+  const [ocVerify, setOcVerify] = useState(false);
+  const [ocArchives, setOcArchives] = useState<OcBackupArchive[]>([]);
+  const [ocInstalled, setOcInstalled] = useState(false);
+  const [ocBackupDir, setOcBackupDir] = useState('');
   const [snapshotScheduleEnabled, setSnapshotScheduleEnabled] = useState(false);
   const [snapshotScheduleTime, setSnapshotScheduleTime] = useState('03:00');
   const [snapshotScheduleRetention, setSnapshotScheduleRetention] = useState(7);
@@ -109,10 +117,17 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
   const fetchStats = useCallback(() => {
     snapshotApi.stats().then(setStats).catch(() => {});
   }, []);
+  const fetchOcArchives = useCallback(() => {
+    ocBackupApi.list().then((data) => {
+      setOcArchives(data.archives || []);
+      setOcInstalled(data.installed);
+      setOcBackupDir(data.backupDir || '');
+    }).catch(() => {});
+  }, []);
 
-  useEffect(() => { fetchSnapshots(); fetchSnapshotSchedule(); fetchStats(); }, [fetchSnapshots, fetchSnapshotSchedule, fetchStats]);
+  useEffect(() => { fetchSnapshots(); fetchSnapshotSchedule(); fetchStats(); fetchOcArchives(); }, [fetchSnapshots, fetchSnapshotSchedule, fetchStats, fetchOcArchives]);
 
-  const refreshAll = useCallback((force = true) => { fetchSnapshots(force); fetchStats(); }, [fetchSnapshots, fetchStats]);
+  const refreshAll = useCallback((force = true) => { fetchSnapshots(force); fetchStats(); fetchOcArchives(); }, [fetchSnapshots, fetchStats, fetchOcArchives]);
 
   // Filtered snapshot list
   const filteredSnapshots = useMemo(() => {
@@ -181,6 +196,22 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
     try { await snapshotApi.create({ password: snapshotPassword, trigger: 'manual', note: snapshotNote.trim() || undefined }); toast('success', s.snapshotCreated || s.backupCreated); setSnapshotPassword(''); setSnapshotNote(''); refreshAll(); }
     catch { toast('error', s.snapshotCreateFailed || s.backupFailed); }
     finally { setSnapshotLoading(false); }
+  };
+  const handleCreateOcBackup = async () => {
+    if (!ocInstalled) { toast('error', s.ocBackupNotInstalled || 'OpenClaw CLI not installed'); return; }
+    setOcBackupCreating(true);
+    try {
+      await ocBackupApi.create({ includeWorkspace: ocIncludeWorkspace && !ocOnlyConfig, onlyConfig: ocOnlyConfig, verify: ocVerify });
+      toast('success', s.ocBackupCreateOk || 'OpenClaw backup created successfully');
+      fetchOcArchives();
+    } catch (err: any) { toast('error', err?.message || s.ocBackupCreateFail || 'Failed to create OpenClaw backup'); }
+    finally { setOcBackupCreating(false); }
+  };
+  const handleDeleteOcArchive = async (path: string) => {
+    const ok = await confirm({ title: s.delete || 'Delete', message: s.ocBackupDeleteConfirm || 'Are you sure you want to delete this backup archive?', confirmText: s.delete || 'Delete', danger: true });
+    if (!ok) return;
+    try { await ocBackupApi.remove(path); toast('success', s.ocBackupDeleteOk || 'Backup archive deleted'); fetchOcArchives(); }
+    catch { toast('error', s.ocBackupDeleteFail || 'Failed to delete backup archive'); }
   };
   const handleImportSnapshot = async (file: File) => {
     if (!file || !file.name.endsWith('.clawbak')) { toast('error', s.snapshotImportInvalidFile || 'Please select a .clawbak file'); return; }
@@ -435,9 +466,77 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
           <button type="button" onClick={() => setSnapshotModeTab('config-history')} className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${snapshotModeTab === 'config-history' ? 'bg-white dark:bg-white/10 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-white/60 hover:text-slate-700 dark:hover:text-white/80'}`}>{s.configBackupTab || 'Config History'}</button>
         </div>
 
-        {snapshotModeTab === 'manual' && (<div className={rowCls}><div className="px-4 py-3 space-y-3"><p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.snapshotCreate || s.createBackup}</p><div className="space-y-2"><input type="text" value={snapshotNote} onChange={e => setSnapshotNote(e.target.value)} placeholder={s.snapshotNotePlaceholder || s.snapshotNote || 'Snapshot note (optional)'} className={inputCls} /><input type="password" value={snapshotPassword} onChange={e => setSnapshotPassword(e.target.value)} placeholder={s.snapshotPasswordPlaceholder || s.enterPassword || 'Password'} className={inputCls} />
-          {snapshotPassword.length > 0 && (() => { const len = snapshotPassword.length; const hasUpper = /[A-Z]/.test(snapshotPassword); const hasDigit = /\d/.test(snapshotPassword); const hasSpecial = /[^A-Za-z0-9]/.test(snapshotPassword); const score = (len >= 6 ? 1 : 0) + (len >= 10 ? 1 : 0) + (hasUpper ? 1 : 0) + (hasDigit ? 1 : 0) + (hasSpecial ? 1 : 0); const label = score <= 1 ? (s.pwdStrengthWeak || 'Weak') : score <= 3 ? (s.pwdStrengthMedium || 'Medium') : (s.pwdStrengthStrong || 'Strong'); const color = score <= 1 ? 'bg-red-400' : score <= 3 ? 'bg-amber-400' : 'bg-emerald-400'; return (<div className="flex items-center gap-2 mt-1"><div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden"><div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(100, score * 20)}%` }} /></div><span className="text-[10px] text-slate-400 dark:text-white/40 shrink-0">{label}</span></div>); })()}
-        </div><div className="flex justify-end"><button onClick={handleCreateSnapshot} disabled={snapshotLoading || snapshotPassword.length < 6} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[13px] font-medium transition-all disabled:opacity-40 hover:opacity-90 shadow-sm"><span className={`material-symbols-outlined text-[16px] ${snapshotLoading ? 'animate-spin' : ''}`}>{snapshotLoading ? 'progress_activity' : 'add'}</span>{s.snapshotCreate || s.createBackup}</button></div><p className="text-[11px] text-amber-700 dark:text-amber-400/80 leading-relaxed">{s.snapshotSecurityNote || s.backupSecurityNote}</p></div></div>)}
+        {snapshotModeTab === 'manual' && (<div className={rowCls}><div className="px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.snapshotCreate || s.createBackup}</p>
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.05]">
+              <button type="button" onClick={() => setBackupMethod('clawdeckx')} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${backupMethod === 'clawdeckx' ? 'bg-white dark:bg-white/10 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-white/60 hover:text-slate-700 dark:hover:text-white/80'}`}>ClawDeckX</button>
+              <button type="button" onClick={() => setBackupMethod('openclaw')} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${backupMethod === 'openclaw' ? 'bg-white dark:bg-white/10 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-white/60 hover:text-slate-700 dark:hover:text-white/80'}`}>OpenClaw</button>
+            </div>
+          </div>
+          {backupMethod === 'clawdeckx' && (<>
+            <div className="space-y-2">
+              <input type="text" value={snapshotNote} onChange={e => setSnapshotNote(e.target.value)} placeholder={s.snapshotNotePlaceholder || s.snapshotNote || 'Snapshot note (optional)'} className={inputCls} />
+              <input type="password" value={snapshotPassword} onChange={e => setSnapshotPassword(e.target.value)} placeholder={s.snapshotPasswordPlaceholder || s.enterPassword || 'Password'} className={inputCls} />
+              {snapshotPassword.length > 0 && (() => { const len = snapshotPassword.length; const hasUpper = /[A-Z]/.test(snapshotPassword); const hasDigit = /\d/.test(snapshotPassword); const hasSpecial = /[^A-Za-z0-9]/.test(snapshotPassword); const score = (len >= 6 ? 1 : 0) + (len >= 10 ? 1 : 0) + (hasUpper ? 1 : 0) + (hasDigit ? 1 : 0) + (hasSpecial ? 1 : 0); const label = score <= 1 ? (s.pwdStrengthWeak || 'Weak') : score <= 3 ? (s.pwdStrengthMedium || 'Medium') : (s.pwdStrengthStrong || 'Strong'); const color = score <= 1 ? 'bg-red-400' : score <= 3 ? 'bg-amber-400' : 'bg-emerald-400'; return (<div className="flex items-center gap-2 mt-1"><div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden"><div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(100, score * 20)}%` }} /></div><span className="text-[10px] text-slate-400 dark:text-white/40 shrink-0">{label}</span></div>); })()}
+            </div>
+            <div className="flex justify-end"><button onClick={handleCreateSnapshot} disabled={snapshotLoading || snapshotPassword.length < 6} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[13px] font-medium transition-all disabled:opacity-40 hover:opacity-90 shadow-sm"><span className={`material-symbols-outlined text-[16px] ${snapshotLoading ? 'animate-spin' : ''}`}>{snapshotLoading ? 'progress_activity' : 'add'}</span>{s.snapshotCreate || s.createBackup}</button></div>
+            <p className="text-[11px] text-amber-700 dark:text-amber-400/80 leading-relaxed">{s.snapshotSecurityNote || s.backupSecurityNote}</p>
+          </>)}
+          {backupMethod === 'openclaw' && (<>
+            {!ocInstalled ? (
+              <div className="flex flex-col items-center justify-center py-6 gap-2">
+                <span className="material-symbols-outlined text-[28px] text-slate-300 dark:text-white/20">terminal</span>
+                <p className="text-[12px] text-slate-400 dark:text-white/40">{s.ocBackupNotInstalled || 'OpenClaw CLI not installed'}</p>
+              </div>
+            ) : (<>
+              <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={ocIncludeWorkspace && !ocOnlyConfig} disabled={ocOnlyConfig} onChange={e => setOcIncludeWorkspace(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
+                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupIncludeWorkspace || 'Include workspace'}</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={ocOnlyConfig} onChange={e => setOcOnlyConfig(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
+                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupOnlyConfig || 'Config only'}</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={ocVerify} onChange={e => setOcVerify(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
+                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupVerify || 'Verify after creation'}</span>
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={handleCreateOcBackup} disabled={ocBackupCreating} className="flex items-center gap-1.5 px-4 py-[7px] bg-primary text-white rounded-lg text-[13px] font-medium transition-all disabled:opacity-40 hover:opacity-90 shadow-sm">
+                  <span className={`material-symbols-outlined text-[16px] ${ocBackupCreating ? 'animate-spin' : ''}`}>{ocBackupCreating ? 'progress_activity' : 'backup'}</span>
+                  {ocBackupCreating ? (s.ocBackupCreating || 'Creating backup...') : (s.ocBackupCreate || 'Create OpenClaw Backup')}
+                </button>
+              </div>
+              {ocArchives.length > 0 && (<>
+                <p className="text-[12px] font-semibold text-slate-600 dark:text-white/60 mt-2">{s.ocBackupArchives || 'OpenClaw Backup Archives'}</p>
+                {ocBackupDir && <p className="text-[10px] font-mono text-slate-300 dark:text-white/20 truncate" title={ocBackupDir}>{ocBackupDir}</p>}
+                <div className="space-y-1.5">
+                  {ocArchives.map(ar => (
+                    <div key={ar.path} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5">
+                      <span className="material-symbols-outlined text-[16px] text-slate-400 dark:text-white/30">archive</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-mono text-slate-700 dark:text-white/70 truncate">{ar.name}</p>
+                        <p className="text-[10px] text-slate-400 dark:text-white/30">{ar.size < 1048576 ? `${(ar.size / 1024).toFixed(1)} KB` : `${(ar.size / 1048576).toFixed(1)} MB`} &middot; {new Date(ar.modTime).toLocaleString()}</p>
+                      </div>
+                      <button onClick={() => ocBackupApi.download(ar.path)} title={s.ocBackupDownload || 'Download'} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">download</span>
+                      </button>
+                      <button onClick={() => handleDeleteOcArchive(ar.path)} title={s.delete || 'Delete'} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-red-400 transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">delete</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>)}
+              {ocArchives.length === 0 && (
+                <p className="text-[11px] text-slate-400 dark:text-white/30 text-center py-2">{s.ocBackupEmpty || 'No backup archives found'}</p>
+              )}
+            </>)}
+          </>)}
+        </div></div>)}
 
         {snapshotModeTab === 'scheduled' && (<div className={rowCls}><div className="px-4 py-3 space-y-3">
           <div className="flex items-center justify-between"><p className="text-[13px] font-semibold text-slate-700 dark:text-white/80">{s.snapshotScheduleTitle || 'Scheduled Backup'}</p><button type="button" role="switch" aria-checked={snapshotScheduleEnabled} onClick={() => setSnapshotScheduleEnabled(prev => !prev)} className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${snapshotScheduleEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-white/20'}`}><span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${snapshotScheduleEnabled ? 'translate-x-[18px] rtl:-translate-x-[18px]' : 'translate-x-[3px] rtl:-translate-x-[3px]'}`} /></button></div>
