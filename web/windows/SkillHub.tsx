@@ -456,9 +456,8 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
     }
   }, [toast]);
 
-  // Dismiss banner
+  // Dismiss banner (session-only, not persistent)
   const handleDismissBanner = useCallback(() => {
-    localStorage.setItem(BANNER_DISMISSED_KEY, 'true');
     setCLIStatus('dismissed');
   }, []);
 
@@ -476,13 +475,14 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
 
 // Initial load
 useEffect(() => {
-  const dismissed = localStorage.getItem(BANNER_DISMISSED_KEY);
+  // Clear stale permanent dismiss flag (banner is now session-only)
+  localStorage.removeItem(BANNER_DISMISSED_KEY);
   const wasInstalled = localStorage.getItem('skillhub_cli_installed') === 'true';
-  if (dismissed === 'true' || wasInstalled) {
-    setCLIStatus(wasInstalled ? 'installed' : 'dismissed');
-  } else {
-    checkCLI();
+  if (wasInstalled) {
+    setCLIStatus('installed');
   }
+  // Always re-check CLI status from backend
+  checkCLI();
   fetchData();
   fetchTopSkills();
   fetchInstalledSkills();
