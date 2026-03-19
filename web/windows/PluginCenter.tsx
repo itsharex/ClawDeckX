@@ -71,7 +71,7 @@ const extractFailureMessage = (output: string): string => {
 };
 
 const SkeletonCard: React.FC = () => (
-  <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-2xl p-4 animate-pulse flex flex-col">
+  <div className="theme-panel rounded-2xl p-4 animate-pulse flex flex-col">
     <div className="flex items-center gap-2.5 mb-2">
       <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-white/10" />
       <div className="flex-1 min-w-0">
@@ -299,12 +299,12 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="p-3 flex items-center gap-2 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 shrink-0">
+      <div className="p-3 flex items-center gap-2 border-b border-slate-200 dark:border-white/5 theme-panel shrink-0">
         {/* Search */}
         <div className="relative flex-1 min-w-0">
-          <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">search</span>
+          <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 theme-text-muted text-[16px]">search</span>
           <input
-            className="w-full h-9 ps-9 pe-4 bg-white dark:bg-[#1a1c22] border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-800 dark:text-white placeholder:text-slate-400 focus:ring-1 focus:ring-primary outline-none"
+            className="w-full h-9 ps-9 pe-4 theme-field rounded-lg text-xs placeholder:text-slate-400 dark:placeholder:text-white/20 focus:ring-1 focus:ring-primary outline-none sci-input"
             placeholder={`${sk.search || 'Search'}...`}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
@@ -343,9 +343,9 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
         )}
         {/* Refresh */}
         <button onClick={() => fetchPlugins()} disabled={refreshing}
-          className="h-9 w-9 flex items-center justify-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 rounded-lg shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-9 w-9 flex items-center justify-center theme-field hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           title={sk.pluginRefresh || 'Refresh'}>
-          <span className={`material-symbols-outlined text-[16px] text-slate-500 ${refreshing ? 'animate-spin' : ''}`}>
+          <span className={`material-symbols-outlined text-[16px] theme-text-secondary ${refreshing ? 'animate-spin' : ''}`}>
             {refreshing ? 'progress_activity' : 'refresh'}
           </span>
         </button>
@@ -373,7 +373,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
             {diagnostics.map((d, i) => (
               <div key={i} className="flex items-start gap-1.5 text-[10px]">
                 <span className={`material-symbols-outlined text-[12px] mt-0.5 ${d.level === 'error' ? 'text-mac-red' : 'text-amber-500'}`}>{d.level === 'error' ? 'error' : 'warning'}</span>
-                <span className="text-slate-600 dark:text-white/60">{d.pluginId && <strong className="text-slate-700 dark:text-white/80">[{d.pluginId}]</strong>} {d.message}</span>
+                <span className="theme-text-secondary">{d.pluginId && <strong className="text-slate-700 dark:text-white/80">[{d.pluginId}]</strong>} {d.message}</span>
               </div>
             ))}
           </div>
@@ -426,7 +426,8 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                 const isBusy = isCurrentInstalling || togglingId === plugin.id || isUninstalling || isUpdating;
                 return (
                   <div key={plugin.id}
-                    className={`bg-slate-50 dark:bg-white/[0.02] border rounded-2xl p-4 transition-all group shadow-sm flex flex-col ${
+                    onClick={() => setDetailPlugin(plugin)}
+                    className={`theme-panel rounded-2xl p-4 transition-all group shadow-sm flex flex-col sci-card cursor-pointer ${
                       plugin.status === 'error' ? 'border-mac-red/30 dark:border-mac-red/20' :
                       plugin.installed
                         ? plugin.enabled ? 'border-mac-green/30 dark:border-mac-green/20 hover:border-mac-green/60' : 'border-slate-200/50 dark:border-white/5 opacity-60'
@@ -444,7 +445,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                       </div>
                       {/* Enable/Disable toggle — works on both local & remote */}
                       {plugin.installed && (
-                        <button onClick={() => handleToggle(plugin)} disabled={isBusy}
+                        <button onClick={(e) => { e.stopPropagation(); handleToggle(plugin); }} disabled={isBusy}
                           className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${isBusy ? 'opacity-50 cursor-wait' : plugin.enabled ? 'bg-mac-green' : 'bg-slate-300 dark:bg-white/20'}`}>
                           <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${plugin.enabled ? 'translate-x-[18px] rtl:-translate-x-[18px]' : 'translate-x-0.5 rtl:-translate-x-0.5'}`} />
                         </button>
@@ -461,10 +462,10 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                       {!plugin.status && (plugin.installed ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-mac-green/15 text-mac-green font-bold">{sk.pluginInstalled || 'Installed'}</span>
                       ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 font-bold">{sk.pluginNotInstalled || 'Not Installed'}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full theme-field theme-text-muted font-bold">{sk.pluginNotInstalled || 'Not Installed'}</span>
                       ))}
                       {plugin.installSource && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 font-bold">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full theme-field theme-text-muted font-bold">
                           {plugin.installSource === 'npm' ? 'npm' : plugin.installSource === 'path' ? (sk.pluginPathSource || 'local path') : plugin.installSource}
                         </span>
                       )}
@@ -482,7 +483,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                     )}
 
                     {/* Description */}
-                    <p className="text-[11px] text-slate-500 dark:text-white/40 leading-relaxed mb-3 line-clamp-2">{plugin.description}</p>
+                    <p className="text-[11px] theme-text-muted leading-relaxed mb-3 line-clamp-2">{plugin.description}</p>
 
                     {/* Install/uninstall progress */}
                     {(isCurrentInstalling || isUninstalling || isUpdating) && (
@@ -502,7 +503,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                     <div className="flex items-center gap-1 mt-auto pt-2 border-t border-slate-100 dark:border-white/5 flex-wrap">
                       {/* Install — local only */}
                       {!plugin.installed && (
-                        <button onClick={() => handleInstall(plugin)} disabled={!canInstall || !!installingSpec}
+                        <button onClick={(e) => { e.stopPropagation(); handleInstall(plugin); }} disabled={!canInstall || !!installingSpec}
                           className="h-7 px-3 bg-primary/10 text-primary text-[10px] font-bold rounded-lg hover:bg-primary hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
                           <span className="material-symbols-outlined text-[12px]">download</span>
                           {sk.pluginInstallBtn || 'Install'}
@@ -510,7 +511,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                       )}
                       {/* Update — local only, npm plugins */}
                       {plugin.installed && canInstall && plugin.installSource === 'npm' && plugin.updateAvailable === true && (
-                        <button onClick={() => handleUpdate(plugin.id)} disabled={isBusy}
+                        <button onClick={(e) => { e.stopPropagation(); handleUpdate(plugin.id); }} disabled={isBusy}
                           className="h-7 px-2.5 bg-primary/10 text-primary text-[10px] font-bold rounded-lg hover:bg-primary hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
                           <span className="material-symbols-outlined text-[12px]">system_update</span>
                           {sk.pluginUpdateBtn || 'Update'}
@@ -518,21 +519,15 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                       )}
                       {/* Uninstall — local only */}
                       {plugin.installed && canInstall && (
-                        <button onClick={() => handleUninstall(plugin)} disabled={isBusy}
+                        <button onClick={(e) => { e.stopPropagation(); handleUninstall(plugin); }} disabled={isBusy}
                           className="h-7 px-2.5 bg-mac-red/10 text-mac-red text-[10px] font-bold rounded-lg hover:bg-mac-red hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
                           <span className="material-symbols-outlined text-[12px]">delete</span>
                           {sk.pluginUninstallBtn || 'Uninstall'}
                         </button>
                       )}
-                      {/* Detail — works on both local & remote */}
-                      <button onClick={() => setDetailPlugin(plugin)}
-                        className="h-7 px-2.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[11px]">info</span>
-                        {sk.pluginDetailTitle || 'Details'}
-                      </button>
                       {/* Copy spec */}
-                      <button onClick={() => handleCopySpec(plugin.spec)}
-                        className="h-7 px-2.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); handleCopySpec(plugin.spec); }}
+                        className="h-7 px-2.5 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1">
                         <span className="material-symbols-outlined text-[11px]">content_copy</span>
                         {sk.pluginCopySpec || 'Copy Spec'}
                       </button>
@@ -548,7 +543,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
       {/* Detail modal — works on both local & remote */}
       {detailPlugin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setDetailPlugin(null)}>
-          <div className="bg-white dark:bg-[#1a1c22] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col theme-panel sci-card" onClick={e => e.stopPropagation()}>
             {/* Modal header */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-white/5 flex items-center gap-3">
               <span className="text-xl">{detailPlugin.icon}</span>
@@ -584,33 +579,36 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
                   <pre className="text-[10px] text-mac-red/80 mt-1 whitespace-pre-wrap break-all">{detailPlugin.error}</pre>
                 </div>
               )}
-              {/* Capabilities */}
-              {detailPlugin.toolNames && detailPlugin.toolNames.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailTools || 'Tools'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.toolNames.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.hookNames && detailPlugin.hookNames.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailHooks || 'Hooks'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.hookNames.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.channelIds && detailPlugin.channelIds.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailChannels || 'Channels'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.channelIds.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary/70 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.providerIds && detailPlugin.providerIds.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailProviders || 'Providers'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.providerIds.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.gatewayMethods && detailPlugin.gatewayMethods.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailGatewayMethods || 'Gateway Methods'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.gatewayMethods.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.cliCommands && detailPlugin.cliCommands.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailCliCommands || 'CLI Commands'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.cliCommands.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.services && detailPlugin.services.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailServices || 'Services'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.services.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
-              {detailPlugin.commands && detailPlugin.commands.length > 0 && (
-                <div><span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailCommands || 'Commands'}</span><div className="flex flex-wrap gap-1 mt-1">{detailPlugin.commands.map(n => <span key={n} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono">{n}</span>)}</div></div>
-              )}
+              {/* Capabilities — card style */}
+              {([
+                { items: detailPlugin.toolNames, label: sk.pluginDetailTools || 'Tools', icon: 'build', color: 'text-amber-500' },
+                { items: detailPlugin.hookNames, label: sk.pluginDetailHooks || 'Hooks', icon: 'webhook', color: 'text-purple-500' },
+                { items: detailPlugin.channelIds, label: sk.pluginDetailChannels || 'Channels', icon: 'forum', color: 'text-primary' },
+                { items: detailPlugin.providerIds, label: sk.pluginDetailProviders || 'Providers', icon: 'cloud', color: 'text-blue-500' },
+                { items: detailPlugin.gatewayMethods, label: sk.pluginDetailGatewayMethods || 'Gateway Methods', icon: 'route', color: 'text-teal-500' },
+                { items: detailPlugin.cliCommands, label: sk.pluginDetailCliCommands || 'CLI Commands', icon: 'terminal', color: 'text-slate-500' },
+                { items: detailPlugin.services, label: sk.pluginDetailServices || 'Services', icon: 'dns', color: 'text-indigo-500' },
+                { items: detailPlugin.commands, label: sk.pluginDetailCommands || 'Commands', icon: 'code', color: 'text-orange-500' },
+              ] as const).filter(s => s.items && s.items.length > 0).map(section => (
+                <div key={section.label} className="bg-slate-50 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-200 dark:border-white/10">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className={`material-symbols-outlined text-[14px] ${section.color}`}>{section.icon}</span>
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{section.label}</span>
+                    <span className="text-[9px] font-bold text-slate-400 dark:text-white/20 ms-auto">{section.items!.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {section.items!.map(n => (
+                      <span key={n} className="text-[9px] px-1.5 py-0.5 rounded-md bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-white/50 font-mono">{n}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
               {detailPlugin.httpRoutes != null && detailPlugin.httpRoutes > 0 && (
-                <div className="text-[10px]"><span className="text-slate-400 dark:text-white/30">{sk.pluginDetailHttpRoutes || 'HTTP Routes'}:</span> <span className="font-bold text-slate-700 dark:text-white/80">{detailPlugin.httpRoutes}</span></div>
+                <div className="bg-slate-50 dark:bg-white/[0.03] rounded-xl p-3 border border-slate-200 dark:border-white/10 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px] text-green-500">http</span>
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{sk.pluginDetailHttpRoutes || 'HTTP Routes'}</span>
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-white/80 ms-auto">{detailPlugin.httpRoutes}</span>
+                </div>
               )}
               {/* If no detail info at all */}
               {!detailPlugin.status && !detailPlugin.version && !detailPlugin.toolNames?.length && !detailPlugin.hookNames?.length && !detailPlugin.channelIds?.length && (
@@ -619,7 +617,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
             </div>
             {/* Modal footer */}
             <div className="px-5 py-3 border-t border-slate-200 dark:border-white/5 flex justify-end">
-              <button onClick={() => setDetailPlugin(null)} className="h-8 px-4 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/60 hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] font-bold rounded-lg transition-colors">
+              <button onClick={() => setDetailPlugin(null)} className="h-8 px-4 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 text-[11px] font-bold rounded-lg transition-colors">
                 {sk.pluginClose || 'Close'}
               </button>
             </div>
@@ -628,7 +626,7 @@ const PluginCenter: React.FC<PluginCenterProps> = ({ language }) => {
       )}
 
       {/* Footer status bar */}
-      <footer className="h-8 px-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 flex items-center justify-between shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/20">
+      <footer className="h-8 px-4 border-t border-slate-200 dark:border-white/5 theme-panel flex items-center justify-between shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/20">
         <div className="flex items-center gap-3">
           <span>{plugins.length} {sk.pluginCatalogCount || 'plugins in catalog'}</span>
           <span className="w-1 h-1 rounded-full bg-slate-200 dark:bg-white/10" />
