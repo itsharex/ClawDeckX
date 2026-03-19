@@ -152,5 +152,9 @@
   "pathConfig": "Config",
   "pathGatewayLog": "Gateway Log",
   "pathInstallLog": "Install Log",
-  "pathDoctorLog": "Doctor Log"
+  "pathDoctorLog": "Doctor Log",
+  "dockerMountsTitle": "Docker Volume Mounts",
+  "dockerMountsDesc": "Volume mappings between host and container paths",
+  "dockerMountHost": "Host",
+  "dockerMountContainer": "Container"
 }

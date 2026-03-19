@@ -152,5 +152,9 @@
   "pathConfig": "Файл конфигурации",
   "pathGatewayLog": "Журнал шлюза",
   "pathInstallLog": "Журнал установки",
-  "pathDoctorLog": "Журнал диагностики"
+  "pathDoctorLog": "Журнал диагностики",
+  "dockerMountsTitle": "Монтирование томов Docker",
+  "dockerMountsDesc": "Сопоставление томов между путями хоста и контейнера",
+  "dockerMountHost": "Хост",
+  "dockerMountContainer": "Контейнер"
 }

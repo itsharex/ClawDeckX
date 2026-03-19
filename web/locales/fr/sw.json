@@ -152,5 +152,9 @@
   "pathConfig": "Fichier de configuration",
   "pathGatewayLog": "Journal de la passerelle",
   "pathInstallLog": "Journal d'installation",
-  "pathDoctorLog": "Journal de diagnostic"
+  "pathDoctorLog": "Journal de diagnostic",
+  "dockerMountsTitle": "Montages de volumes Docker",
+  "dockerMountsDesc": "Correspondances de volumes entre les chemins hôte et conteneur",
+  "dockerMountHost": "Hôte",
+  "dockerMountContainer": "Conteneur"
 }

@@ -152,5 +152,9 @@
   "pathDoctorLog": "診斷日誌",
   "stepScanDesc": "偵測系統環境",
   "stepInstallDesc": "安裝相依性與服務",
-  "stepDoneDesc": "全部完成"
+  "stepDoneDesc": "全部完成",
+  "dockerMountsTitle": "Docker 卷映射",
+  "dockerMountsDesc": "主機與容器之間的卷映射路徑",
+  "dockerMountHost": "主機",
+  "dockerMountContainer": "容器"
 }

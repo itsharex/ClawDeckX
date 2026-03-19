@@ -152,5 +152,9 @@
   "pathConfig": "設定ファイル",
   "pathGatewayLog": "ゲートウェイログ",
   "pathInstallLog": "インストールログ",
-  "pathDoctorLog": "診断ログ"
+  "pathDoctorLog": "診断ログ",
+  "dockerMountsTitle": "Docker ボリュームマウント",
+  "dockerMountsDesc": "ホストとコンテナ間のボリュームマッピング",
+  "dockerMountHost": "ホスト",
+  "dockerMountContainer": "コンテナ"
 }

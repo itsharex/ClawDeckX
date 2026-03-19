@@ -32,6 +32,12 @@ type Step struct {
 	Required    bool   `json:"required"`
 }
 
+type DockerMount struct {
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	Type        string `json:"type,omitempty"`
+}
+
 type EnvironmentReport struct {
 	OS            string `json:"os"`
 	Arch          string `json:"arch"`
@@ -76,6 +82,8 @@ type EnvironmentReport struct {
 
 	LatestOpenClawVersion string `json:"latestOpenClawVersion,omitempty"`
 	UpdateAvailable       bool   `json:"updateAvailable"`
+
+	DockerMounts []DockerMount `json:"dockerMounts,omitempty"`
 
 	ScanTime string `json:"scanTime"`
 }
@@ -138,6 +146,10 @@ func Scan() (*EnvironmentReport, error) {
 				report.UpdateAvailable = true
 			}
 		}
+	}
+
+	if report.IsDocker {
+		report.DockerMounts = detectDockerMounts()
 	}
 
 	report.RecommendedMethod = recommendInstallMethod(report)
@@ -225,6 +237,52 @@ func detectDocker() bool {
 		return true
 	}
 	return false
+}
+
+func detectDockerMounts() []DockerMount {
+	data, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return nil
+	}
+	var mounts []DockerMount
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 10 {
+			continue
+		}
+		// mountinfo format: id parent major:minor root mount-point options ... - fstype source super-options
+		mountPoint := fields[4]
+		// find the separator "-"
+		sepIdx := -1
+		for i, f := range fields {
+			if f == "-" {
+				sepIdx = i
+				break
+			}
+		}
+		if sepIdx < 0 || sepIdx+2 >= len(fields) {
+			continue
+		}
+		fsType := fields[sepIdx+1]
+		source := fields[sepIdx+2]
+		// skip system/internal mounts, only show bind mounts or overlay with real host paths
+		if fsType == "overlay" || fsType == "tmpfs" || fsType == "proc" || fsType == "sysfs" || fsType == "devpts" || fsType == "cgroup" || fsType == "cgroup2" || fsType == "mqueue" || fsType == "devtmpfs" {
+			continue
+		}
+		// skip docker internal paths
+		if strings.HasPrefix(mountPoint, "/dev") || strings.HasPrefix(mountPoint, "/sys") || strings.HasPrefix(mountPoint, "/proc") || mountPoint == "/" {
+			continue
+		}
+		if source == "" || source == "none" || source == "tmpfs" {
+			continue
+		}
+		mounts = append(mounts, DockerMount{
+			Source:      source,
+			Destination: mountPoint,
+			Type:        fsType,
+		})
+	}
+	return mounts
 }
 
 func detectSSH() bool {

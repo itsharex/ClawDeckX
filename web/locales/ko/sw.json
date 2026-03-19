@@ -152,5 +152,9 @@
   "pathConfig": "설정 파일",
   "pathGatewayLog": "게이트웨이 로그",
   "pathInstallLog": "설치 로그",
-  "pathDoctorLog": "진단 로그"
+  "pathDoctorLog": "진단 로그",
+  "dockerMountsTitle": "Docker 볼륨 마운트",
+  "dockerMountsDesc": "호스트와 컨테이너 간의 볼륨 매핑",
+  "dockerMountHost": "호스트",
+  "dockerMountContainer": "컨테이너"
 }

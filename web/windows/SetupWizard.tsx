@@ -58,6 +58,8 @@ interface EnvironmentReport {
   currentUser?: string;
   latestOpenClawVersion?: string;
   updateAvailable?: boolean;
+  isDocker?: boolean;
+  dockerMounts?: { source: string; destination: string; type?: string }[];
 }
 
 interface SetupEvent {
@@ -736,6 +738,33 @@ const SetupWizard: React.FC<SetupWizardProps> = ({ language, onClose, onOpenEdit
                         <div key={label} className="p-3 theme-field rounded-lg">
                           <p className="text-[10px] theme-text-muted uppercase">{label}</p>
                           <p className="text-xs font-mono break-all text-[var(--color-text)] dark:text-white/80 mt-1">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Docker Volume Mounts */}
+                {scanResult.isDocker && scanResult.dockerMounts && scanResult.dockerMounts.length > 0 && (
+                  <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-white/10">
+                    <h4 className="text-sm font-bold text-[var(--color-text)] dark:text-white/80 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-base">deployed_code</span>
+                      {sw.dockerMountsTitle || 'Docker Volume Mounts'}
+                    </h4>
+                    <p className="text-[11px] theme-text-muted">{sw.dockerMountsDesc || 'Volume mappings between host and container paths'}</p>
+                    <div className="space-y-2">
+                      {scanResult.dockerMounts.map((m, i) => (
+                        <div key={i} className="p-3 theme-field rounded-lg">
+                          <div className="flex items-center gap-2 text-[10px] theme-text-muted uppercase">
+                            <span>{sw.dockerMountHost || 'Host'}</span>
+                            <span className="material-symbols-outlined text-[10px]">arrow_forward</span>
+                            <span>{sw.dockerMountContainer || 'Container'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs font-mono break-all text-[var(--color-text)] dark:text-white/80 flex-1">{m.source}</p>
+                            <span className="material-symbols-outlined text-[12px] theme-text-muted shrink-0">arrow_forward</span>
+                            <p className="text-xs font-mono break-all text-[var(--color-text)] dark:text-white/80 flex-1">{m.destination}</p>
+                          </div>
                         </div>
                       ))}
                     </div>

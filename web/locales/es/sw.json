@@ -152,5 +152,9 @@
   "pathConfig": "Archivo de configuración",
   "pathGatewayLog": "Registro del gateway",
   "pathInstallLog": "Registro de instalación",
-  "pathDoctorLog": "Registro de diagnóstico"
+  "pathDoctorLog": "Registro de diagnóstico",
+  "dockerMountsTitle": "Montajes de volumen Docker",
+  "dockerMountsDesc": "Mapeos de volúmenes entre rutas del host y del contenedor",
+  "dockerMountHost": "Host",
+  "dockerMountContainer": "Contenedor"
 }

@@ -152,5 +152,9 @@
   "pathConfig": "ملف الإعداد",
   "pathGatewayLog": "سجل البوابة",
   "pathInstallLog": "سجل التثبيت",
-  "pathDoctorLog": "سجل التشخيص"
+  "pathDoctorLog": "سجل التشخيص",
+  "dockerMountsTitle": "Docker Volume Mounts",
+  "dockerMountsDesc": "Volume mappings between host and container paths",
+  "dockerMountHost": "Host",
+  "dockerMountContainer": "Container"
 }

@@ -152,5 +152,9 @@
   "pathConfig": "Konfigurationsdatei",
   "pathGatewayLog": "Gateway-Protokoll",
   "pathInstallLog": "Installationsprotokoll",
-  "pathDoctorLog": "Diagnoseprotokoll"
+  "pathDoctorLog": "Diagnoseprotokoll",
+  "dockerMountsTitle": "Docker-Volume-Mounts",
+  "dockerMountsDesc": "Volume-Zuordnungen zwischen Host- und Container-Pfaden",
+  "dockerMountHost": "Host",
+  "dockerMountContainer": "Container"
 }
