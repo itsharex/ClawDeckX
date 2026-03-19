@@ -526,6 +526,14 @@ const Desktop: React.FC<DesktopProps> = ({
             </button>
           </div>
         )}
+        {wallpaper?.imageEnabled && wallpaperRefreshing && (
+          <div className="absolute top-[6.5rem] end-3 z-[9000] flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 backdrop-blur-xl px-3 py-1.5 shadow-lg animate-[fade-in_0.2s_ease-out]">
+            <span className="material-symbols-outlined text-[14px] text-white/80 animate-spin">progress_activity</span>
+            <span className="text-[11px] text-white/80 whitespace-nowrap">
+              {(t as any).pref?.wallpaperLoadingHint || 'Fetching wallpaper, please wait...'}
+            </span>
+          </div>
+        )}
 
         {/* 移动端：保持原有网格布局 */}
         <div className="md:hidden grid gap-x-1 gap-y-2 h-full content-start items-start pt-[45px] px-2 pb-24"

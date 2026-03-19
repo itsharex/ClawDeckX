@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "Clique em Atualizar para carregar o papel de parede",
     "wallpaperCacheHint": "O papel de parede é armazenado localmente e atualizado automaticamente a cada 24 horas.",
     "wallpaperFetchFail": "Falha ao carregar o papel de parede",
+    "wallpaperLoadingHint": "Buscando papel de parede, por favor aguarde...",
     "startupWindow": "Startup Window",
     "startupWindowDesc": "Choose which window opens automatically when you enter the desktop.",
     "startupNone": "None",

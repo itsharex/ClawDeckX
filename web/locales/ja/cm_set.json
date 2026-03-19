@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "更新をクリックして壁紙を読み込み",
     "wallpaperCacheHint": "壁紙はローカルにキャッシュされ、24時間ごとに自動更新されます。",
     "wallpaperFetchFail": "壁紙の読み込みに失敗しました",
+    "wallpaperLoadingHint": "壁紙を取得中です。しばらくお待ちください...",
     "startupWindow": "起動ウィンドウ",
     "startupWindowDesc": "デスクトップに入った時に自動的に開くウィンドウを選択します。",
     "startupNone": "なし",

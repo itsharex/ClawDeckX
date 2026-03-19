@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "點擊重新整理以載入桌布",
     "wallpaperCacheHint": "桌布已快取至本機，每 24 小時自動重新整理。",
     "wallpaperFetchFail": "桌布載入失敗",
+    "wallpaperLoadingHint": "正在取得桌布，請稍候...",
     "startupWindow": "啟動視窗",
     "startupWindowDesc": "選擇進入桌面時自動開啟的視窗。",
     "startupNone": "不開啟",

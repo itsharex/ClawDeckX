@@ -130,10 +130,32 @@ func (h *SkillHubHandler) CLIStatus(w http.ResponseWriter, r *http.Request) {
 		version = strings.TrimSpace(stderr.String())
 	}
 
-	web.OK(w, r, map[string]interface{}{
+	resp := map[string]interface{}{
 		"installed": true,
 		"version":   version,
 		"path":      bin,
+	}
+
+	// Check for newer version from npm registry (non-blocking, best-effort)
+	if latest, err := FetchLatestNpmVersion("skillhub"); err == nil && latest != "" {
+		resp["latestVersion"] = latest
+		resp["updateAvailable"] = CompareVersions(version, latest)
+	}
+
+	web.OK(w, r, resp)
+}
+
+// UpgradeCLI upgrades SkillHub CLI to latest version.
+// POST /api/v1/skillhub/upgrade-cli
+func (h *SkillHubHandler) UpgradeCLI(w http.ResponseWriter, r *http.Request) {
+	output, err := UpgradeNpmCLI("skillhub")
+	if err != nil {
+		web.Fail(w, r, "CLI_UPGRADE_FAILED", fmt.Sprintf("upgrade failed: %s\n%s", err.Error(), output), http.StatusInternalServerError)
+		return
+	}
+	web.OK(w, r, map[string]interface{}{
+		"success": true,
+		"output":  output,
 	})
 }
 
@@ -384,7 +406,7 @@ func (h *SkillHubHandler) RemoteSearchSkills(w http.ResponseWriter, r *http.Requ
 	if pageSize == "" {
 		pageSize = "24"
 	}
-	upstreamURL := fmt.Sprintf("%s/skills?page=1&pageSize=%s&search=%s", skillHubRemoteBaseURL, pageSize, urlQueryEscape(q))
+	upstreamURL := fmt.Sprintf("%s/skills?page=1&pageSize=%s&keyword=%s", skillHubRemoteBaseURL, pageSize, urlQueryEscape(q))
 	if category := strings.TrimSpace(r.URL.Query().Get("category")); category != "" && category != "all" {
 		upstreamURL += "&category=" + urlQueryEscape(category)
 	}

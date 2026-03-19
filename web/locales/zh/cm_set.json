@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "点击刷新加载壁纸",
     "wallpaperCacheHint": "壁纸已缓存到本地，每 24 小时自动刷新一次。",
     "wallpaperFetchFail": "壁纸加载失败",
+    "wallpaperLoadingHint": "正在获取壁纸，请稍候...",
     "startupWindow": "启动窗口",
     "startupWindowDesc": "选择进入桌面时自动打开的窗口。",
     "startupNone": "不打开",

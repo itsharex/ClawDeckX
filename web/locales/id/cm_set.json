@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "Click Refresh to load wallpaper",
     "wallpaperCacheHint": "Wallpaper is cached locally. It refreshes automatically every 24 hours.",
     "wallpaperFetchFail": "Failed to load wallpaper",
+    "wallpaperLoadingHint": "Fetching wallpaper, please wait...",
     "startupWindow": "Startup Window",
     "startupWindowDesc": "Choose which window opens automatically when you enter the desktop.",
     "startupNone": "None",

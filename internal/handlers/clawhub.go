@@ -1,6 +1,7 @@
 ﻿package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -728,4 +729,111 @@ func (h *ClawHubHandler) removeLockEntry(home, slug string) {
 			os.WriteFile(lockPath, updated, 0644)
 		}
 	}
+}
+
+// resolveClawHubBin returns the path to the clawhub CLI binary.
+func resolveClawHubBin() string {
+	if runtime.GOOS == "windows" {
+		if p, err := exec.LookPath("clawhub.cmd"); err == nil {
+			return p
+		}
+		if p, err := exec.LookPath("clawhub"); err == nil {
+			return p
+		}
+		return ""
+	}
+	if p, err := exec.LookPath("clawhub"); err == nil {
+		return p
+	}
+	home, _ := os.UserHomeDir()
+	candidates := []string{
+		"/usr/local/bin/clawhub",
+		"/usr/bin/clawhub",
+	}
+	if home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, ".local", "bin", "clawhub"),
+			filepath.Join(home, "bin", "clawhub"),
+		)
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c
+		}
+	}
+	return ""
+}
+
+// CLIStatus checks if ClawHub CLI is installed.
+// GET /api/v1/clawhub/cli-status
+func (h *ClawHubHandler) CLIStatus(w http.ResponseWriter, r *http.Request) {
+	bin := resolveClawHubBin()
+
+	if bin == "" && runtime.GOOS == "windows" {
+		bin = "clawhub"
+	}
+
+	if bin == "" {
+		web.OK(w, r, map[string]interface{}{
+			"installed": false,
+			"version":   nil,
+			"path":      nil,
+		})
+		return
+	}
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", "/c", bin, "--cli-version")
+	} else {
+		cmd = exec.Command(bin, "--cli-version")
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		logger.Log.Debug().Err(err).Str("bin", bin).Msg("clawhub --cli-version failed")
+		web.OK(w, r, map[string]interface{}{
+			"installed": false,
+			"version":   nil,
+			"path":      nil,
+		})
+		return
+	}
+
+	version := strings.TrimSpace(stdout.String())
+	if version == "" {
+		version = strings.TrimSpace(stderr.String())
+	}
+
+	resp := map[string]interface{}{
+		"installed": true,
+		"version":   version,
+		"path":      bin,
+	}
+
+	// Check for newer version from npm registry (non-blocking, best-effort)
+	if latest, err := FetchLatestNpmVersion("clawhub"); err == nil && latest != "" {
+		resp["latestVersion"] = latest
+		resp["updateAvailable"] = CompareVersions(version, latest)
+	}
+
+	web.OK(w, r, resp)
+}
+
+// UpgradeCLI upgrades ClawHub CLI to latest version.
+// POST /api/v1/clawhub/upgrade-cli
+func (h *ClawHubHandler) UpgradeCLI(w http.ResponseWriter, r *http.Request) {
+	output, err := UpgradeNpmCLI("clawhub")
+	if err != nil {
+		web.Fail(w, r, "CLI_UPGRADE_FAILED", fmt.Sprintf("upgrade failed: %s\n%s", err.Error(), output), http.StatusInternalServerError)
+		return
+	}
+	web.OK(w, r, map[string]interface{}{
+		"success": true,
+		"output":  output,
+	})
 }

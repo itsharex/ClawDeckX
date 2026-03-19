@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "Haz clic en Actualizar para cargar el fondo",
     "wallpaperCacheHint": "El fondo se almacena localmente y se actualiza automáticamente cada 24 horas.",
     "wallpaperFetchFail": "Error al cargar el fondo",
+    "wallpaperLoadingHint": "Obteniendo fondo de pantalla, por favor espere...",
     "startupWindow": "Ventana de inicio",
     "startupWindowDesc": "Elija qué ventana se abre automáticamente al entrar al escritorio.",
     "startupNone": "Ninguna",

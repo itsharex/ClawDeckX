@@ -202,9 +202,46 @@ const CLIBanner: React.FC<{
   status: 'checking' | 'not-installed' | 'installing' | 'installed' | 'error' | 'dismissed';
   onInstall: () => void;
   onDismiss: () => void;
+  onUpgrade?: () => void;
+  upgrading?: boolean;
+  updateAvailable?: boolean;
+  currentVersion?: string | null;
+  latestVersion?: string | null;
   error?: string;
   sk: any;
-}> = ({ status, onInstall, onDismiss, error, sk }) => {
+}> = ({ status, onInstall, onDismiss, onUpgrade, upgrading, updateAvailable, currentVersion, latestVersion, error, sk }) => {
+  // Show upgrade banner when installed but update available
+  if (status === 'installed' && updateAvailable && currentVersion && latestVersion) {
+    return (
+      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
+        <div className="flex items-center gap-3">
+          <span className="material-symbols-outlined text-blue-500 text-xl">system_update</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+              {(sk.cliUpdateAvailable || 'Update available: v{current} → v{latest}').replace('{current}', currentVersion).replace('{latest}', latestVersion)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {upgrading ? (
+              <span className="flex items-center gap-1.5 text-xs font-bold text-blue-500">
+                <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                {sk.cliUpgrading || 'Upgrading...'}
+              </span>
+            ) : (
+              <button onClick={onUpgrade} className="h-7 px-3 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">system_update</span>
+                {sk.cliUpgradeBtn || 'Upgrade CLI'}
+              </button>
+            )}
+            <button onClick={onDismiss} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20">
+              <span className="material-symbols-outlined text-[14px] text-blue-400">close</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (status === 'installed' || status === 'dismissed' || status === 'checking') return null;
 
   if (status === 'installing') {
@@ -274,6 +311,10 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
 
   const [cliStatus, setCLIStatus] = useState<'checking' | 'not-installed' | 'installing' | 'installed' | 'error' | 'dismissed'>('checking');
   const [cliError, setCLIError] = useState<string>('');
+  const [cliVersion, setCliVersion] = useState<string | null>(null);
+  const [cliLatestVersion, setCliLatestVersion] = useState<string | null>(null);
+  const [cliUpdateAvailable, setCliUpdateAvailable] = useState(false);
+  const [cliUpgrading, setCliUpgrading] = useState(false);
 
   const [skills, setSkills] = useState<SkillHubSkill[]>([]);
   const [totalSkills, setTotalSkills] = useState(0);
@@ -418,6 +459,9 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
       if (status.installed) {
         setCLIStatus('installed');
         localStorage.setItem(CLI_INSTALLED_KEY, 'true');
+        setCliVersion(status.version);
+        setCliLatestVersion(status.latestVersion || null);
+        setCliUpdateAvailable(status.updateAvailable === true);
       } else {
         setCLIStatus('not-installed');
         localStorage.removeItem(CLI_INSTALLED_KEY);
@@ -456,9 +500,27 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
     }
   }, [toast]);
 
+  // Upgrade CLI
+  const handleUpgradeCLI = useCallback(async () => {
+    setCliUpgrading(true);
+    try {
+      const result = await skillHubApi.upgradeCli();
+      if (result.success) {
+        toast('success', skRef.current.cliUpgradeSuccess || 'CLI upgraded successfully!');
+        setCliUpdateAvailable(false);
+        checkCLI();
+      }
+    } catch (err: any) {
+      toast('error', `${skRef.current.cliUpgradeFailed || 'CLI upgrade failed'}: ${err?.message || ''}`);
+    } finally {
+      setCliUpgrading(false);
+    }
+  }, [toast, checkCLI]);
+
   // Dismiss banner (session-only, not persistent)
   const handleDismissBanner = useCallback(() => {
     setCLIStatus('dismissed');
+    setCliUpdateAvailable(false);
   }, []);
 
   // Fetch installed skills from backend (merges Gateway skills.status RPC + skillhub list CLI)
@@ -682,7 +744,7 @@ const categoryOptions = useMemo(() => {
       <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar neon-scrollbar">
         <div className="max-w-6xl mx-auto">
           {/* CLI Banner */}
-          <CLIBanner status={cliStatus} onInstall={handleInstallCLI} onDismiss={handleDismissBanner} error={cliError} sk={sk} />
+          <CLIBanner status={cliStatus} onInstall={handleInstallCLI} onDismiss={handleDismissBanner} onUpgrade={handleUpgradeCLI} upgrading={cliUpgrading} updateAvailable={cliUpdateAvailable} currentVersion={cliVersion} latestVersion={cliLatestVersion} error={cliError} sk={sk} />
 
           {/* Skeleton loading — consistent with PluginCenter */}
           {(loading || (showFeatured && topLoading)) && renderedSkills.length === 0 && (
@@ -773,23 +835,23 @@ const categoryOptions = useMemo(() => {
                       </a>
                     </div>
 
-                    {/* Actions — unified: left=secondary/copy, right=primary/action */}
+                    {/* Actions */}
                     <div className="flex items-center gap-1 mt-auto pt-2 border-t border-slate-100 dark:border-white/5">
-                      {/* Primary action: Install or Copy CLI */}
+                      {/* Left: Copy Prompt (flex-1, fills remaining space) */}
+                      <button onClick={(e) => { e.stopPropagation(); handleCopyPrompt(skill); }}
+                        className={`flex-1 h-7 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${isSkillHubCLIInstalled ? 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10' : 'bg-primary/15 text-primary hover:bg-primary/25'}`}>
+                        <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                        <span className="truncate">{sk.copyPrompt || 'Copy Prompt'}</span>
+                      </button>
+                      {/* Right: Install or Copy CLI (shrink-0, compact) */}
                       <button onClick={(e) => { e.stopPropagation(); handleRightButton(skill); }}
                         disabled={installingSlug === skill.slug}
-                        className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : isSkillHubCLIInstalled ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
+                        className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : isSkillHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
                         title={isSkillHubCLIInstalled ? `${sk.installSkill || 'Install'} ${skill.slug}` : `${sk.copyCLI || 'Copy'}: skillhub install ${skill.slug}`}>
                         <span className={`material-symbols-outlined text-[12px] ${installingSlug === skill.slug ? 'animate-spin' : ''}`}>
                           {installingSlug === skill.slug ? 'progress_activity' : (isSkillHubCLIInstalled ? 'download' : 'terminal')}
                         </span>
-                        {isSkillHubCLIInstalled ? (sk.installSkill || 'Install') : (sk.copyCLI || 'Copy CLI')}
-                      </button>
-                      {/* Secondary: Copy Prompt */}
-                      <button onClick={(e) => { e.stopPropagation(); handleCopyPrompt(skill); }}
-                        className="h-7 px-2.5 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[11px]">content_copy</span>
-                        {sk.copyPrompt || 'Copy Prompt'}
+                        {isSkillHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
                       </button>
                     </div>
                   </div>

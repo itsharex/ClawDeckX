@@ -524,9 +524,19 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const [marketLoadingMore, setMarketLoadingMore] = useState(false);
   const [marketInstalledSlugs, setMarketInstalledSlugs] = useState<Set<string>>(new Set());
   const [marketRateLimit, setMarketRateLimit] = useState<{ limit: string; remaining: string; reset: string } | null>(null);
+  // ClawHub CLI state
+  const [clawHubCliStatus, setClawHubCliStatus] = useState<'checking' | 'installed' | 'not-installed'>('checking');
+  const [clawHubCliVersion, setClawHubCliVersion] = useState<string | null>(null);
+  const [clawHubCliLatest, setClawHubCliLatest] = useState<string | null>(null);
+  const [clawHubCliUpdateAvailable, setClawHubCliUpdateAvailable] = useState(false);
+  const [clawHubCliUpgrading, setClawHubCliUpgrading] = useState(false);
+  const [clawHubUpgradeDismissed, setClawHubUpgradeDismissed] = useState(false);
+  const [marketInstallingSlug, setMarketInstallingSlug] = useState<string | null>(null);
+  const [marketConfirmSkill, setMarketConfirmSkill] = useState<any>(null);
   const skillsReqSeqRef = useRef(0);
   const marketListReqSeqRef = useRef(0);
   const marketSearchReqSeqRef = useRef(0);
+  const marketSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSkills = useCallback(async () => {
     const reqId = ++skillsReqSeqRef.current;
@@ -775,6 +785,82 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     }
   }, [toast]);
 
+  // ClawHub CLI status check
+  const checkClawHubCli = useCallback(async () => {
+    try {
+      const status = await clawHubApi.cliStatus();
+      if (status.installed) {
+        setClawHubCliStatus('installed');
+        setClawHubCliVersion(status.version);
+        setClawHubCliLatest(status.latestVersion || null);
+        setClawHubCliUpdateAvailable(status.updateAvailable === true);
+      } else {
+        setClawHubCliStatus('not-installed');
+      }
+    } catch {
+      setClawHubCliStatus('not-installed');
+    }
+  }, []);
+
+  useEffect(() => { checkClawHubCli(); }, [checkClawHubCli]);
+
+  const isClawHubCLIInstalled = clawHubCliStatus === 'installed';
+
+  // Upgrade ClawHub CLI
+  const handleUpgradeClawHubCli = useCallback(async () => {
+    setClawHubCliUpgrading(true);
+    try {
+      const result = await clawHubApi.upgradeCli();
+      if (result.success) {
+        toast('success', skRef.current.cliUpgradeSuccess || 'CLI upgraded successfully!');
+        setClawHubCliUpdateAvailable(false);
+        checkClawHubCli();
+      }
+    } catch (err: any) {
+      toast('error', `${skRef.current.cliUpgradeFailed || 'CLI upgrade failed'}: ${err?.message || ''}`);
+    } finally {
+      setClawHubCliUpgrading(false);
+    }
+  }, [toast, checkClawHubCli]);
+
+  // Copy CLI command for ClawHub
+  const handleCopyClawHubCLI = useCallback((item: any) => {
+    const slug = item.slug || item.name || '';
+    const command = `clawhub install ${slug}`;
+    copyToClipboard(command).then(() => {
+      toast('success', skRef.current.copiedHint);
+    }).catch(() => { toast('error', skRef.current.copyFailed || 'Copy failed'); });
+  }, [toast]);
+
+  // Install skill via ClawHub CLI API
+  const handleClawHubInstall = useCallback(async (item: any) => {
+    const slug = item.slug || item.name || '';
+    if (marketInstallingSlug) return;
+    setMarketConfirmSkill(null);
+    setMarketInstallingSlug(slug);
+    try {
+      const result = await clawHubApi.install(slug);
+      if (result.success) {
+        toast('success', `${item.displayName || slug} ${skRef.current.installSuccess || 'installed successfully'}`);
+        // Refresh installed slugs
+        setMarketInstalledSlugs(prev => new Set([...prev, slug]));
+      }
+    } catch (err: any) {
+      toast('error', `${skRef.current.installFailed || 'Install failed'}: ${err?.message || ''}`);
+    } finally {
+      setMarketInstallingSlug(null);
+    }
+  }, [marketInstallingSlug, toast]);
+
+  // Right button on ClawHub card: if CLI installed → confirm dialog; else → copy CLI command
+  const handleMarketRightButton = useCallback((item: any) => {
+    if (isClawHubCLIInstalled) {
+      setMarketConfirmSkill(item);
+    } else {
+      handleCopyClawHubCLI(item);
+    }
+  }, [isClawHubCLIInstalled, handleCopyClawHubCLI]);
+
   // 过滤技能
   const filteredSkills = useMemo(() => {
     let list = skills;
@@ -1015,6 +1101,21 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     }
   }, [marketQuery, marketSort, fetchMarketList, sk, toast]);
 
+  // Debounced real-time search for ClawHub market (matching SkillHub behavior)
+  useEffect(() => {
+    if (marketSearchDebounceRef.current) clearTimeout(marketSearchDebounceRef.current);
+    if (activeTab !== 'market') return;
+    if (!marketQuery.trim()) {
+      // Empty query: fall back to list mode
+      if (marketLoaded) return;
+      return;
+    }
+    marketSearchDebounceRef.current = setTimeout(() => {
+      handleMarketSearch();
+    }, 300);
+    return () => { if (marketSearchDebounceRef.current) clearTimeout(marketSearchDebounceRef.current); };
+  }, [marketQuery, activeTab, handleMarketSearch, marketLoaded]);
+
   // 瀑布流自动加载更多
   useEffect(() => {
     const el = sentinelRef.current;
@@ -1178,13 +1279,21 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
             <>
               <div className="relative flex-1 min-w-0">
                 <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 theme-text-muted text-[16px]">search</span>
-                <input className="w-full h-9 ps-9 pe-4 theme-field rounded-lg text-xs placeholder:text-slate-400 dark:placeholder:text-white/20 focus:ring-1 focus:ring-primary outline-none sci-input"
-                  placeholder={sk.searchMarket} value={marketQuery} onChange={e => setMarketQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleMarketSearch()} />
+                <input className="w-full h-9 ps-9 pe-8 theme-field rounded-lg text-xs placeholder:text-slate-400 dark:placeholder:text-white/20 focus:ring-1 focus:ring-primary outline-none sci-input"
+                  placeholder={sk.searchMarket} value={marketQuery} onChange={e => {
+                    setMarketQuery(e.target.value);
+                    if (!e.target.value.trim()) { setMarketResults([]); setMarketLoaded(false); fetchMarketList(marketSort); }
+                  }} />
+                {marketQuery && !marketSearching && (
+                  <button onClick={() => { setMarketQuery(''); setMarketResults([]); setMarketLoaded(false); fetchMarketList(marketSort); }}
+                    className="absolute end-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-white/10">
+                    <span className="material-symbols-outlined text-[12px] theme-text-muted">close</span>
+                  </button>
+                )}
+                {marketSearching && (
+                  <span className="absolute end-2 top-1/2 -translate-y-1/2 material-symbols-outlined text-[14px] text-primary/50 animate-spin">progress_activity</span>
+                )}
               </div>
-              <button onClick={handleMarketSearch} disabled={marketSearching} className="h-9 px-3 bg-primary text-white text-[11px] font-bold rounded-lg disabled:opacity-50 shrink-0 whitespace-nowrap">
-                {marketSearching ? sk.searching : sk.search}
-              </button>
               {/* 自动翻译开关 + 模型选择 */}
               {language !== 'en' && (
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -1413,6 +1522,50 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
           {/* ClawHub 市场 */}
           {activeTab === 'market' && (
             <div className="space-y-4">
+              {/* ClawHub CLI upgrade banner */}
+              {isClawHubCLIInstalled && clawHubCliUpdateAvailable && clawHubCliVersion && clawHubCliLatest && !clawHubUpgradeDismissed && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-blue-500 text-xl">system_update</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                        {(sk.cliUpdateAvailable || 'Update available: v{current} → v{latest}').replace('{current}', clawHubCliVersion).replace('{latest}', clawHubCliLatest)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {clawHubCliUpgrading ? (
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-blue-500">
+                          <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                          {sk.cliUpgrading || 'Upgrading...'}
+                        </span>
+                      ) : (
+                        <button onClick={handleUpgradeClawHubCli} className="h-7 px-3 bg-blue-500 text-white text-xs font-bold rounded-lg hover:bg-blue-600 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">system_update</span>
+                          {sk.cliUpgradeBtn || 'Upgrade CLI'}
+                        </button>
+                      )}
+                      <button onClick={() => setClawHubUpgradeDismissed(true)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-blue-100 dark:hover:bg-blue-500/20">
+                        <span className="material-symbols-outlined text-[14px] text-blue-400">close</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* ClawHub CLI not installed banner */}
+              {clawHubCliStatus === 'not-installed' && !clawHubUpgradeDismissed && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">💡</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-amber-800 dark:text-amber-300">{sk.clawHubBannerNotInstalled || 'ClawHub CLI Not Installed'}</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-200 mt-1">{sk.clawHubBannerDesc || 'Install ClawHub CLI to use skill installation features'}</p>
+                    </div>
+                    <button onClick={() => setClawHubUpgradeDismissed(true)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-amber-100 dark:hover:bg-amber-500/20 shrink-0">
+                      <span className="material-symbols-outlined text-[14px] text-amber-400">close</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* 加载中 */}
               {(marketLoading || marketSearching) && marketResults.length === 0 && (
                 <div className="flex items-center justify-center py-16 text-slate-400">
@@ -1508,17 +1661,22 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                                 {sk.installed}
                               </span>
                             )}
+                            {/* Left: Copy Install Info (flex-1, fills remaining space) */}
                             <button onClick={(e) => { e.stopPropagation(); handleCopyMarketInstall(item); }}
-                              className="h-6 px-2 theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold rounded-md transition-colors flex items-center gap-1">
-                              <span className="material-symbols-outlined text-[11px]">content_copy</span>
-                              <span>{sk.copyInstallInfo}</span>
+                              className={`flex-1 h-7 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${isClawHubCLIInstalled ? 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10' : 'bg-primary/15 text-primary hover:bg-primary/25'}`}>
+                              <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                              <span className="truncate">{sk.copyInstallInfo}</span>
                             </button>
-                            {canSendToAgent && (
-                              <button onClick={() => handleSendMarketInstall(item)}
-                                className="h-6 w-6 flex items-center justify-center bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-md transition-all shrink-0" title={sk.sendToAgent}>
-                                <span className="material-symbols-outlined text-[11px]">send</span>
-                              </button>
-                            )}
+                            {/* Right: Install or Copy CLI (shrink-0, compact) */}
+                            <button onClick={(e) => { e.stopPropagation(); handleMarketRightButton(item); }}
+                              disabled={marketInstallingSlug === slug}
+                              className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${marketInstallingSlug === slug ? 'bg-primary/20 text-primary cursor-wait' : isClawHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
+                              title={isClawHubCLIInstalled ? `${sk.installSkill || 'Install'} ${slug}` : `clawhub install ${slug}`}>
+                              <span className={`material-symbols-outlined text-[12px] ${marketInstallingSlug === slug ? 'animate-spin' : ''}`}>
+                                {marketInstallingSlug === slug ? 'progress_activity' : (isClawHubCLIInstalled ? 'download' : 'terminal')}
+                              </span>
+                              {isClawHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
+                            </button>
                           </div>
                         </div>
                       );
@@ -1805,6 +1963,40 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
           </div>
         );
       })()}
+
+      {/* ClawHub Install Confirmation Dialog */}
+      {marketConfirmSkill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setMarketConfirmSkill(null)}>
+          <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6 theme-panel sci-card" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary">download</span>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-white">{sk.confirmInstallTitle || 'Install Skill'}</h3>
+                <p className="text-xs theme-text-muted">{marketConfirmSkill.displayName || marketConfirmSkill.name || marketConfirmSkill.slug}</p>
+              </div>
+            </div>
+            <p className="text-xs theme-text-secondary mb-1">
+              {sk.confirmInstallDesc || 'This will execute the following command:'}
+            </p>
+            <pre className="text-[11px] theme-field p-2 rounded-lg mb-4 font-mono">
+              clawhub install {marketConfirmSkill.slug || marketConfirmSkill.name}
+            </pre>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setMarketConfirmSkill(null)}
+                className="h-8 px-4 text-xs font-bold rounded-lg theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/20 transition-colors">
+                {sk.cancel || 'Cancel'}
+              </button>
+              <button onClick={() => handleClawHubInstall(marketConfirmSkill)}
+                className="h-8 px-4 text-xs font-bold rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">download</span>
+                {sk.confirmInstallBtn || 'Install'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 数据源配置弹窗 */}
       {showSourceConfig && (

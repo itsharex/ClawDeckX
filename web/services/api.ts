@@ -779,6 +779,7 @@ export interface WallpaperRandomResponse {
   seed?: string;
   page?: number;
   total?: number;
+  pool_remaining?: number;
 }
 
 export interface BingWallpaperResponse {
@@ -788,6 +789,7 @@ export interface BingWallpaperResponse {
   copyright?: string;
   start_date?: string;
   full_start_date?: string;
+  pool_size?: number;
 }
 
 export interface UnsplashWallpaperResponse {
@@ -798,7 +800,7 @@ export interface UnsplashWallpaperResponse {
 }
 
 export const wallpaperApi = {
-  wallhavenRandom: (params?: { q?: string; atleast?: string; ratios?: string; categories?: string; purity?: string; page?: number; seed?: string; apiKey?: string }) => {
+  wallhavenRandom: (params?: { q?: string; atleast?: string; ratios?: string; categories?: string; purity?: string; page?: number; seed?: string; apiKey?: string; exclude?: string[] }) => {
     const qs = new URLSearchParams();
     if (params?.q) qs.set('q', params.q);
     if (params?.atleast) qs.set('atleast', params.atleast);
@@ -808,6 +810,9 @@ export const wallpaperApi = {
     if (params?.page) qs.set('page', String(params.page));
     if (params?.seed) qs.set('seed', params.seed);
     if (params?.apiKey) qs.set('apikey', params.apiKey);
+    params?.exclude?.forEach(value => {
+      if (value) qs.append('exclude', value);
+    });
     const query = qs.toString();
     return get<WallpaperRandomResponse>(`/api/v1/wallpaper/wallhaven/random${query ? `?${query}` : ''}`);
   },
@@ -1066,7 +1071,15 @@ export interface ClawHubListResponse {
     reset: string;
   };
 }
+export interface ClawHubCLIStatus {
+  installed: boolean;
+  version: string | null;
+  path: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
+}
 export const clawHubApi = {
+  cliStatus: () => get<ClawHubCLIStatus>('/api/v1/clawhub/cli-status'),
   list: (sort = 'newest', limit = 20, cursor?: string) => {
     let url = `/api/v1/clawhub/list?sort=${sort}&limit=${limit}`;
     if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
@@ -1079,6 +1092,7 @@ export const clawHubApi = {
   update: (slug: string) => post('/api/v1/clawhub/update', { slug }),
   updateAll: () => post('/api/v1/clawhub/update', { all: true }),
   installed: () => get<any[]>('/api/v1/clawhub/installed'),
+  upgradeCli: () => post<{ success: boolean; output: string }>('/api/v1/clawhub/upgrade-cli', {}),
 };
 
 // ==================== 数据导出 ====================
@@ -1277,6 +1291,8 @@ export interface SkillHubCLIStatus {
   installed: boolean;
   version: string | null;
   path: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
 }
 
 export interface SkillHubSkill {
@@ -1407,4 +1423,5 @@ export const skillHubApi = {
   install: () => post<{ success: boolean; output: string }>('/api/v1/skillhub/install', {}),
   installSkill: (slug: string) => post<{ success: boolean; output: string; slug: string }>('/api/v1/skillhub/install-skill', { slug }),
   getInstalledSkills: () => get<{ skills: string[] }>('/api/v1/skillhub/installed'),
+  upgradeCli: () => post<{ success: boolean; output: string }>('/api/v1/skillhub/upgrade-cli', {}),
 };

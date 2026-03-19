@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "Cliquez sur Actualiser pour charger le fond d'écran",
     "wallpaperCacheHint": "Le fond d'écran est mis en cache localement et actualisé automatiquement toutes les 24 heures.",
     "wallpaperFetchFail": "Échec du chargement du fond d'écran",
+    "wallpaperLoadingHint": "Récupération du fond d'écran, veuillez patienter...",
     "startupWindow": "Fenêtre de démarrage",
     "startupWindowDesc": "Choisissez la fenêtre qui s'ouvre automatiquement à l'entrée du bureau.",
     "startupNone": "Aucune",

@@ -461,14 +461,29 @@ const PreferencesTab: React.FC<PreferencesTabProps> = ({ s, pref, prefs, onPrefs
                   </button>
                 </div>
                 {wallpaperPreview ? (
-                  <div className="w-full aspect-[16/9] min-h-52 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
+                  <div className="relative w-full aspect-[16/9] min-h-52 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
                     <img src={wallpaperPreview} alt={pref?.wallpaperPreviewAlt || 'Wallpaper preview'} className="w-full h-full object-contain" />
+                    {wallpaperLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-xl">
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/40">
+                          <span className="material-symbols-outlined text-[16px] text-white/90 animate-spin">progress_activity</span>
+                          <span className="text-[12px] text-white/90">{pref?.wallpaperLoadingHint || 'Fetching wallpaper, please wait...'}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full aspect-[16/9] min-h-52 rounded-xl border border-dashed border-slate-300 dark:border-white/15 flex items-center justify-center bg-slate-50 dark:bg-white/5">
-                    <span className="text-[12px] text-slate-400 dark:text-white/20">
-                      {pref?.wallpaperClickRefresh || 'Click Refresh to load wallpaper'}
-                    </span>
+                    {wallpaperLoading ? (
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[16px] text-slate-400 dark:text-white/30 animate-spin">progress_activity</span>
+                        <span className="text-[12px] text-slate-400 dark:text-white/30">{pref?.wallpaperLoadingHint || 'Fetching wallpaper, please wait...'}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[12px] text-slate-400 dark:text-white/20">
+                        {pref?.wallpaperClickRefresh || 'Click Refresh to load wallpaper'}
+                      </span>
+                    )}
                   </div>
                 )}
                 <p className="text-[10px] text-slate-400 dark:text-white/20">

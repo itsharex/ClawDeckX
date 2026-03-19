@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "Klicken Sie auf Aktualisieren, um das Hintergrundbild zu laden",
     "wallpaperCacheHint": "Das Hintergrundbild wird lokal zwischengespeichert und alle 24 Stunden automatisch aktualisiert.",
     "wallpaperFetchFail": "Hintergrundbild konnte nicht geladen werden",
+    "wallpaperLoadingHint": "Hintergrundbild wird abgerufen, bitte warten...",
     "startupWindow": "Startfenster",
     "startupWindowDesc": "Wählen Sie das Fenster, das beim Betreten des Desktops automatisch geöffnet wird.",
     "startupNone": "Keines",

@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "انقر على تحديث لتحميل الخلفية",
     "wallpaperCacheHint": "يتم تخزين الخلفية محليًا وتحديثها تلقائيًا كل 24 ساعة.",
     "wallpaperFetchFail": "فشل تحميل الخلفية",
+    "wallpaperLoadingHint": "جارٍ جلب الخلفية، يرجى الانتظار...",
     "startupWindow": "نافذة البدء",
     "startupWindowDesc": "اختر النافذة التي تُفتح تلقائيًا عند دخول سطح المكتب.",
     "startupNone": "بدون",

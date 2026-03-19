@@ -588,6 +588,7 @@ func RunServe(args []string) int {
 	router.DELETE("/api/v1/templates/", web.RequireAdmin(templateHandler.Delete))
 
 	clawHubHandler := handlers.NewClawHubHandler(gwClient)
+	router.GET("/api/v1/clawhub/cli-status", clawHubHandler.CLIStatus)
 	router.GET("/api/v1/clawhub/list", clawHubHandler.List)
 	router.GET("/api/v1/clawhub/search", clawHubHandler.Search)
 	router.GET("/api/v1/clawhub/skill", clawHubHandler.SkillDetail)
@@ -596,6 +597,7 @@ func RunServe(args []string) int {
 	router.POST("/api/v1/clawhub/uninstall", web.RequireAdmin(clawHubHandler.Uninstall))
 	router.POST("/api/v1/clawhub/update", web.RequireAdmin(clawHubHandler.Update))
 	router.GET("/api/v1/clawhub/installed", clawHubHandler.InstalledList)
+	router.POST("/api/v1/clawhub/upgrade-cli", web.RequireAdmin(clawHubHandler.UpgradeCLI))
 
 	wallpaperHandler := handlers.NewWallpaperHandler()
 	router.GET("/api/v1/wallpaper/wallhaven/random", wallpaperHandler.WallhavenRandom)
@@ -616,6 +618,7 @@ func RunServe(args []string) int {
 	skillHubHandler.SetGatewayClient(gwClient)
 	router.GET("/api/v1/skillhub/cli-status", skillHubHandler.CLIStatus)
 	router.POST("/api/v1/skillhub/install", web.RequireAdmin(skillHubHandler.Install))
+	router.POST("/api/v1/skillhub/upgrade-cli", web.RequireAdmin(skillHubHandler.UpgradeCLI))
 	router.POST("/api/v1/skillhub/install-skill", web.RequireAdmin(skillHubHandler.InstallSkill))
 	router.GET("/api/v1/skillhub/remote/skills", skillHubHandler.RemoteListSkills)
 	router.GET("/api/v1/skillhub/remote/search", skillHubHandler.RemoteSearchSkills)

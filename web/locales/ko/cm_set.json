@@ -424,6 +424,7 @@
     "wallpaperClickRefresh": "새로고침을 클릭하여 배경화면 로드",
     "wallpaperCacheHint": "배경화면은 로컬에 캐시되며 24시간마다 자동으로 새로고침됩니다.",
     "wallpaperFetchFail": "배경화면 로드 실패",
+    "wallpaperLoadingHint": "배경화면을 가져오는 중입니다. 잠시만 기다려 주세요...",
     "startupWindow": "시작 창",
     "startupWindowDesc": "데스크톱에 진입할 때 자동으로 열리는 창을 선택합니다.",
     "startupNone": "없음",

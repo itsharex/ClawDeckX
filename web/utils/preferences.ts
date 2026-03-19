@@ -373,6 +373,7 @@ export async function fetchWallpaperUrl(
       categories: encodeWallhavenCategories(wallpaper.categories),
       purity: encodeWallhavenPurity(wallpaper.purity),
       apiKey: wallpaper.apiKey.trim() || undefined,
+      exclude: getRecentWallpaperExcludes(wallpaper),
     });
     if (!item.image_url) return null;
     return { url: item.image_url, provider: 'wallhaven' };
