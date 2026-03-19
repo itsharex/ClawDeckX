@@ -135,6 +135,7 @@
     "assistantMsg": "सहायक",
     "toolCallsLabel": "टूल्स",
     "errors": "त्रुटियाँ",
-    "latencyStats": "विलंबता"
+    "latencyStats": "विलंबता",
+    "topConsumers": "Top Consumers"
   }
 }

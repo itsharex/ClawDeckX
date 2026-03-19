@@ -135,6 +135,7 @@
     "assistantMsg": "Ассистент",
     "toolCallsLabel": "Инструменты",
     "errors": "Ошибки",
-    "latencyStats": "Задержка"
+    "latencyStats": "Задержка",
+    "topConsumers": "Топ потребителей"
   }
 }

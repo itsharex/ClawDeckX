@@ -135,6 +135,7 @@
     "assistantMsg": "アシスタント",
     "toolCallsLabel": "ツール",
     "errors": "エラー",
-    "latencyStats": "レイテンシ"
+    "latencyStats": "レイテンシ",
+    "topConsumers": "トップ消費"
   }
 }

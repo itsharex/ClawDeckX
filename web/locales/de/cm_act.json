@@ -135,6 +135,7 @@
     "assistantMsg": "Assistent",
     "toolCallsLabel": "Werkzeuge",
     "errors": "Fehler",
-    "latencyStats": "Latenz"
+    "latencyStats": "Latenz",
+    "topConsumers": "Top-Verbraucher"
   }
 }

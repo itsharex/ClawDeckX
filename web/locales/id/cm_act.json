@@ -135,6 +135,7 @@
     "assistantMsg": "Asisten",
     "toolCallsLabel": "Alat",
     "errors": "Kesalahan",
-    "latencyStats": "Latensi"
+    "latencyStats": "Latensi",
+    "topConsumers": "Top Consumers"
   }
 }

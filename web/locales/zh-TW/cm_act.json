@@ -135,6 +135,7 @@
     "assistantMsg": "助手",
     "toolCallsLabel": "工具",
     "errors": "錯誤",
-    "latencyStats": "延遲"
+    "latencyStats": "延遲",
+    "topConsumers": "消耗排行"
   }
 }

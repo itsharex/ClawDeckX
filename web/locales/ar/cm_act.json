@@ -135,6 +135,7 @@
     "assistantMsg": "المساعد",
     "toolCallsLabel": "الأدوات",
     "errors": "الأخطاء",
-    "latencyStats": "زمن الاستجابة"
+    "latencyStats": "زمن الاستجابة",
+    "topConsumers": "Top Consumers"
   }
 }

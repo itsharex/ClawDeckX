@@ -135,6 +135,7 @@
     "assistantMsg": "어시스턴트",
     "toolCallsLabel": "도구",
     "errors": "오류",
-    "latencyStats": "지연 시간"
+    "latencyStats": "지연 시간",
+    "topConsumers": "상위 소비"
   }
 }
