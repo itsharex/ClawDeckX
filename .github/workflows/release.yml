@@ -129,16 +129,18 @@ jobs:
     outputs:
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-tags: true
-
       - name: Check tag message for [skip-docker]
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_MSG=$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" 2>/dev/null || echo "")
-          echo "Tag message: $TAG_MSG"
+          TAG_NAME="${GITHUB_REF_NAME}"
+          TAG_MSG=$(gh api "repos/${{ github.repository }}/git/refs/tags/${TAG_NAME}" \
+            --jq '.object.sha' 2>/dev/null | \
+            xargs -I{} gh api "repos/${{ github.repository }}/git/tags/{}" \
+            --jq '.message' 2>/dev/null || echo "")
+          echo "Tag: $TAG_NAME"
+          echo "Message: $TAG_MSG"
           if echo "$TAG_MSG" | grep -qF '[skip-docker]'; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "::notice::Docker build skipped via [skip-docker] tag marker"

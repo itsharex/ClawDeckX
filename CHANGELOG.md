@@ -14,6 +14,7 @@ _2026-03-19_
 
 ### 🐛 Bug Fixes / 修复
 
+- use GitHub API instead of checkout to read tag message in check-docker job
 - suppress GORM record-not-found log for missing settings
 
 ### ⚡ Performance / 性能优化
@@ -293,6 +294,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
