@@ -337,7 +337,7 @@ function New-Tag {
 
     $skipDockerSuffix = ""
     if (-not $Docker) {
-        $skipDockerSuffix = "`n`nSKIP_DOCKER=true"
+        $skipDockerSuffix = "`n`nDocker-Build: skip"
         Write-Host "默认跳过 Docker 构建（使用 -d 启用）" -ForegroundColor Yellow
     } else {
         Write-Host "将构建并推送 Docker 镜像" -ForegroundColor Cyan
