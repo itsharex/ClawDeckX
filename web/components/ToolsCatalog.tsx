@@ -247,34 +247,29 @@ const ToolsCatalog: React.FC<ToolsCatalogProps> = ({ language }) => {
               </button>
               {/* Tool list */}
               {expandedGroups.has(group.id) && (
-                <div className="border-t border-slate-100 dark:border-white/[0.04]">
-                  {group.tools.map((tool, idx) => (
-                    <div key={tool.id} className={`flex items-start gap-3 px-3 py-2.5 ${idx > 0 ? 'border-t border-slate-100/60 dark:border-white/[0.03]' : ''} hover:bg-slate-50/50 dark:hover:bg-white/[0.01] transition-colors`}>
-                      <span className="material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 mt-0.5 shrink-0">handyman</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">{tool.label}</span>
-                          <code className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 font-mono">{tool.id}</code>
-                          {tool.optional && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
-                              {t.toolsCatalogOptional || 'optional'}
-                            </span>
-                          )}
-                          {tool.pluginId && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                              {tool.pluginId}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5 leading-relaxed">{tool.description}</p>
-                        {tool.defaultProfiles.length > 0 && (
-                          <div className="flex items-center gap-1 mt-1.5">
-                            <span className="text-[9px] text-slate-400 dark:text-white/25">{t.toolsCatalogProfiles || 'Profiles'}:</span>
-                            {tool.defaultProfiles.map(p => (
-                              <span key={p} className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${profileColor(p)}`}>{getProfileLabel(p)}</span>
-                            ))}
-                          </div>
+                <div className="border-t border-slate-100 dark:border-white/[0.04] p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {group.tools.map(tool => (
+                    <div key={tool.id} className="rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/60 dark:border-white/[0.06] p-3 hover:border-primary/30 transition-all flex flex-col">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="material-symbols-outlined text-[14px] text-primary/60 shrink-0">handyman</span>
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-white/80 truncate">{tool.label}</span>
+                        <code className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 font-mono shrink-0">{tool.id}</code>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-white/40 leading-relaxed line-clamp-2 mb-2">{tool.description}</p>
+                      <div className="flex items-center gap-1 mt-auto flex-wrap">
+                        {tool.optional && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold">
+                            {t.toolsCatalogOptional || 'optional'}
+                          </span>
                         )}
+                        {tool.pluginId && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                            {tool.pluginId}
+                          </span>
+                        )}
+                        {tool.defaultProfiles.map(p => (
+                          <span key={p} className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${profileColor(p)}`}>{getProfileLabel(p)}</span>
+                        ))}
                       </div>
                     </div>
                   ))}
