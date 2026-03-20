@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { resolveTemplateColor } from '../utils/templateColors';
 
 const MARKET_ITEMS = [
   { title: 'SQLite Explorer', desc: 'Query and browse local SQLite databases with natural language.', icon: 'database', color: 'from-blue-500 to-indigo-600' },
@@ -29,7 +30,7 @@ const Market: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {MARKET_ITEMS.map(item => (
             <div key={item.title} className="theme-panel rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/10 transition-all cursor-pointer group shadow-sm sci-card">
-              <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl mb-4 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform`}>
+              <div className="w-14 h-14 rounded-xl mb-4 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform" style={resolveTemplateColor(item.color)}>
                 <span className="material-symbols-outlined text-3xl text-white">{item.icon}</span>
               </div>
               <h3 className="font-semibold text-sm mb-1 text-slate-800 dark:text-white">{item.title}</h3>

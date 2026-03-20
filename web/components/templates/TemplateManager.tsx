@@ -9,6 +9,7 @@ import TemplateSourceManagerUI from './TemplateSourceManager';
 import { useToast } from '../Toast';
 import { FileApplyConfirm, FileApplyRequest } from '../FileApplyConfirm';
 import AgentPickerModal from '../AgentPickerModal';
+import { resolveTemplateColor } from '../../utils/templateColors';
 
 type Template = ScenarioTemplate | MultiAgentTemplate | AgentTemplate | KnowledgeItem;
 
@@ -249,7 +250,8 @@ const AgentPresetsPanel: React.FC<AgentPresetsPanelProps> = ({ language, default
             className="text-start p-4 rounded-xl border transition-all border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] hover:border-primary/40 hover:bg-primary/[0.02] hover:ring-1 hover:ring-primary/15"
           >
             <div
-              className={`w-12 h-12 rounded-xl bg-gradient-to-br ${template.metadata.color || 'from-slate-500 to-gray-600'} flex items-center justify-center mb-3`}
+              className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
+              style={resolveTemplateColor(template.metadata.color)}
             >
               <span className="material-symbols-outlined text-white text-[24px]">{template.metadata.icon || 'person'}</span>
             </div>
@@ -266,7 +268,7 @@ const AgentPresetsPanel: React.FC<AgentPresetsPanelProps> = ({ language, default
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex items-center gap-3">
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${detailTemplate.metadata.color || 'from-slate-500 to-gray-600'} flex items-center justify-center`}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={resolveTemplateColor(detailTemplate.metadata.color)}>
                   <span className="material-symbols-outlined text-white text-[22px]">{detailTemplate.metadata.icon || 'person'}</span>
                 </div>
                 <div>
@@ -427,7 +429,8 @@ const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
           >
             <div className="flex items-start gap-3">
               <div
-                className={`w-10 h-10 rounded-lg bg-gradient-to-br ${template.metadata.color || 'from-slate-500 to-gray-600'} flex items-center justify-center shrink-0`}
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                style={resolveTemplateColor(template.metadata.color)}
               >
                 <span className="material-symbols-outlined text-white text-[20px]">{template.metadata.icon || 'auto_awesome'}</span>
               </div>

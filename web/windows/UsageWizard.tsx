@@ -7,6 +7,7 @@ import { templateSystem } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { FileApplyConfirm, FileApplyRequest } from '../components/FileApplyConfirm';
 import { ScenarioLibraryV2 } from '../components/scenarios';
+import { resolveTemplateColor } from '../utils/templateColors';
 
 interface UsageWizardProps {
   language: Language;
@@ -1115,7 +1116,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
                 {agentPresets.map(preset => (
                     <button key={preset.id} onClick={() => setPresetPreview(preset)}
                       className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-3 text-start hover:border-primary/30 hover:shadow-sm transition-all group">
-                      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${preset.metadata.color || 'from-primary to-primary/80'} flex items-center justify-center mb-2`}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2" style={resolveTemplateColor(preset.metadata.color)}>
                         <span className="material-symbols-outlined text-[16px] text-white">{preset.metadata.icon || 'person'}</span>
                       </div>
                       <p className="text-[10px] font-bold text-slate-700 dark:text-white/80 group-hover:text-primary">{preset.metadata.name}</p>
@@ -1371,7 +1372,7 @@ const UsageWizard: React.FC<UsageWizardProps> = ({ language, onOpenEditor, onOpe
           <div className="theme-panel rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col sci-card" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-white/[0.06]">
               <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${presetPreview.metadata.color || 'from-primary to-primary/80'} flex items-center justify-center`}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={resolveTemplateColor(presetPreview.metadata.color)}>
                   <span className="material-symbols-outlined text-[14px] text-white">{presetPreview.metadata.icon || 'person'}</span>
                 </div>
                 <span className="text-xs font-bold text-[var(--color-text)] dark:text-white/80">

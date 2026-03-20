@@ -4,6 +4,7 @@ import { getTranslation } from '../../locales';
 import { workflowApi, WorkflowInstance, WorkflowExecutionDefinition, gwApi } from '../../services/api';
 import { MultiAgentTemplate } from '../../services/template-system';
 import { useToast } from '../Toast';
+import { resolveTemplateColor } from '../../utils/templateColors';
 
 interface WorkflowRunnerProps {
   template: MultiAgentTemplate;
@@ -165,7 +166,7 @@ const WorkflowRunner: React.FC<WorkflowRunnerProps> = ({ template, language, pre
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${template.metadata.color || 'from-purple-500 to-pink-500'} flex items-center justify-center`}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={resolveTemplateColor(template.metadata.color)}>
               <span className="material-symbols-outlined text-white text-[20px]">play_circle</span>
             </div>
             <div>
@@ -219,7 +220,7 @@ const WorkflowRunner: React.FC<WorkflowRunnerProps> = ({ template, language, pre
                         <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-white/40">
                           {i + 1}
                         </div>
-                        <div className={`w-8 h-8 rounded-lg ${agent?.color || 'bg-slate-500'} flex items-center justify-center relative`}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center relative" style={resolveTemplateColor(agent?.color)}>
                           <span className="material-symbols-outlined text-white text-[14px]">{agent?.icon || 'person'}</span>
                           {!checkingAgents && (
                             <div className={`absolute -top-1 -end-1 w-3 h-3 rounded-full border-2 border-white dark:border-[#1a1a2e] ${isDeployed ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -310,7 +311,7 @@ const WorkflowRunner: React.FC<WorkflowRunnerProps> = ({ template, language, pre
                               <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{i + 1}</span>
                             )}
                           </div>
-                          <div className={`w-8 h-8 rounded-lg ${agentDef?.color || 'bg-slate-500'} flex items-center justify-center`}>
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={resolveTemplateColor(agentDef?.color)}>
                             <span className="material-symbols-outlined text-white text-[14px]">{agentDef?.icon || 'person'}</span>
                           </div>
                           <div className="flex-1 min-w-0">
