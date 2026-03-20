@@ -136,6 +136,7 @@
     "cronFetchFailed": "獲取定時任務失敗",
     "channelsFetchFailed": "獲取頻道失敗",
     "skillsFetchFailed": "獲取技能失敗",
-    "configFetchFailed": "獲取配置失敗"
+    "configFetchFailed": "獲取配置失敗",
+    "themeHint": "代理個性 / 指令描述..."
   }
 }

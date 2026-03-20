@@ -136,6 +136,7 @@
     "cronFetchFailed": "क्रॉन जॉब लाने में विफल",
     "channelsFetchFailed": "चैनल लाने में विफल",
     "skillsFetchFailed": "स्किल्स लाने में विफल",
-    "configFetchFailed": "कॉन्फ़िग लाने में विफल"
+    "configFetchFailed": "कॉन्फ़िग लाने में विफल",
+    "themeHint": "Agent personality / instructions..."
   }
 }

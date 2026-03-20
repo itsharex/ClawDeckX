@@ -136,6 +136,7 @@
     "cronFetchFailed": "Échec de la récupération des tâches cron",
     "channelsFetchFailed": "Échec de la récupération des canaux",
     "skillsFetchFailed": "Échec de la récupération des skills",
-    "configFetchFailed": "Échec de la récupération de la config"
+    "configFetchFailed": "Échec de la récupération de la config",
+    "themeHint": "Agent personality / instructions..."
   }
 }

@@ -136,6 +136,7 @@
     "cronFetchFailed": "Не удалось получить задания cron",
     "channelsFetchFailed": "Не удалось получить каналы",
     "skillsFetchFailed": "Не удалось получить навыки",
-    "configFetchFailed": "Не удалось получить конфигурацию"
+    "configFetchFailed": "Не удалось получить конфигурацию",
+    "themeHint": "Agent personality / instructions..."
   }
 }

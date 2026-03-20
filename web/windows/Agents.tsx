@@ -313,6 +313,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [crudWorkspace, setCrudWorkspace] = useState('');
   const [crudModel, setCrudModel] = useState('');
   const [crudEmoji, setCrudEmoji] = useState('');
+  const [crudDefault, setCrudDefault] = useState(false);
+  const [crudTheme, setCrudTheme] = useState('');
   const [crudBusy, setCrudBusy] = useState(false);
   const [crudError, setCrudError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -390,6 +392,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setCrudWorkspace(suggestedWs);
     setCrudModel('');
     setCrudEmoji('🤖');
+    setCrudDefault(false);
+    setCrudTheme('');
     setCrudError(null);
   }, [agents, config]);
 
@@ -404,12 +408,16 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     const rawWorkspace = entry?.workspace || defaults?.workspace || '';
     const rawModel = entry?.model || defaults?.model || '';
     const modelStr = typeof rawModel === 'string' ? rawModel : (rawModel?.primary || '');
+    const isDefault = selected.id === defaultId;
+    const theme = selected.identity?.theme || identity[selected.id]?.theme || '';
     setCrudName(resolveLabel(selected));
     setCrudWorkspace(rawWorkspace);
     setCrudModel(modelStr);
     setCrudEmoji(resolveEmoji(selected));
+    setCrudDefault(isDefault);
+    setCrudTheme(theme);
     setCrudError(null);
-  }, [selected, config]);
+  }, [selected, config, defaultId, identity]);
 
   const handleCreate = useCallback(async () => {
     if (!gwReady || crudBusy) return;
@@ -425,6 +433,17 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
         workspace: crudWorkspace.trim() || undefined,
         emoji: crudEmoji.trim() || undefined,
       });
+      // Patch config for model/default if specified
+      if (crudModel.trim() || crudDefault) {
+        try {
+          const cfgRaw = await gwApi.configGet() as any;
+          const baseHash = cfgRaw?.hash || cfgRaw?.baseHash || '';
+          const agentEntry: Record<string, any> = { id: crudName.trim() };
+          if (crudModel.trim()) agentEntry.model = crudModel.trim();
+          if (crudDefault) agentEntry.default = true;
+          await gwApi.configPatch(JSON.stringify({ agents: { list: [agentEntry] } }), baseHash);
+        } catch { /* best-effort */ }
+      }
       setCrudMode(null);
       loadAgents();
       loadConfig();
@@ -433,7 +452,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     }
     setCrudBusy(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crudName, crudWorkspace, crudEmoji, crudBusy, loadAgents]);
+  }, [crudName, crudWorkspace, crudEmoji, crudModel, crudDefault, crudBusy, loadAgents]);
 
   const handleUpdate = useCallback(async () => {
     if (!gwReady || crudBusy || !selectedId) return;
@@ -444,6 +463,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       if (crudName.trim()) agentEntry.name = crudName.trim();
       if (crudWorkspace.trim()) agentEntry.workspace = crudWorkspace.trim();
       if (crudModel.trim()) agentEntry.model = crudModel.trim();
+      agentEntry.default = crudDefault || undefined;
+      if (crudTheme.trim()) agentEntry.identity = { theme: crudTheme.trim() };
       // Patch config via config.patch (merges agents.list by id)
       const cfgRaw = await gwApi.configGet() as any;
       const baseHash = cfgRaw?.hash || cfgRaw?.baseHash || '';
@@ -464,7 +485,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     }
     setCrudBusy(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, crudName, crudWorkspace, crudModel, crudEmoji, crudBusy, loadAgents]);
+  }, [selectedId, crudName, crudWorkspace, crudModel, crudEmoji, crudDefault, crudTheme, crudBusy, loadAgents]);
 
   const handleDelete = useCallback(async () => {
     if (!gwReady || crudBusy || !selectedId) return;
@@ -1337,32 +1358,49 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] font-mono text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30"
                   disabled={crudBusy} />
               </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">{a.model}</label>
+                {modelOptions.length > 0 ? (
+                  <CustomSelect
+                    value={crudModel}
+                    onChange={setCrudModel}
+                    options={[{ value: '', label: a.modelHint || 'Inherit default' }, ...modelOptions]}
+                    disabled={crudBusy}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] font-mono text-slate-800 dark:text-white/80"
+                  />
+                ) : (
+                  <input value={crudModel} onChange={e => setCrudModel(e.target.value)}
+                    placeholder={a.modelHint}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] font-mono text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    disabled={crudBusy} />
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">{a.emoji}</label>
+                  <input value={crudEmoji} onChange={e => setCrudEmoji(e.target.value)}
+                    placeholder={a.emojiHint}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    disabled={crudBusy} />
+                </div>
+                <div className="shrink-0 pt-4">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={crudDefault} onChange={e => setCrudDefault(e.target.checked)}
+                      className="accent-primary w-3.5 h-3.5" disabled={crudBusy} />
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase">{a.isDefault}</span>
+                  </label>
+                </div>
+              </div>
               {crudMode === 'edit' && (
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">{a.model}</label>
-                  {modelOptions.length > 0 ? (
-                    <CustomSelect
-                      value={crudModel}
-                      onChange={setCrudModel}
-                      options={[{ value: '', label: a.modelHint || 'Select model...' }, ...modelOptions]}
-                      disabled={crudBusy}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] font-mono text-slate-800 dark:text-white/80"
-                    />
-                  ) : (
-                    <input value={crudModel} onChange={e => setCrudModel(e.target.value)}
-                      placeholder={a.modelHint}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] font-mono text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                      disabled={crudBusy} />
-                  )}
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">{a.theme}</label>
+                  <textarea value={crudTheme} onChange={e => setCrudTheme(e.target.value)}
+                    placeholder={a.themeHint || 'Agent personality / instructions...'}
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-none"
+                    disabled={crudBusy} />
                 </div>
               )}
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase block mb-1">{a.emoji}</label>
-                <input value={crudEmoji} onChange={e => setCrudEmoji(e.target.value)}
-                  placeholder={a.emojiHint}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[12px] text-slate-800 dark:text-white/80 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  disabled={crudBusy} />
-              </div>
             </div>
 
             <div className="flex justify-end gap-2 mt-5">

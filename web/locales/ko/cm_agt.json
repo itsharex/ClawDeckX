@@ -136,6 +136,7 @@
     "cronFetchFailed": "정기 작업을 불러오지 못했습니다",
     "channelsFetchFailed": "채널을 불러오지 못했습니다",
     "skillsFetchFailed": "스킬을 불러오지 못했습니다",
-    "configFetchFailed": "설정을 불러오지 못했습니다"
+    "configFetchFailed": "설정을 가져오지 못했습니다",
+    "themeHint": "에이전트 성격 / 지시 사항..."
   }
 }

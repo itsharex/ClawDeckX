@@ -136,6 +136,7 @@
     "cronFetchFailed": "Cronジョブの取得に失敗しました",
     "channelsFetchFailed": "チャンネルの取得に失敗しました",
     "skillsFetchFailed": "スキルの取得に失敗しました",
-    "configFetchFailed": "設定の取得に失敗しました"
+    "configFetchFailed": "設定の取得に失敗しました",
+    "themeHint": "エージェントの性格 / 指示..."
   }
 }

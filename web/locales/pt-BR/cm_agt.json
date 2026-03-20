@@ -136,6 +136,7 @@
     "cronFetchFailed": "Falha ao buscar tarefas cron",
     "channelsFetchFailed": "Falha ao buscar canais",
     "skillsFetchFailed": "Falha ao buscar skills",
-    "configFetchFailed": "Falha ao buscar configuração"
+    "configFetchFailed": "Falha ao buscar configuração",
+    "themeHint": "Agent personality / instructions..."
   }
 }

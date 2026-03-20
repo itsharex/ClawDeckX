@@ -136,6 +136,7 @@
     "cronFetchFailed": "Error al obtener cron jobs",
     "channelsFetchFailed": "Error al obtener canales",
     "skillsFetchFailed": "Error al obtener skills",
-    "configFetchFailed": "Error al obtener configuración"
+    "configFetchFailed": "Error al obtener configuración",
+    "themeHint": "Personalidad del agente / instrucciones..."
   }
 }

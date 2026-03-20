@@ -136,6 +136,7 @@
     "cronFetchFailed": "Failed to fetch cron jobs",
     "channelsFetchFailed": "Failed to fetch channels",
     "skillsFetchFailed": "Failed to fetch skills",
-    "configFetchFailed": "Failed to fetch config"
+    "configFetchFailed": "Failed to fetch config",
+    "themeHint": "Agent personality / instructions..."
   }
 }

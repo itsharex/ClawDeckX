@@ -136,6 +136,7 @@
     "cronFetchFailed": "Gagal mengambil cron job",
     "channelsFetchFailed": "Gagal mengambil channel",
     "skillsFetchFailed": "Gagal mengambil skill",
-    "configFetchFailed": "Gagal mengambil konfigurasi"
+    "configFetchFailed": "Gagal mengambil konfigurasi",
+    "themeHint": "Agent personality / instructions..."
   }
 }

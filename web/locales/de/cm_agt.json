@@ -136,6 +136,7 @@
     "cronFetchFailed": "Cron-Jobs konnten nicht abgerufen werden",
     "channelsFetchFailed": "Kanäle konnten nicht abgerufen werden",
     "skillsFetchFailed": "Skills konnten nicht abgerufen werden",
-    "configFetchFailed": "Konfiguration konnte nicht abgerufen werden"
+    "configFetchFailed": "Konfiguration konnte nicht abgerufen werden",
+    "themeHint": "Agent personality / instructions..."
   }
 }
