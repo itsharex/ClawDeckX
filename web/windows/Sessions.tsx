@@ -1559,10 +1559,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       const res = await gwApi.sessionsResolve(sessionKey.trim()) as any;
       setResolveResult(res?.key || sessionKey);
       if (res?.key && res.key !== sessionKey) setSessionKey(res.key);
-    } catch { /* ignore */ }
+      toast('success', c.resolveOk || 'Session resolved');
+    } catch (err: any) {
+      toast('error', err?.message || c.resolveFailed || 'Resolve failed');
+    }
     setResolving(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionKey, resolving]);
+  }, [sessionKey, resolving, toast]);
 
   // Compact session (via REST proxy)
   const handleCompact = useCallback(async () => {
@@ -1572,13 +1575,15 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     try {
       await gwApi.sessionsCompact(sessionKey.trim());
       setCompactResult({ ok: true, text: c.compactOk });
+      toast('success', c.compactOk || 'Compacted');
       setTimeout(() => setCompactResult(null), 3000);
     } catch (err: any) {
       setCompactResult({ ok: false, text: `${cRef.current.compactFailed}: ${err?.message || ''}` });
+      toast('error', err?.message || c.compactFailed || 'Compact failed');
     }
     setCompacting(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionKey, compacting]);
+  }, [sessionKey, compacting, toast]);
 
   // Session repair: scan all sessions for issues
   const handleRepairScan = useCallback(async () => {
