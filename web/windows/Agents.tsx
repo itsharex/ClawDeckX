@@ -469,7 +469,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
   const resolveLabel = (ag: any) => {
     const id = identity[ag.id];
-    return id?.name?.trim() || ag.identity?.name?.trim() || ag.name?.trim() || ag.id;
+    const explicitName = ag.name?.trim();
+    if (explicitName && explicitName !== ag.id) return explicitName;
+    return id?.name?.trim() || ag.identity?.name?.trim() || explicitName || ag.id;
   };
   const resolveEmoji = (ag: any) => {
     const id = identity[ag.id];
