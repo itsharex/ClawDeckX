@@ -771,7 +771,24 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setRunPhase('error');
       setLiveToolCalls(new Map());
       pendingRunRef.current = null;
-      setError(payload.errorMessage || cRef.current.error);
+      // Enhance upstream API errors with HTTP status context
+      let errMsg = payload.errorMessage || cRef.current.error;
+      const httpMatch = typeof errMsg === 'string' && errMsg.match(/^(\d{3})\b/);
+      if (httpMatch) {
+        const code = Number(httpMatch[1]);
+        const hints: Record<number, string> = {
+          401: 'API key invalid or expired',
+          403: 'Access denied — check API key permissions or model availability',
+          429: 'Rate limited — too many requests, retry later',
+          500: 'Provider internal error',
+          502: 'Provider unreachable',
+          503: 'Provider temporarily unavailable',
+        };
+        if (hints[code] && !errMsg.includes(hints[code])) {
+          errMsg = `${errMsg}  (${hints[code]})`;
+        }
+      }
+      setError(errMsg);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
