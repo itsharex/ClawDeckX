@@ -564,6 +564,526 @@ function Show-ServiceCommands {
 }
 
 # ==============================================================================
+# Docker Mode Functions
+# ==============================================================================
+
+$DOCKER_COMPOSE_URL = "https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml"
+$DOCKER_COMPOSE_URL_CN = "https://ghfast.top/https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml"
+$DOCKER_IMAGE = "knowhunters/clawdeckx:latest"
+$DOCKER_COMPOSE_FILE = "docker-compose.yml"
+$script:NEED_MIRROR = $false
+$script:DOCKER_MIRROR = ""
+
+function Invoke-DownloadWithFallback {
+    param([string]$Url, [string]$CnUrl, [string]$OutFile)
+    if ($script:NEED_MIRROR -and $CnUrl) {
+        Write-C "Using China proxy... / 使用中国代理..." Cyan
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            Invoke-WebRequest -Uri $CnUrl -OutFile $OutFile -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
+            return
+        } catch {
+            Write-C "China proxy failed, trying direct... / 中国代理失败，尝试直连..." Yellow
+        }
+    }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+    Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 60
+}
+
+# Docker registry mirrors for China mainland
+$DOCKER_MIRRORS = @(
+    "https://docker.1ms.run",
+    "https://docker.xuanyuan.me"
+)
+
+function Test-NetworkDirect {
+    # Returns $true if direct access works, $false if mirror is needed
+    try {
+        $null = Invoke-WebRequest -Uri "https://registry-1.docker.io/v2/" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        return $true
+    } catch { $null = $_ }
+    try {
+        $null = Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        return $true
+    } catch { $null = $_ }
+    return $false
+}
+
+function Set-DockerMirror {
+    # On Windows, Docker Desktop uses a settings JSON file or daemon.json
+    $daemonJson = "$env:ProgramData\docker\config\daemon.json"
+    $daemonDir = Split-Path $daemonJson -Parent
+
+    Write-C "Configuring Docker registry mirrors for faster pulls..." Cyan
+    Write-C "正在配置 Docker 镜像加速器以加快拉取速度..." Cyan
+
+    $mirrorsArray = $DOCKER_MIRRORS | ForEach-Object { $_ }
+
+    if (-not (Test-Path $daemonDir)) {
+        New-Item -ItemType Directory -Path $daemonDir -Force | Out-Null
+    }
+
+    if (Test-Path $daemonJson) {
+        $existing = Get-Content $daemonJson -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+        if ($existing -and $existing."registry-mirrors") {
+            Write-C "Docker mirrors already configured in $daemonJson" Yellow
+            Write-C "$daemonJson 中已配置镜像加速器" Yellow
+            return
+        }
+    }
+
+    try {
+        $config = @{}
+        if (Test-Path $daemonJson) {
+            $config = Get-Content $daemonJson -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if (-not $config) { $config = @{} }
+            # Convert PSObject to hashtable
+            $ht = @{}
+            $config.PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
+            $config = $ht
+        }
+        $config["registry-mirrors"] = $mirrorsArray
+        $config | ConvertTo-Json -Depth 5 | Set-Content -Path $daemonJson -Encoding UTF8
+        Write-C "✓ Docker registry mirrors configured / Docker 镜像加速器已配置" Green
+        foreach ($m in $DOCKER_MIRRORS) {
+            Write-C "  $m" Cyan
+        }
+        Write-C "⚠ Please restart Docker Desktop for mirrors to take effect." Yellow
+        Write-C "  请重启 Docker Desktop 以使镜像加速器生效。" Yellow
+    } catch {
+        Write-C "⚠ Could not configure Docker mirrors automatically: $_" Yellow
+        Write-C "  无法自动配置镜像加速器。请手动在 Docker Desktop Settings > Docker Engine 中添加：" Yellow
+        Write-C "  `"registry-mirrors`": [`"$($DOCKER_MIRRORS[0])`"]" Cyan
+    }
+}
+
+function Set-ImageMirror {
+    param([string]$ComposeFile)
+    if (-not $script:NEED_MIRROR -or -not $script:DOCKER_MIRROR) { return }
+    $mirrorHost = $script:DOCKER_MIRROR -replace 'https?://', ''
+    $originalImage = "knowhunters/clawdeckx"
+    $mirroredImage = "$mirrorHost/$originalImage"
+    $content = Get-Content $ComposeFile -Raw
+    if ($content -match [regex]::Escape($mirroredImage)) { return }
+    $content = $content -replace [regex]::Escape("image: $originalImage"), "image: $mirroredImage"
+    Set-Content -Path $ComposeFile -Value $content -NoNewline
+    Write-C "✓ Using mirror for image pull / 使用镜像加速拉取： $mirroredImage" Green
+}
+
+function Test-DockerInstalled {
+    try {
+        $null = & docker info 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+function Test-DockerCompose {
+    try {
+        $null = & docker compose version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $script:COMPOSE_CMD = "docker compose"
+            return $true
+        }
+    } catch { $null = $_ }
+    try {
+        $null = & docker-compose version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $script:COMPOSE_CMD = "docker-compose"
+            return $true
+        }
+    } catch { $null = $_ }
+    return $false
+}
+
+function Test-DockerDeployed {
+    if ((Test-Path $DOCKER_COMPOSE_FILE) -and (Test-DockerInstalled) -and (Test-DockerCompose)) {
+        $content = Get-Content $DOCKER_COMPOSE_FILE -Raw -ErrorAction SilentlyContinue
+        if ($content -match "knowhunters/clawdeckx") { return $true }
+    }
+    return $false
+}
+
+function Get-DockerVersion {
+    try {
+        $ver = & docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' clawdeckx 2>$null
+        if ($ver -and $ver -ne "<no value>") { return $ver }
+    } catch { $null = $_ }
+    return "unknown"
+}
+
+function Test-DockerRunning {
+    try {
+        $out = & docker ps --filter "name=clawdeckx" --filter "status=running" --format '{{.Names}}' 2>$null
+        return ($out -match "clawdeckx")
+    } catch { return $false }
+}
+
+function Get-ComposePort {
+    if (Test-Path $DOCKER_COMPOSE_FILE) {
+        $content = Get-Content $DOCKER_COMPOSE_FILE -Raw -ErrorAction SilentlyContinue
+        if ($content -match '"(\d+):18788"') {
+            return [int]$Matches[1]
+        }
+    }
+    return $DEFAULT_PORT
+}
+
+function Invoke-ComposeCmd {
+    param([string[]]$Args)
+    if ($script:COMPOSE_CMD -eq "docker compose") {
+        & docker compose @Args
+    } else {
+        & docker-compose @Args
+    }
+}
+
+function Install-Docker {
+    Write-Section "Install Docker / 安装 Docker"
+
+    Write-C "Docker Desktop is not installed or not running." Yellow
+    Write-C "Docker Desktop 未安装或未运行。" Yellow
+    Write-Host ""
+    Write-C "Please install Docker Desktop for Windows from:" Cyan
+    Write-C "请从以下地址安装 Docker Desktop：" Cyan
+    Write-C "  https://www.docker.com/products/docker-desktop/" Green
+    Write-Host ""
+    Write-C "After installation, start Docker Desktop and re-run this script." Yellow
+    Write-C "安装完成后，启动 Docker Desktop 并重新运行此脚本。" Yellow
+    Write-Host ""
+
+    $openBrowser = Read-YesNo "Open download page now? / 现在打开下载页面？" $true
+    if ($openBrowser) {
+        Start-Process "https://www.docker.com/products/docker-desktop/"
+    }
+    return $false
+}
+
+function Install-DockerClawDeckX {
+    Write-Section "Install ClawDeckX (Docker) / 安装 ClawDeckX (Docker)"
+
+    # Step 0: Detect network early (needed for Docker Desktop guidance + image pull mirror)
+    Write-C "Checking network connectivity... / 正在检测网络连通性..." Cyan
+    if (-not (Test-NetworkDirect)) {
+        $script:NEED_MIRROR = $true
+        $script:DOCKER_MIRROR = $DOCKER_MIRRORS[0]
+        Write-C "⚠ Docker Hub appears unreachable (likely China mainland network)" Yellow
+        Write-C "  Docker Hub 似乎不可访问（可能为中国大陆网络）" Yellow
+    } else {
+        Write-C "✓ Direct network access OK / 网络直连正常" Green
+    }
+    Write-Host ""
+
+    # Step 1: Ensure Docker is installed
+    if (-not (Test-DockerInstalled)) {
+        $null = Install-Docker
+        return
+    }
+
+    # Step 2: Ensure docker compose is available
+    if (-not (Test-DockerCompose)) {
+        Write-C "✗ docker compose not found / 未找到 docker compose" Red
+        Write-C "Please update Docker Desktop to a recent version." Yellow
+        return
+    }
+
+    Write-C "✓ Docker is ready / Docker 已就绪" Green
+    Write-C "✓ Compose: $($script:COMPOSE_CMD)" Green
+    Write-Host ""
+
+    # Step 2.5: Configure Docker daemon mirrors if needed (requires Docker to be installed)
+    if ($script:NEED_MIRROR) {
+        Set-DockerMirror
+        Write-Host ""
+    }
+
+    # Step 3: Download docker-compose.yml
+    if (Test-Path $DOCKER_COMPOSE_FILE) {
+        Write-C "docker-compose.yml already exists in current directory." Yellow
+        Write-C "当前目录已存在 docker-compose.yml" Yellow
+        if (-not (Read-YesNo "Overwrite? / 覆盖？" $false)) {
+            Write-C "Using existing docker-compose.yml / 使用现有 docker-compose.yml" Cyan
+        } else {
+            Write-C "Downloading docker-compose.yml... / 正在下载 docker-compose.yml..." Cyan
+            Invoke-DownloadWithFallback $DOCKER_COMPOSE_URL $DOCKER_COMPOSE_URL_CN $DOCKER_COMPOSE_FILE
+            Write-C "✓ Downloaded / 已下载" Green
+        }
+    } else {
+        Write-C "Downloading docker-compose.yml... / 正在下载 docker-compose.yml..." Cyan
+        Invoke-DownloadWithFallback $DOCKER_COMPOSE_URL $DOCKER_COMPOSE_URL_CN $DOCKER_COMPOSE_FILE
+        Write-C "✓ Downloaded / 已下载" Green
+    }
+
+    # Step 4: Optional port configuration
+    Write-Host ""
+    Write-C "Default port / 默认端口: $DEFAULT_PORT" Cyan
+    if (Read-YesNo "Use a different port? / 使用其他端口？" $false) {
+        $customPort = Read-Host "Enter port / 输入端口"
+        try {
+            $p = [int]$customPort
+            if ($p -gt 0 -and $p -le 65535) {
+                $content = Get-Content $DOCKER_COMPOSE_FILE -Raw
+                $content = $content -replace "`"${DEFAULT_PORT}:${DEFAULT_PORT}`"", "`"${p}:${DEFAULT_PORT}`""
+                Set-Content -Path $DOCKER_COMPOSE_FILE -Value $content -NoNewline
+                $script:PORT = $p
+                Write-C "✓ Port set to $p / 端口已设置为 $p" Green
+            } else {
+                Write-C "Invalid port, using default $DEFAULT_PORT / 端口无效，使用默认 $DEFAULT_PORT" Yellow
+            }
+        } catch {
+            Write-C "Invalid port, using default $DEFAULT_PORT / 端口无效，使用默认 $DEFAULT_PORT" Yellow
+        }
+    }
+
+    # Step 5: Apply image mirror if needed, then pull and start
+    Set-ImageMirror $DOCKER_COMPOSE_FILE
+
+    Write-Host ""
+    Write-C "Pulling Docker image... / 正在拉取 Docker 镜像..." Blue
+    Invoke-ComposeCmd @("pull")
+
+    Write-Host ""
+    Write-C "Starting ClawDeckX container... / 正在启动 ClawDeckX 容器..." Blue
+    Invoke-ComposeCmd @("up", "-d")
+
+    # Step 6: Wait for health check
+    Write-Host ""
+    Write-C "Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪..." Cyan
+    $maxWait = 60
+    $waited = 0
+    while ($waited -lt $maxWait) {
+        try {
+            $null = Invoke-WebRequest -Uri "http://localhost:$($script:PORT)/api/v1/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+            break
+        } catch { $null = $_ }
+        Start-Sleep -Seconds 2
+        $waited += 2
+        Write-Host "." -NoNewline
+    }
+    Write-Host ""
+
+    if ($waited -ge $maxWait) {
+        Write-C "⚠ ClawDeckX is still starting. Check with: docker compose ps" Yellow
+    } else {
+        Write-C "✓ ClawDeckX is ready! / ClawDeckX 已就绪！" Green
+    }
+
+    Write-Host ""
+    Write-Host "=======================================================" -ForegroundColor Green
+    Write-C "✅ Docker installation complete! / Docker 安装完成！" Green
+    Write-Host "=======================================================" -ForegroundColor Green
+    Write-Host ""
+    Write-C "Access ClawDeckX at / 访问 ClawDeckX：" Cyan
+    Write-C "  http://localhost:$($script:PORT)" Green
+    Write-Host ""
+    Show-DockerCommands
+}
+
+function Update-DockerClawDeckX {
+    Write-Section "Update ClawDeckX (Docker) / 更新 ClawDeckX (Docker)"
+
+    $currentVer = Get-DockerVersion
+    Write-C "Current image version / 当前镜像版本： $currentVer" Cyan
+    Write-C "Will pull / 将拉取： $DOCKER_IMAGE" Cyan
+    Write-Host ""
+
+    if (-not (Read-YesNo "Proceed with update? / 确认更新？" $true)) {
+        Write-C "Update cancelled / 更新已取消" Yellow
+        return
+    }
+
+    # Detect network and configure mirrors if needed
+    Write-Host ""
+    Write-C "Checking network connectivity... / 正在检测网络连通性..." Cyan
+    if (-not (Test-NetworkDirect)) {
+        $script:NEED_MIRROR = $true
+        $script:DOCKER_MIRROR = $DOCKER_MIRRORS[0]
+        Write-C "⚠ Docker Hub appears unreachable — using mirrors" Yellow
+        Write-C "  Docker Hub 不可访问 — 使用镜像加速器" Yellow
+        Set-DockerMirror
+        Set-ImageMirror $DOCKER_COMPOSE_FILE
+    } else {
+        Write-C "✓ Direct network access OK / 网络直连正常" Green
+    }
+
+    Write-Host ""
+    Write-C "Pulling latest image... / 正在拉取最新镜像..." Blue
+    Invoke-ComposeCmd @("pull")
+
+    Write-Host ""
+    Write-C "Recreating container with new image... / 正在用新镜像重建容器..." Blue
+    Invoke-ComposeCmd @("up", "-d")
+
+    # Wait for health check
+    Write-Host ""
+    Write-C "Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪..." Cyan
+    $maxWait = 60
+    $waited = 0
+    while ($waited -lt $maxWait) {
+        try {
+            $null = Invoke-WebRequest -Uri "http://localhost:$($script:PORT)/api/v1/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+            break
+        } catch { $null = $_ }
+        Start-Sleep -Seconds 2
+        $waited += 2
+        Write-Host "." -NoNewline
+    }
+    Write-Host ""
+
+    $newVer = Get-DockerVersion
+
+    Write-Host ""
+    Write-Host "=======================================================" -ForegroundColor Green
+    Write-C "✅ Docker update complete! / Docker 更新完成！" Green
+    Write-Host "=======================================================" -ForegroundColor Green
+    Write-Host ""
+    Write-C "Previous version / 旧版本： $currentVer" Cyan
+    Write-C "Current version  / 新版本： $newVer" Cyan
+    Write-C "Access at / 访问： http://localhost:$($script:PORT)" Cyan
+}
+
+function Uninstall-DockerClawDeckX {
+    Write-Section "Uninstall ClawDeckX (Docker) / 卸载 ClawDeckX (Docker)"
+
+    Write-C "This will: / 将执行：" Cyan
+    Write-Host "  - Stop and remove the ClawDeckX container / 停止并删除 ClawDeckX 容器"
+    Write-Host ""
+
+    $removeVolumes = Read-YesNo "Also remove data volumes? / 同时删除数据卷？" $false
+    $removeImage = Read-YesNo "Also remove Docker image? / 同时删除 Docker 镜像？" $false
+    $removeCompose = Read-YesNo "Also remove docker-compose.yml? / 同时删除 docker-compose.yml？" $false
+
+    Write-Host ""
+    if (-not (Read-YesNo "Confirm uninstall? / 确认卸载？" $false)) {
+        Write-C "Uninstall cancelled / 卸载已取消" Yellow
+        return
+    }
+
+    Write-Host ""
+    Write-C "Stopping and removing container... / 正在停止并删除容器..." Blue
+    if ($removeVolumes) {
+        Invoke-ComposeCmd @("down", "-v")
+        Write-C "✓ Container and volumes removed / 容器和数据卷已删除" Green
+    } else {
+        Invoke-ComposeCmd @("down")
+        Write-C "✓ Container removed (volumes preserved) / 容器已删除（数据卷已保留）" Green
+    }
+
+    if ($removeImage) {
+        Write-C "Removing Docker image... / 正在删除 Docker 镜像..." Blue
+        # Remove both original and any mirrored image names
+        & docker rmi $DOCKER_IMAGE 2>$null
+        foreach ($m in $DOCKER_MIRRORS) {
+            $mhost = $m -replace 'https?://', ''
+            & docker rmi "${mhost}/knowhunters/clawdeckx:latest" 2>$null
+        }
+        Write-C "✓ Image removed / 镜像已删除" Green
+    }
+
+    if ($removeCompose) {
+        Remove-Item -Path $DOCKER_COMPOSE_FILE -Force -ErrorAction SilentlyContinue
+        Write-C "✓ docker-compose.yml removed / docker-compose.yml 已删除" Green
+    }
+
+    Write-Host ""
+    Write-Host "=======================================================" -ForegroundColor Green
+    Write-C "✅ Docker uninstall complete! / Docker 卸载完成！" Green
+    Write-Host "=======================================================" -ForegroundColor Green
+}
+
+function Show-DockerCommands {
+    Write-C "Docker management commands / Docker 管理命令：" Yellow
+    Write-C "  docker compose ps              - Status / 状态" Green
+    Write-C "  docker compose logs --tail 50  - Logs / 日志" Green
+    Write-C "  docker compose restart         - Restart / 重启" Green
+    Write-C "  docker compose stop            - Stop / 停止" Green
+    Write-C "  docker compose down            - Remove container / 删除容器" Green
+}
+
+function Show-DockerManagementMenu {
+    if (-not (Test-DockerCompose)) {
+        Write-C "docker compose not available" Red
+        return
+    }
+
+    $dockerVer = Get-DockerVersion
+    $isRunning = Test-DockerRunning
+    $script:PORT = Get-ComposePort
+
+    Write-C "✓ ClawDeckX Docker deployment detected / 检测到 ClawDeckX Docker 部署" Green
+    Write-C "Image version / 镜像版本： $dockerVer" Cyan
+    Write-C "Port / 端口：            $($script:PORT)" Cyan
+    if ($isRunning) {
+        Write-C "Status / 状态：          Running / 运行中" Green
+    } else {
+        Write-C "Status / 状态：          Stopped / 已停止" Yellow
+    }
+    Write-Host ""
+
+    Write-C "What would you like to do? / 您想做什么？" Yellow
+    Write-Host "  1) Update / 更新"
+    if ($isRunning) {
+        Write-Host "  2) Stop / 停止"
+    } else {
+        Write-Host "  2) Start / 启动"
+    }
+    Write-Host "  3) Restart / 重启"
+    Write-Host "  4) Logs / 查看日志"
+    Write-Host "  5) Status / 查看状态"
+    Write-Host "  6) Uninstall / 卸载"
+    Write-Host "  7) Exit / 退出"
+    Write-Host ""
+
+    $choice = Read-Choice "Enter your choice / 输入选择 [1-7]:" 1 7
+
+    switch ($choice) {
+        1 { Update-DockerClawDeckX }
+        2 {
+            if ($isRunning) {
+                Write-Host ""
+                Write-C "Stopping ClawDeckX container... / 正在停止 ClawDeckX 容器..." Blue
+                Invoke-ComposeCmd @("stop")
+                Write-C "✓ Stopped / 已停止" Green
+            } else {
+                Write-Host ""
+                Write-C "Starting ClawDeckX container... / 正在启动 ClawDeckX 容器..." Blue
+                Invoke-ComposeCmd @("up", "-d")
+                Start-Sleep -Seconds 2
+                Write-C "✓ Started / 已启动" Green
+                Write-C "Access at / 访问： http://localhost:$($script:PORT)" Cyan
+            }
+        }
+        3 {
+            Write-Host ""
+            Write-C "Restarting ClawDeckX container... / 正在重启 ClawDeckX 容器..." Blue
+            Invoke-ComposeCmd @("restart")
+            Write-C "✓ Restarted / 已重启" Green
+        }
+        4 {
+            Write-Host ""
+            Write-C "Recent logs / 最近日志：" Cyan
+            Write-Host "────────────────────────────────────────"
+            Invoke-ComposeCmd @("logs", "--tail", "50")
+            Write-Host "────────────────────────────────────────"
+        }
+        5 {
+            Write-Host ""
+            Invoke-ComposeCmd @("ps")
+            Write-Host ""
+            if (Test-DockerRunning) {
+                Write-C "✓ ClawDeckX is running / ClawDeckX 运行中" Green
+                Write-C "Access at / 访问： http://localhost:$($script:PORT)" Cyan
+            } else {
+                Write-C "ClawDeckX is not running / ClawDeckX 未运行" Yellow
+            }
+        }
+        6 { Uninstall-DockerClawDeckX }
+        default { Write-C "Exiting / 退出" Yellow }
+    }
+}
+
+# ==============================================================================
 # MAIN
 # ==============================================================================
 
@@ -574,6 +1094,12 @@ $LATEST_VERSION = Get-LatestVersion $REPO
 
 Write-C ":: ClawDeckX Launcher - $LATEST_VERSION ::" Cyan
 Write-Host ""
+
+# -- Priority check: Docker deployment exists? ---------------------------------
+if (Test-DockerDeployed) {
+    Show-DockerManagementMenu
+    return
+}
 
 # -- Already installed? --------------------------------------------------------
 if (Test-Installed) {
@@ -671,6 +1197,18 @@ if (Test-Installed) {
 }
 
 # -- Fresh install -------------------------------------------------------------
+
+# Offer installation mode choice (Binary vs Docker)
+Write-C "Choose installation mode / 选择安装模式：" Yellow
+Write-Host "  1) Binary - Direct binary install / 直接安装二进制文件"
+Write-Host "  2) Docker - Run in Docker container / 在 Docker 容器中运行"
+Write-Host ""
+$installMode = Read-Choice "Enter your choice / 输入选择 [1-2]:" 1 2
+if ($installMode -eq 2) {
+    Install-DockerClawDeckX
+    return
+}
+Write-Host ""
 
 $arch = Get-Architecture
 Write-C "✓ Detected System / 检测到系统: windows/$arch" Green

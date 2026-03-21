@@ -220,6 +220,690 @@ stop_service() {
     fi
 }
 
+# ==============================================================================
+# Docker Mode Functions
+# ==============================================================================
+
+DOCKER_COMPOSE_URL="https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml"
+DOCKER_COMPOSE_URL_CN="https://ghfast.top/https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml"
+DOCKER_IMAGE="knowhunters/clawdeckx:latest"
+DOCKER_COMPOSE_FILE="docker-compose.yml"
+NEED_MIRROR=false
+DOCKER_MIRROR=""
+
+# Docker registry mirrors for China mainland
+# These are well-known, publicly available mirrors
+DOCKER_MIRRORS=(
+    "https://docker.1ms.run"
+    "https://docker.xuanyuan.me"
+)
+
+# Cross-platform sed -i (macOS requires '' suffix, Linux does not)
+sed_inplace() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
+# Download a file with China proxy fallback
+# Usage: download_with_fallback <url> <cn_url> <output_file>
+download_with_fallback() {
+    local url="$1" cn_url="$2" output="$3"
+    if [ "$NEED_MIRROR" = true ] && [ -n "$cn_url" ]; then
+        echo -e "${CYAN}Using China proxy... / 使用中国代理...${NC}"
+        if curl -fsSL --connect-timeout 10 --max-time 30 "$cn_url" -o "$output" 2>/dev/null; then
+            return 0
+        fi
+        echo -e "${YELLOW}China proxy failed, trying direct... / 中国代理失败，尝试直连...${NC}"
+    fi
+    curl -fsSL --connect-timeout 15 --max-time 60 "$url" -o "$output"
+}
+
+# Detect if direct access to Docker Hub / international network is blocked
+# Returns 0 if mirror is needed (China mainland), 1 if direct access works
+detect_network() {
+    # Try to reach Docker Hub registry API with a short timeout
+    if curl -sf --connect-timeout 3 --max-time 5 "https://registry-1.docker.io/v2/" >/dev/null 2>&1; then
+        return 1
+    fi
+    # Fallback: try Google (common GFW indicator)
+    if curl -sf --connect-timeout 3 --max-time 5 "https://www.google.com" >/dev/null 2>&1; then
+        return 1
+    fi
+    # Both blocked — likely behind GFW
+    return 0
+}
+
+# Configure Docker daemon to use registry mirrors (for China mainland)
+configure_docker_mirror() {
+    local daemon_json="/etc/docker/daemon.json"
+
+    echo -e "${CYAN}Configuring Docker registry mirrors for faster pulls..."
+    echo -e "正在配置 Docker 镜像加速器以加快拉取速度...${NC}"
+
+    # Build mirrors JSON array
+    local mirrors_json=""
+    for m in "${DOCKER_MIRRORS[@]}"; do
+        if [ -n "$mirrors_json" ]; then mirrors_json="$mirrors_json, "; fi
+        mirrors_json="$mirrors_json\"$m\""
+    done
+
+    sudo mkdir -p /etc/docker
+
+    if [ -f "$daemon_json" ]; then
+        # Check if mirrors are already configured
+        if grep -q "registry-mirrors" "$daemon_json" 2>/dev/null; then
+            echo -e "${YELLOW}Docker mirrors already configured in $daemon_json"
+            echo -e "$daemon_json 中已配置镜像加速器${NC}"
+            return 0
+        fi
+        # Merge into existing config: insert "registry-mirrors" before the last }
+        # Use a simple sed approach — insert before the closing brace
+        local tmp_json
+        tmp_json=$(mktemp)
+        # Remove trailing } and whitespace, append mirrors, re-close
+        sed '$ s/}$//' "$daemon_json" > "$tmp_json"
+        echo "  ,\"registry-mirrors\": [$mirrors_json]" >> "$tmp_json"
+        echo "}" >> "$tmp_json"
+        sudo cp "$tmp_json" "$daemon_json"
+        rm -f "$tmp_json"
+    else
+        # Create new config
+        sudo tee "$daemon_json" > /dev/null << EOF
+{
+  "registry-mirrors": [$mirrors_json]
+}
+EOF
+    fi
+
+    echo -e "${GREEN}✓ Docker registry mirrors configured / Docker 镜像加速器已配置${NC}"
+    for m in "${DOCKER_MIRRORS[@]}"; do
+        echo -e "  ${CYAN}$m${NC}"
+    done
+
+    # Restart Docker to apply mirror config
+    if command -v systemctl &>/dev/null && systemctl is-active --quiet docker 2>/dev/null; then
+        echo -e "${CYAN}Restarting Docker to apply mirror config... / 正在重启 Docker 以应用镜像加速器...${NC}"
+        sudo systemctl restart docker 2>/dev/null || true
+        sleep 2
+    fi
+
+    return 0
+}
+
+# Replace Docker image with mirrored version in docker-compose.yml
+apply_image_mirror() {
+    local compose_file="$1"
+    if [ "$NEED_MIRROR" != true ] || [ -z "$DOCKER_MIRROR" ]; then
+        return
+    fi
+    # The mirror prefix replaces the default Docker Hub pull path
+    # e.g., knowhunters/clawdeckx:latest → docker.1ms.run/knowhunters/clawdeckx:latest
+    local mirror_host
+    mirror_host=$(echo "$DOCKER_MIRROR" | sed 's|https\?://||')
+    local original_image="knowhunters/clawdeckx"
+    local mirrored_image="${mirror_host}/${original_image}"
+    if grep -q "$mirrored_image" "$compose_file" 2>/dev/null; then
+        return  # Already mirrored
+    fi
+    sed_inplace "s|image: ${original_image}|image: ${mirrored_image}|" "$compose_file"
+    echo -e "${GREEN}✓ Using mirror for image pull / 使用镜像加速拉取：${NC} $mirrored_image"
+}
+
+# Check if running inside a Docker container
+is_inside_docker() {
+    [ -f /.dockerenv ] || grep -qE '/(docker|lxc|containerd)/' /proc/1/cgroup 2>/dev/null
+}
+
+# Check if Docker is installed and usable
+# Pass "verbose" as $1 to enable output and auto-start attempt
+check_docker() {
+    local verbose="${1:-}"
+    if ! command -v docker &>/dev/null; then
+        return 1
+    fi
+    # Verify daemon is running
+    if ! docker info &>/dev/null; then
+        if [ "$verbose" = "verbose" ]; then
+            echo -e "${YELLOW}⚠ Docker is installed but the daemon is not running."
+            echo -e "  Docker 已安装但守护进程未运行。${NC}"
+            if command -v systemctl &>/dev/null; then
+                echo -e "${CYAN}Attempting to start Docker... / 正在尝试启动 Docker...${NC}"
+                sudo systemctl start docker 2>/dev/null
+                sleep 2
+                if docker info &>/dev/null; then
+                    echo -e "${GREEN}✓ Docker started / Docker 已启动${NC}"
+                    return 0
+                fi
+            fi
+            echo -e "${YELLOW}Please start Docker manually: sudo systemctl start docker${NC}"
+        fi
+        return 2
+    fi
+    return 0
+}
+
+# Check if docker compose (plugin or standalone) is available
+check_docker_compose() {
+    if docker compose version &>/dev/null; then
+        COMPOSE_CMD="docker compose"
+        return 0
+    elif command -v docker-compose &>/dev/null; then
+        COMPOSE_CMD="docker-compose"
+        return 0
+    fi
+    return 1
+}
+
+# Check if ClawDeckX is deployed via Docker (docker-compose.yml + container exist)
+check_docker_deployed() {
+    if [ -f "$DOCKER_COMPOSE_FILE" ] && check_docker && check_docker_compose; then
+        # Check if compose file references our image
+        if grep -q "knowhunters/clawdeckx" "$DOCKER_COMPOSE_FILE" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Get currently running ClawDeckX Docker image version
+get_docker_version() {
+    local ver
+    ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' clawdeckx 2>/dev/null)
+    if [ -n "$ver" ] && [ "$ver" != "<no value>" ]; then
+        echo "$ver"
+        return
+    fi
+    # Fallback: parse image tag
+    ver=$(docker inspect --format '{{ .Config.Image }}' clawdeckx 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    if [ -n "$ver" ]; then
+        echo "$ver"
+        return
+    fi
+    echo "unknown"
+}
+
+# Check if ClawDeckX container is running
+check_docker_running() {
+    docker ps --filter "name=clawdeckx" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q "clawdeckx"
+}
+
+# Install Docker Engine (Linux only)
+install_docker() {
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  Install Docker / 安装 Docker${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    echo -e "${CYAN}Docker is not installed. Installing via official script..."
+    echo -e "未检测到 Docker，正在通过官方脚本安装...${NC}"
+    echo ""
+
+    local install_ok=false
+    if [ "$NEED_MIRROR" = true ]; then
+        echo -e "${CYAN}Using Aliyun mirror for Docker installation..."
+        echo -e "使用阿里云镜像安装 Docker...${NC}"
+        if curl -fsSL https://get.docker.com | sh -s -- --mirror Aliyun; then
+            install_ok=true
+        fi
+    fi
+
+    if [ "$install_ok" = false ]; then
+        if ! curl -fsSL https://get.docker.com | sh; then
+            echo -e "${RED}✗ Docker installation failed / Docker 安装失败${NC}"
+            echo -e "${YELLOW}Please install Docker manually: https://docs.docker.com/engine/install/${NC}"
+            return 1
+        fi
+    fi
+
+    echo -e "${GREEN}✓ Docker installed successfully / Docker 安装成功${NC}"
+
+    # Start and enable Docker service
+    echo -e "${CYAN}Starting Docker service... / 正在启动 Docker 服务...${NC}"
+    if command -v systemctl &>/dev/null; then
+        sudo systemctl start docker 2>/dev/null || true
+        sudo systemctl enable docker 2>/dev/null || true
+    fi
+
+    # Add current user to docker group (avoid needing sudo for docker commands)
+    local current_user
+    current_user=$(whoami)
+    if [ "$current_user" != "root" ]; then
+        echo -e "${CYAN}Adding user '$current_user' to docker group..."
+        echo -e "正在将用户 '$current_user' 添加到 docker 组...${NC}"
+        sudo usermod -aG docker "$current_user" 2>/dev/null || true
+
+        # Apply docker group in current session so subsequent docker commands work
+        # without requiring the user to log out and back in
+        if ! docker info &>/dev/null 2>&1; then
+            echo -e "${CYAN}Activating docker group for current session..."
+            echo -e "正在为当前会话激活 docker 组...${NC}"
+            sg docker -c "true" 2>/dev/null || true
+        fi
+
+        # If docker still doesn't work without sudo, fall back to sudo for this session
+        if ! docker info &>/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ Docker group not yet effective in this session."
+            echo -e "  Will use sudo for docker commands in this session."
+            echo -e "  Docker 组在当前会话未生效，本次将使用 sudo 执行 docker 命令。"
+            echo -e "  Please log out and back in for future sessions."
+            echo -e "  请重新登录以在后续会话中生效。${NC}"
+        fi
+    fi
+
+    echo -e "${GREEN}✓ Docker is ready / Docker 已就绪${NC}"
+    return 0
+}
+
+# Install ClawDeckX via Docker
+docker_install() {
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  Install ClawDeckX (Docker) / 安装 ClawDeckX (Docker)${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Step 0: Detect network early (needed for Docker install mirror + image pull mirror)
+    echo -e "${CYAN}Checking network connectivity... / 正在检测网络连通性...${NC}"
+    if detect_network; then
+        NEED_MIRROR=true
+        DOCKER_MIRROR="${DOCKER_MIRRORS[0]}"
+        echo -e "${YELLOW}⚠ Docker Hub appears unreachable (likely China mainland network)"
+        echo -e "  Docker Hub 似乎不可访问（可能为中国大陆网络）${NC}"
+    else
+        echo -e "${GREEN}✓ Direct network access OK / 网络直连正常${NC}"
+    fi
+    echo ""
+
+    # Step 1: Ensure Docker is installed
+    if ! check_docker verbose; then
+        echo -n "Docker is not installed. Install Docker now? / Docker 未安装，现在安装？ [Y/n] "
+        read -n 1 -r </dev/tty
+        echo
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            echo -e "${YELLOW}Cannot proceed without Docker. / 没有 Docker 无法继续。${NC}"
+            exit 1
+        fi
+        if ! install_docker; then
+            exit 1
+        fi
+        echo ""
+    fi
+
+    # Step 2: Ensure docker compose is available
+    if ! check_docker_compose; then
+        echo -e "${RED}✗ docker compose not found / 未找到 docker compose${NC}"
+        echo -e "${YELLOW}Please install Docker Compose plugin: https://docs.docker.com/compose/install/${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Docker is ready / Docker 已就绪${NC}"
+    echo -e "${GREEN}✓ Compose: $COMPOSE_CMD${NC}"
+    echo ""
+
+    # Step 2.5: Configure Docker daemon mirrors if needed (requires Docker to be installed)
+    if [ "$NEED_MIRROR" = true ]; then
+        configure_docker_mirror
+        echo ""
+    fi
+
+    # Step 3: Download docker-compose.yml
+    if [ -f "$DOCKER_COMPOSE_FILE" ]; then
+        echo -e "${YELLOW}docker-compose.yml already exists in current directory."
+        echo -e "当前目录已存在 docker-compose.yml${NC}"
+        echo -n "Overwrite? / 覆盖？ [y/N] "
+        read -n 1 -r </dev/tty
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${CYAN}Using existing docker-compose.yml / 使用现有 docker-compose.yml${NC}"
+        else
+            echo -e "${CYAN}Downloading docker-compose.yml... / 正在下载 docker-compose.yml...${NC}"
+            download_with_fallback "$DOCKER_COMPOSE_URL" "$DOCKER_COMPOSE_URL_CN" "$DOCKER_COMPOSE_FILE"
+            echo -e "${GREEN}✓ Downloaded / 已下载${NC}"
+        fi
+    else
+        echo -e "${CYAN}Downloading docker-compose.yml... / 正在下载 docker-compose.yml...${NC}"
+        download_with_fallback "$DOCKER_COMPOSE_URL" "$DOCKER_COMPOSE_URL_CN" "$DOCKER_COMPOSE_FILE"
+        echo -e "${GREEN}✓ Downloaded / 已下载${NC}"
+    fi
+
+    # Step 4: Optional port configuration
+    echo ""
+    echo -e "${CYAN}Default port / 默认端口: $DEFAULT_PORT${NC}"
+    echo -n "Use a different port? / 使用其他端口？ [y/N] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -n "Enter port / 输入端口: "
+        read -r CUSTOM_PORT </dev/tty
+        if [ -n "$CUSTOM_PORT" ] && [ "$CUSTOM_PORT" -gt 0 ] 2>/dev/null && [ "$CUSTOM_PORT" -le 65535 ] 2>/dev/null; then
+            # Replace port mapping in docker-compose.yml
+            sed_inplace "s/\"${DEFAULT_PORT}:${DEFAULT_PORT}\"/\"${CUSTOM_PORT}:${DEFAULT_PORT}\"/" "$DOCKER_COMPOSE_FILE"
+            PORT=$CUSTOM_PORT
+            echo -e "${GREEN}✓ Port set to $CUSTOM_PORT / 端口已设置为 $CUSTOM_PORT${NC}"
+        else
+            echo -e "${YELLOW}Invalid port, using default $DEFAULT_PORT / 端口无效，使用默认 $DEFAULT_PORT${NC}"
+        fi
+    fi
+
+    # Step 5: Apply image mirror if needed, then pull and start
+    apply_image_mirror "$DOCKER_COMPOSE_FILE"
+
+    echo ""
+    echo -e "${BLUE}Pulling Docker image... / 正在拉取 Docker 镜像...${NC}"
+    $COMPOSE_CMD pull
+
+    echo ""
+    echo -e "${BLUE}Starting ClawDeckX container... / 正在启动 ClawDeckX 容器...${NC}"
+    $COMPOSE_CMD up -d
+
+    # Step 6: Wait for health check
+    echo ""
+    echo -e "${CYAN}Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪...${NC}"
+    local max_wait=60
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        if curl -sf "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+        waited=$((waited + 2))
+        printf "."
+    done
+    echo ""
+
+    if [ $waited -ge $max_wait ]; then
+        echo -e "${YELLOW}⚠ ClawDeckX is still starting. Check status with:"
+        echo -e "  ClawDeckX 仍在启动中，请用以下命令检查状态：${NC}"
+        echo -e "  ${GREEN}$COMPOSE_CMD ps${NC}"
+        echo -e "  ${GREEN}$COMPOSE_CMD logs --tail 30${NC}"
+    else
+        echo -e "${GREEN}✓ ClawDeckX is ready! / ClawDeckX 已就绪！${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✅ Docker installation complete! / Docker 安装完成！${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}Access ClawDeckX at / 访问 ClawDeckX：${NC}"
+    echo -e "  ${GREEN}http://localhost:${PORT}${NC}"
+    echo ""
+    echo -e "${YELLOW}Docker management commands / Docker 管理命令：${NC}"
+    echo -e "  ${GREEN}$COMPOSE_CMD ps${NC}              - Status / 状态"
+    echo -e "  ${GREEN}$COMPOSE_CMD logs --tail 50${NC}  - Logs / 日志"
+    echo -e "  ${GREEN}$COMPOSE_CMD restart${NC}         - Restart / 重启"
+    echo -e "  ${GREEN}$COMPOSE_CMD stop${NC}            - Stop / 停止"
+    echo -e "  ${GREEN}$COMPOSE_CMD down${NC}            - Remove container / 删除容器"
+    echo ""
+    exit 0
+}
+
+# Update ClawDeckX Docker deployment
+docker_update() {
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  Update ClawDeckX (Docker) / 更新 ClawDeckX (Docker)${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    local current_ver
+    current_ver=$(get_docker_version)
+    echo -e "${CYAN}Current image version / 当前镜像版本：${NC} $current_ver"
+    echo -e "${CYAN}Will pull / 将拉取：${NC} $DOCKER_IMAGE"
+    echo ""
+
+    echo -n "Proceed with update? / 确认更新？ [Y/n] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        echo -e "${YELLOW}Update cancelled / 更新已取消${NC}"
+        return
+    fi
+
+    # Detect network and configure mirrors if needed
+    echo ""
+    echo -e "${CYAN}Checking network connectivity... / 正在检测网络连通性...${NC}"
+    if detect_network; then
+        NEED_MIRROR=true
+        DOCKER_MIRROR="${DOCKER_MIRRORS[0]}"
+        echo -e "${YELLOW}⚠ Docker Hub appears unreachable — using mirrors"
+        echo -e "  Docker Hub 不可访问 — 使用镜像加速器${NC}"
+        configure_docker_mirror
+        apply_image_mirror "$DOCKER_COMPOSE_FILE"
+    else
+        echo -e "${GREEN}✓ Direct network access OK / 网络直连正常${NC}"
+    fi
+
+    echo ""
+    echo -e "${BLUE}Pulling latest image... / 正在拉取最新镜像...${NC}"
+    $COMPOSE_CMD pull
+
+    echo ""
+    echo -e "${BLUE}Recreating container with new image... / 正在用新镜像重建容器...${NC}"
+    $COMPOSE_CMD up -d
+
+    # Wait for health check
+    echo ""
+    echo -e "${CYAN}Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪...${NC}"
+    local max_wait=60
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        if curl -sf "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+        waited=$((waited + 2))
+        printf "."
+    done
+    echo ""
+
+    local new_ver
+    new_ver=$(get_docker_version)
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✅ Docker update complete! / Docker 更新完成！${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}Previous version / 旧版本：${NC} $current_ver"
+    echo -e "${CYAN}Current version  / 新版本：${NC} $new_ver"
+    echo -e "${CYAN}Access at / 访问：${NC} http://localhost:${PORT}"
+    echo ""
+}
+
+# Uninstall ClawDeckX Docker deployment
+docker_uninstall() {
+    echo ""
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}  Uninstall ClawDeckX (Docker) / 卸载 ClawDeckX (Docker)${NC}"
+    echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    echo -e "${CYAN}This will: / 将执行：${NC}"
+    echo "  - Stop and remove the ClawDeckX container / 停止并删除 ClawDeckX 容器"
+    echo ""
+
+    # Ask about volumes
+    local remove_volumes=false
+    echo -n "Also remove data volumes? (config, database, logs) / 同时删除数据卷？（配置、数据库、日志）[y/N] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        remove_volumes=true
+        echo -e "  ${RED}- Data volumes will be removed / 数据卷将被删除${NC}"
+    fi
+
+    # Ask about image
+    local remove_image=false
+    echo -n "Also remove Docker image? / 同时删除 Docker 镜像？ [y/N] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        remove_image=true
+        echo -e "  ${RED}- Docker image will be removed / Docker 镜像将被删除${NC}"
+    fi
+
+    # Ask about compose file
+    local remove_compose=false
+    echo -n "Also remove docker-compose.yml? / 同时删除 docker-compose.yml？ [y/N] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        remove_compose=true
+        echo -e "  ${RED}- docker-compose.yml will be removed / docker-compose.yml 将被删除${NC}"
+    fi
+
+    echo ""
+    echo -n -e "${RED}Confirm uninstall? / 确认卸载？ [y/N] ${NC}"
+    read -n 1 -r </dev/tty
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Uninstall cancelled / 卸载已取消${NC}"
+        return
+    fi
+
+    echo ""
+    echo -e "${BLUE}Stopping and removing container... / 正在停止并删除容器...${NC}"
+    if [ "$remove_volumes" = true ]; then
+        $COMPOSE_CMD down -v
+        echo -e "${GREEN}✓ Container and volumes removed / 容器和数据卷已删除${NC}"
+    else
+        $COMPOSE_CMD down
+        echo -e "${GREEN}✓ Container removed (volumes preserved) / 容器已删除（数据卷已保留）${NC}"
+    fi
+
+    if [ "$remove_image" = true ]; then
+        echo -e "${BLUE}Removing Docker image... / 正在删除 Docker 镜像...${NC}"
+        # Remove both original and any mirrored image names
+        docker rmi "$DOCKER_IMAGE" 2>/dev/null || true
+        # Also try to remove mirrored variants
+        for m in "${DOCKER_MIRRORS[@]}"; do
+            local mhost
+            mhost=$(echo "$m" | sed 's|https\?://||')
+            docker rmi "${mhost}/knowhunters/clawdeckx:latest" 2>/dev/null || true
+        done
+        echo -e "${GREEN}✓ Image removed / 镜像已删除${NC}"
+    fi
+
+    if [ "$remove_compose" = true ]; then
+        rm -f "$DOCKER_COMPOSE_FILE"
+        echo -e "${GREEN}✓ docker-compose.yml removed / docker-compose.yml 已删除${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✅ Docker uninstall complete! / Docker 卸载完成！${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    exit 0
+}
+
+# Show Docker management menu for existing Docker deployment
+docker_management_menu() {
+    check_docker_compose || return 1
+
+    local docker_ver
+    docker_ver=$(get_docker_version)
+    local is_running=false
+    if check_docker_running; then
+        is_running=true
+    fi
+
+    # Read port from docker-compose.yml
+    local compose_port
+    compose_port=$(grep -oE '"[0-9]+:18788"' "$DOCKER_COMPOSE_FILE" 2>/dev/null | head -1 | grep -oE '^"[0-9]+' | tr -d '"')
+    if [ -n "$compose_port" ]; then
+        PORT=$compose_port
+    fi
+
+    echo -e "${GREEN}✓ ClawDeckX Docker deployment detected / 检测到 ClawDeckX Docker 部署${NC}"
+    echo -e "${CYAN}Image version / 镜像版本：${NC} $docker_ver"
+    echo -e "${CYAN}Port / 端口：${NC} $PORT"
+    if [ "$is_running" = true ]; then
+        echo -e "${CYAN}Status / 状态：${NC} ${GREEN}Running / 运行中${NC}"
+    else
+        echo -e "${CYAN}Status / 状态：${NC} ${YELLOW}Stopped / 已停止${NC}"
+    fi
+    echo ""
+
+    echo -e "${YELLOW}What would you like to do? / 您想做什么？${NC}"
+    echo "  1) Update / 更新"
+    if [ "$is_running" = true ]; then
+        echo "  2) Stop / 停止"
+    else
+        echo "  2) Start / 启动"
+    fi
+    echo "  3) Restart / 重启"
+    echo "  4) Logs / 查看日志"
+    echo "  5) Status / 查看状态"
+    echo "  6) Uninstall / 卸载"
+    echo "  7) Exit / 退出"
+    echo ""
+    echo -n "Enter your choice [1-7] / 输入选择 [1-7]: "
+    read -n 1 -r CHOICE </dev/tty
+    echo
+
+    case $CHOICE in
+        1)
+            docker_update
+            ;;
+        2)
+            if [ "$is_running" = true ]; then
+                echo ""
+                echo -e "${BLUE}Stopping ClawDeckX container... / 正在停止 ClawDeckX 容器...${NC}"
+                $COMPOSE_CMD stop
+                echo -e "${GREEN}✓ Stopped / 已停止${NC}"
+            else
+                echo ""
+                echo -e "${BLUE}Starting ClawDeckX container... / 正在启动 ClawDeckX 容器...${NC}"
+                $COMPOSE_CMD up -d
+                sleep 2
+                echo -e "${GREEN}✓ Started / 已启动${NC}"
+                echo -e "${CYAN}Access at / 访问：${NC} http://localhost:${PORT}"
+            fi
+            ;;
+        3)
+            echo ""
+            echo -e "${BLUE}Restarting ClawDeckX container... / 正在重启 ClawDeckX 容器...${NC}"
+            $COMPOSE_CMD restart
+            echo -e "${GREEN}✓ Restarted / 已重启${NC}"
+            ;;
+        4)
+            echo ""
+            echo -e "${CYAN}Recent logs / 最近日志：${NC}"
+            echo "────────────────────────────────────────"
+            $COMPOSE_CMD logs --tail 50
+            echo "────────────────────────────────────────"
+            ;;
+        5)
+            echo ""
+            $COMPOSE_CMD ps
+            echo ""
+            if check_docker_running; then
+                echo -e "${GREEN}✓ ClawDeckX is running / ClawDeckX 运行中${NC}"
+                echo -e "${CYAN}Access at / 访问：${NC} http://localhost:${PORT}"
+            else
+                echo -e "${YELLOW}ClawDeckX is not running / ClawDeckX 未运行${NC}"
+            fi
+            ;;
+        6)
+            docker_uninstall
+            ;;
+        7)
+            echo -e "${YELLOW}Exiting / 退出${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice / 选择无效${NC}"
+            ;;
+    esac
+    exit 0
+}
+
 echo -e "${BLUE}"
 cat << 'LOGO'
   ___ _             ___          _  __  __
@@ -241,6 +925,12 @@ LATEST_VERSION="${LATEST_VERSION_RAW#v}"
 
 echo -e "${CYAN}:: ClawDeckX Launcher - ${LATEST_VERSION} ::${NC}"
 echo ""
+
+# Priority check: if Docker deployment exists (and we're not inside a container), show Docker menu
+if ! is_inside_docker && check_docker_deployed; then
+    docker_management_menu
+    exit 0
+fi
 
 # Function to uninstall ClawDeckX
 uninstall() {
@@ -997,6 +1687,23 @@ if [ "$(id -u)" = "0" ]; then
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         exit 0
     fi
+fi
+
+# Offer installation mode choice (Binary vs Docker) unless inside a container
+if ! is_inside_docker; then
+    echo -e "${YELLOW}Choose installation mode / 选择安装模式：${NC}"
+    echo "  1) Binary - Direct binary install / 直接安装二进制文件"
+    echo "  2) Docker - Run in Docker container / 在 Docker 容器中运行"
+    echo ""
+    echo -n "Enter your choice [1-2] / 输入选择 [1-2]: "
+    read -n 1 -r INSTALL_MODE </dev/tty
+    echo
+
+    if [ "$INSTALL_MODE" = "2" ]; then
+        docker_install
+        # docker_install calls exit 0 on success
+    fi
+    echo ""
 fi
 
 # 1. Detect OS and Arch
