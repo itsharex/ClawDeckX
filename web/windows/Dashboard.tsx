@@ -695,7 +695,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
             { icon: 'forum', label: d.sessions, value: data !== null ? sessions.length : '--', color: '#6366f1', gradient: 'from-indigo-50/50 dark:from-indigo-500/[0.06]', target: 'sessions' },
             { icon: 'token', label: d.todayTokens, value: todayCostEntry ? fmtTokens(todayCostEntry.totalTokens || 0) : (usageCost !== null ? '0' : '--'), color: '#8b5cf6', gradient: 'from-violet-50/50 dark:from-violet-500/[0.06]', target: 'usage' },
             { icon: 'payments', label: d.totalCost, value: usageCost !== null ? fmtCost(totalCostVal) : '--', color: '#f59e0b', gradient: 'from-amber-50/50 dark:from-amber-500/[0.06]', target: 'usage' },
-            { icon: 'smart_toy', label: d.models, value: userConfig !== null ? userModelCount : (data !== null ? models.length : '--'), color: '#10b981', gradient: 'from-emerald-50/50 dark:from-emerald-500/[0.06]', target: 'editor' },
+            { icon: 'smart_toy', label: d.models, value: userConfig !== null ? userModelCount : '--', color: '#10b981', gradient: 'from-emerald-50/50 dark:from-emerald-500/[0.06]', target: 'editor' },
             { icon: 'extension', label: d.skills, value: data !== null ? (skills.length > 0 ? `${eligibleSkills}/${skills.length}` : '0') : '--', color: '#ec4899', gradient: 'from-pink-50/50 dark:from-pink-500/[0.06]', target: 'skills' },
             { icon: 'support_agent', label: d.agents, value: data !== null ? agents.length : '--', color: '#14b8a6', gradient: 'from-teal-50/50 dark:from-teal-500/[0.06]', target: 'agents' },
             { icon: 'devices', label: d.instances, value: data !== null ? instances.length : '--', color: '#0ea5e9', gradient: 'from-sky-50/50 dark:from-sky-500/[0.06]', target: 'gateway' },
