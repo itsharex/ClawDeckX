@@ -762,11 +762,19 @@ function Get-ComposePort {
 }
 
 function Invoke-ComposeCmd {
-    param([string[]]$Args)
+    param(
+        [string[]]$Args,
+        [string]$ComposeFile = "",
+        [string]$ProjectName = ""
+    )
+    $prefixArgs = @()
+    if ($ComposeFile) { $prefixArgs += @("-f", $ComposeFile) }
+    if ($ProjectName) { $prefixArgs += @("-p", $ProjectName) }
+    $allArgs = $prefixArgs + $Args
     if ($script:COMPOSE_CMD -eq "docker compose") {
-        & docker compose @Args
+        & docker compose @allArgs
     } else {
-        & docker-compose @Args
+        & docker-compose @allArgs
     }
 }
 
@@ -791,8 +799,32 @@ function Install-Docker {
     return $false
 }
 
+function Install-DockerClawDeckXNew {
+    Write-Host ""
+    Write-C "Each Docker deployment needs a unique instance name." Cyan
+    Write-C "每个 Docker 部署需要一个唯一的实例名称。" Cyan
+    Write-Host ""
+    Write-C "Default instance name: clawdeckx" Green
+    Write-Host "Examples: clawdeckx-2, clawdeckx-dev, clawdeckx-test"
+    Write-Host ""
+    $instanceName = Read-Host "Enter instance name (or press Enter for default) / 输入实例名称（回车使用默认）"
+    if ([string]::IsNullOrWhiteSpace($instanceName)) { $instanceName = "clawdeckx" }
+    $instanceName = $instanceName.ToLower().Replace(" ", "-") -replace '[^a-z0-9_-]', ''
+    if ([string]::IsNullOrWhiteSpace($instanceName)) { $instanceName = "clawdeckx" }
+
+    $checkFile = if ($instanceName -eq "clawdeckx") { "docker-compose.yml" } else { "docker-compose-$instanceName.yml" }
+    if (Test-Path $checkFile) {
+        Write-C "⚠ Instance '$instanceName' already exists ($checkFile)." Yellow
+        if (-not (Read-YesNo "Continue anyway? / 继续？" $false)) { return }
+    }
+    Install-DockerClawDeckX -InstanceName $instanceName
+}
+
 function Install-DockerClawDeckX {
-    Write-Section "Install ClawDeckX (Docker) / 安装 ClawDeckX (Docker)"
+    param([string]$InstanceName = "clawdeckx")
+    $composeFile = if ($InstanceName -eq "clawdeckx") { "docker-compose.yml" } else { "docker-compose-$InstanceName.yml" }
+    $titleExtra = if ($InstanceName -ne "clawdeckx") { " [$InstanceName]" } else { "" }
+    Write-Section "Install ClawDeckX (Docker)$titleExtra / 安装 ClawDeckX (Docker)$titleExtra"
 
     # Step 0: Detect network early (needed for Docker Desktop guidance + image pull mirror)
     Write-C "Checking network connectivity... / 正在检测网络连通性..." Cyan
@@ -830,20 +862,21 @@ function Install-DockerClawDeckX {
     }
 
     # Step 3: Download docker-compose.yml
-    if (Test-Path $DOCKER_COMPOSE_FILE) {
-        Write-C "docker-compose.yml already exists in current directory." Yellow
-        Write-C "当前目录已存在 docker-compose.yml" Yellow
-        if (-not (Read-YesNo "Overwrite? / 覆盖？" $false)) {
-            Write-C "Using existing docker-compose.yml / 使用现有 docker-compose.yml" Cyan
-        } else {
-            Write-C "Downloading docker-compose.yml... / 正在下载 docker-compose.yml..." Cyan
-            Invoke-DownloadWithFallback $DOCKER_COMPOSE_URL $DOCKER_COMPOSE_URL_CN $DOCKER_COMPOSE_FILE
-            Write-C "✓ Downloaded / 已下载" Green
-        }
-    } else {
-        Write-C "Downloading docker-compose.yml... / 正在下载 docker-compose.yml..." Cyan
-        Invoke-DownloadWithFallback $DOCKER_COMPOSE_URL $DOCKER_COMPOSE_URL_CN $DOCKER_COMPOSE_FILE
-        Write-C "✓ Downloaded / 已下载" Green
+    Write-C "Downloading docker-compose.yml... / 正在下载 docker-compose.yml..." Cyan
+    Invoke-DownloadWithFallback $DOCKER_COMPOSE_URL $DOCKER_COMPOSE_URL_CN $composeFile
+    Write-C "✓ Downloaded / 已下载" Green
+
+    # Step 3.5: Customize compose file for non-default instance
+    if ($InstanceName -ne "clawdeckx") {
+        Write-C "Customizing for instance '$InstanceName'... / 正在为实例 '$InstanceName' 定制配置..." Cyan
+        $content = Get-Content $composeFile -Raw
+        $content = $content -replace 'container_name: clawdeckx', "container_name: $InstanceName"
+        $content = $content -replace 'name: clawdeckx-data', "name: $InstanceName-data"
+        $content = $content -replace 'name: openclaw-data', "name: $InstanceName-openclaw-data"
+        $content = $content -replace 'name: clawdeckx-runtime', "name: $InstanceName-runtime"
+        $content = $content -replace 'name: clawdeckx-net', "name: $InstanceName-net"
+        Set-Content -Path $composeFile -Value $content -NoNewline
+        Write-C "✓ Configured for instance: $InstanceName" Green
     }
 
     # Step 4: Smart port configuration — auto-detect available port
@@ -874,22 +907,22 @@ function Install-DockerClawDeckX {
 
     $script:PORT = $autoPort
     if ($script:PORT -ne $DEFAULT_PORT) {
-        $content = Get-Content $DOCKER_COMPOSE_FILE -Raw
+        $content = Get-Content $composeFile -Raw
         $content = $content -replace "`"${DEFAULT_PORT}:${DEFAULT_PORT}`"", "`"$($script:PORT):${DEFAULT_PORT}`""
-        Set-Content -Path $DOCKER_COMPOSE_FILE -Value $content -NoNewline
+        Set-Content -Path $composeFile -Value $content -NoNewline
     }
     Write-C "✓ Port set to $($script:PORT) / 端口已设置为 $($script:PORT)" Green
 
     # Step 5: Apply image mirror if needed, then pull and start
-    Set-ImageMirror $DOCKER_COMPOSE_FILE
+    Set-ImageMirror $composeFile
 
     Write-Host ""
     Write-C "Pulling Docker image... / 正在拉取 Docker 镜像..." Blue
-    Invoke-ComposeCmd @("pull")
+    Invoke-ComposeCmd @("pull") -ComposeFile $composeFile -ProjectName $InstanceName
 
     Write-Host ""
     Write-C "Starting ClawDeckX container... / 正在启动 ClawDeckX 容器..." Blue
-    Invoke-ComposeCmd @("up", "-d")
+    Invoke-ComposeCmd @("up", "-d") -ComposeFile $composeFile -ProjectName $InstanceName
 
     # Step 6: Wait for health check
     Write-Host ""
@@ -922,25 +955,35 @@ function Install-DockerClawDeckX {
     Write-C "  http://localhost:$($script:PORT)" Green
     Write-Host ""
     Write-C "� Data volumes / 数据卷：" Cyan
-    Write-Host "  ClawDeckX data: /data/clawdeckx  -> volume: clawdeckx-data" -ForegroundColor Green
-    Write-Host "  OpenClaw data:  /data/openclaw   -> volume: openclaw-data" -ForegroundColor Green
-    Write-Host "  Runtime:        /data/runtime    -> volume: clawdeckx-runtime" -ForegroundColor Green
+    Write-Host "  ClawDeckX data: /data/clawdeckx  -> volume: $InstanceName-data" -ForegroundColor Green
+    Write-Host "  OpenClaw data:  /data/openclaw   -> volume: $InstanceName-openclaw-data" -ForegroundColor Green
+    Write-Host "  Runtime:        /data/runtime    -> volume: $InstanceName-runtime" -ForegroundColor Green
     Write-Host ""
     Write-C "�🔐 First-time login / 首次登录：" Yellow
     Write-Host "  View initial admin credentials in container logs:"
     Write-Host "  查看容器日志中的初始管理员账户信息："
     Write-Host ""
     Write-Host "────────────────────────────────────────"
-    Invoke-Expression "$COMPOSE_CMD logs --tail 50"
+    Invoke-ComposeCmd @("logs", "--tail", "50") -ComposeFile $composeFile -ProjectName $InstanceName
     Write-Host "────────────────────────────────────────"
     Write-Host ""
-    Show-DockerCommands
+    Show-DockerCommands -ComposeFile $composeFile -ProjectName $InstanceName
 }
 
 function Update-DockerClawDeckX {
-    Write-Section "Update ClawDeckX (Docker) / 更新 ClawDeckX (Docker)"
+    param(
+        [string]$ComposeFile = $DOCKER_COMPOSE_FILE,
+        [string]$InstanceName = "clawdeckx"
+    )
+    $titleExtra = if ($InstanceName -ne "clawdeckx") { " [$InstanceName]" } else { "" }
+    Write-Section "Update ClawDeckX (Docker)$titleExtra / 更新 ClawDeckX (Docker)$titleExtra"
 
-    $currentVer = Get-DockerVersion
+    $containerName = $InstanceName
+    $cnMatch = Select-String -Path $ComposeFile -Pattern 'container_name:\s*(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cnMatch) { $containerName = $cnMatch.Matches.Groups[1].Value }
+
+    $currentVer = try { (& docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' $containerName 2>$null) } catch { "unknown" }
+    if ($currentVer -eq '<no value>') { $currentVer = "unknown" }
     Write-C "Current image version / 当前镜像版本： $currentVer" Cyan
     Write-C "Will pull / 将拉取： $DOCKER_IMAGE" Cyan
     Write-Host ""
@@ -950,7 +993,6 @@ function Update-DockerClawDeckX {
         return
     }
 
-    # Detect network and configure mirrors if needed
     Write-Host ""
     Write-C "Checking network connectivity... / 正在检测网络连通性..." Cyan
     if (-not (Test-NetworkDirect)) {
@@ -959,20 +1001,19 @@ function Update-DockerClawDeckX {
         Write-C "⚠ Docker Hub appears unreachable — using mirrors" Yellow
         Write-C "  Docker Hub 不可访问 — 使用镜像加速器" Yellow
         Set-DockerMirror
-        Set-ImageMirror $DOCKER_COMPOSE_FILE
+        Set-ImageMirror $ComposeFile
     } else {
         Write-C "✓ Direct network access OK / 网络直连正常" Green
     }
 
     Write-Host ""
     Write-C "Pulling latest image... / 正在拉取最新镜像..." Blue
-    Invoke-ComposeCmd @("pull")
+    Invoke-ComposeCmd @("pull") -ComposeFile $ComposeFile -ProjectName $InstanceName
 
     Write-Host ""
     Write-C "Recreating container with new image... / 正在用新镜像重建容器..." Blue
-    Invoke-ComposeCmd @("up", "-d")
+    Invoke-ComposeCmd @("up", "-d") -ComposeFile $ComposeFile -ProjectName $InstanceName
 
-    # Wait for health check
     Write-Host ""
     Write-C "Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪..." Cyan
     $maxWait = 60
@@ -988,7 +1029,8 @@ function Update-DockerClawDeckX {
     }
     Write-Host ""
 
-    $newVer = Get-DockerVersion
+    $newVer = try { (& docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' $containerName 2>$null) } catch { "unknown" }
+    if ($newVer -eq '<no value>') { $newVer = "unknown" }
 
     Write-Host ""
     Write-Host "=======================================================" -ForegroundColor Green
@@ -1001,15 +1043,20 @@ function Update-DockerClawDeckX {
 }
 
 function Uninstall-DockerClawDeckX {
-    Write-Section "Uninstall ClawDeckX (Docker) / 卸载 ClawDeckX (Docker)"
+    param(
+        [string]$ComposeFile = $DOCKER_COMPOSE_FILE,
+        [string]$InstanceName = "clawdeckx"
+    )
+    $titleExtra = if ($InstanceName -ne "clawdeckx") { " [$InstanceName]" } else { "" }
+    Write-Section "Uninstall ClawDeckX (Docker: $InstanceName) / 卸载 ClawDeckX (Docker: $InstanceName)"
 
     Write-C "This will: / 将执行：" Cyan
-    Write-Host "  - Stop and remove the ClawDeckX container / 停止并删除 ClawDeckX 容器"
+    Write-Host "  - Stop and remove the ClawDeckX container ($InstanceName) / 停止并删除 ClawDeckX 容器 ($InstanceName)"
     Write-Host ""
 
     $removeVolumes = Read-YesNo "Also remove data volumes? / 同时删除数据卷？" $false
     $removeImage = Read-YesNo "Also remove Docker image? / 同时删除 Docker 镜像？" $false
-    $removeCompose = Read-YesNo "Also remove docker-compose.yml? / 同时删除 docker-compose.yml？" $false
+    $removeCompose = Read-YesNo "Also remove $ComposeFile? / 同时删除 ${ComposeFile}？" $false
 
     Write-Host ""
     if (-not (Read-YesNo "Confirm uninstall? / 确认卸载？" $false)) {
@@ -1020,16 +1067,15 @@ function Uninstall-DockerClawDeckX {
     Write-Host ""
     Write-C "Stopping and removing container... / 正在停止并删除容器..." Blue
     if ($removeVolumes) {
-        Invoke-ComposeCmd @("down", "-v")
+        Invoke-ComposeCmd @("down", "-v") -ComposeFile $ComposeFile -ProjectName $InstanceName
         Write-C "✓ Container and volumes removed / 容器和数据卷已删除" Green
     } else {
-        Invoke-ComposeCmd @("down")
+        Invoke-ComposeCmd @("down") -ComposeFile $ComposeFile -ProjectName $InstanceName
         Write-C "✓ Container removed (volumes preserved) / 容器已删除（数据卷已保留）" Green
     }
 
     if ($removeImage) {
         Write-C "Removing Docker image... / 正在删除 Docker 镜像..." Blue
-        # Remove both original and any mirrored image names
         & docker rmi $DOCKER_IMAGE 2>$null
         foreach ($m in $DOCKER_MIRRORS) {
             $mhost = $m -replace 'https?://', ''
@@ -1039,8 +1085,8 @@ function Uninstall-DockerClawDeckX {
     }
 
     if ($removeCompose) {
-        Remove-Item -Path $DOCKER_COMPOSE_FILE -Force -ErrorAction SilentlyContinue
-        Write-C "✓ docker-compose.yml removed / docker-compose.yml 已删除" Green
+        Remove-Item -Path $ComposeFile -Force -ErrorAction SilentlyContinue
+        Write-C "✓ $ComposeFile removed / $ComposeFile 已删除" Green
     }
 
     Write-Host ""
@@ -1050,25 +1096,42 @@ function Uninstall-DockerClawDeckX {
 }
 
 function Show-DockerCommands {
+    param(
+        [string]$ComposeFile = "",
+        [string]$ProjectName = ""
+    )
+    $prefix = "docker compose"
+    if ($ComposeFile) { $prefix += " -f $ComposeFile" }
+    if ($ProjectName) { $prefix += " -p $ProjectName" }
     Write-C "Docker management commands / Docker 管理命令：" Yellow
-    Write-C "  docker compose ps              - Status / 状态" Green
-    Write-C "  docker compose logs --tail 50  - Logs / 日志" Green
-    Write-C "  docker compose restart         - Restart / 重启" Green
-    Write-C "  docker compose stop            - Stop / 停止" Green
-    Write-C "  docker compose down            - Remove container / 删除容器" Green
+    Write-C "  $prefix ps              - Status / 状态" Green
+    Write-C "  $prefix logs --tail 50  - Logs / 日志" Green
+    Write-C "  $prefix restart         - Restart / 重启" Green
+    Write-C "  $prefix stop            - Stop / 停止" Green
+    Write-C "  $prefix down            - Remove container / 删除容器" Green
 }
 
 function Show-DockerManagementMenu {
-    if (-not (Test-DockerCompose)) {
-        Write-C "docker compose not available" Red
-        return
-    }
+    param([string]$ComposeFile = $DOCKER_COMPOSE_FILE, [string]$InstanceName = "clawdeckx")
 
-    $dockerVer = Get-DockerVersion
-    $isRunning = Test-DockerRunning
-    $script:PORT = Get-ComposePort
+    if (-not (Test-DockerCompose)) { Write-C "docker compose not available" Red; return }
 
-    Write-C "✓ ClawDeckX Docker deployment detected / 检测到 ClawDeckX Docker 部署" Green
+    $containerName = $InstanceName
+    $cnMatch = Select-String -Path $ComposeFile -Pattern 'container_name:\s*(\S+)' -EA SilentlyContinue | Select-Object -First 1
+    if ($cnMatch) { $containerName = $cnMatch.Matches.Groups[1].Value }
+
+    $dockerVer = try { (& docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' $containerName 2>$null) } catch { "unknown" }
+    if ($dockerVer -eq '<no value>') { $dockerVer = "unknown" }
+
+    $isRunning = $false
+    $rc = & docker ps --filter "name=^${containerName}$" --filter "status=running" --format '{{.Names}}' 2>$null
+    if ($rc) { $isRunning = $true }
+
+    $cc = Get-Content $ComposeFile -Raw -EA SilentlyContinue
+    if ($cc -match '"(\d+):18800"') { $script:PORT = [int]$Matches[1] }
+
+    Write-C "✓ Docker deployment: $InstanceName" Green
+    Write-C "Compose file / 配置文件： $ComposeFile" Cyan
     Write-C "Image version / 镜像版本： $dockerVer" Cyan
     Write-C "Port / 端口：            $($script:PORT)" Cyan
     if ($isRunning) {
@@ -1095,17 +1158,17 @@ function Show-DockerManagementMenu {
     $choice = Read-Choice "Enter your choice / 输入选择 [1-7]:" 1 7
 
     switch ($choice) {
-        1 { Update-DockerClawDeckX }
+        1 { Update-DockerClawDeckX -ComposeFile $ComposeFile -InstanceName $InstanceName }
         2 {
             if ($isRunning) {
                 Write-Host ""
                 Write-C "Stopping ClawDeckX container... / 正在停止 ClawDeckX 容器..." Blue
-                Invoke-ComposeCmd @("stop")
+                Invoke-ComposeCmd @("stop") -ComposeFile $ComposeFile -ProjectName $InstanceName
                 Write-C "✓ Stopped / 已停止" Green
             } else {
                 Write-Host ""
                 Write-C "Starting ClawDeckX container... / 正在启动 ClawDeckX 容器..." Blue
-                Invoke-ComposeCmd @("up", "-d")
+                Invoke-ComposeCmd @("up", "-d") -ComposeFile $ComposeFile -ProjectName $InstanceName
                 Start-Sleep -Seconds 2
                 Write-C "✓ Started / 已启动" Green
                 Write-C "Access at / 访问： http://localhost:$($script:PORT)" Cyan
@@ -1114,28 +1177,29 @@ function Show-DockerManagementMenu {
         3 {
             Write-Host ""
             Write-C "Restarting ClawDeckX container... / 正在重启 ClawDeckX 容器..." Blue
-            Invoke-ComposeCmd @("restart")
+            Invoke-ComposeCmd @("restart") -ComposeFile $ComposeFile -ProjectName $InstanceName
             Write-C "✓ Restarted / 已重启" Green
         }
         4 {
             Write-Host ""
             Write-C "Recent logs / 最近日志：" Cyan
             Write-Host "────────────────────────────────────────"
-            Invoke-ComposeCmd @("logs", "--tail", "50")
+            Invoke-ComposeCmd @("logs", "--tail", "50") -ComposeFile $ComposeFile -ProjectName $InstanceName
             Write-Host "────────────────────────────────────────"
         }
         5 {
             Write-Host ""
-            Invoke-ComposeCmd @("ps")
+            Invoke-ComposeCmd @("ps") -ComposeFile $ComposeFile -ProjectName $InstanceName
             Write-Host ""
-            if (Test-DockerRunning) {
+            $statusCheck = & docker ps --filter "name=^${containerName}$" --filter "status=running" --format '{{.Names}}' 2>$null
+            if ($statusCheck) {
                 Write-C "✓ ClawDeckX is running / ClawDeckX 运行中" Green
                 Write-C "Access at / 访问： http://localhost:$($script:PORT)" Cyan
             } else {
                 Write-C "ClawDeckX is not running / ClawDeckX 未运行" Yellow
             }
         }
-        6 { Uninstall-DockerClawDeckX }
+        6 { Uninstall-DockerClawDeckX -ComposeFile $ComposeFile -InstanceName $InstanceName }
         default { Write-C "Exiting / 退出" Yellow }
     }
 }
@@ -1156,7 +1220,50 @@ Write-Host ""
 # Unified Adaptive Main Menu
 # ==============================================================================
 
-$HAS_DOCKER = Test-DockerDeployed
+# Docker: detect all instances (docker-compose.yml + docker-compose-*.yml)
+$DOCKER_INSTANCES = @()      # Array of compose files
+$DOCKER_INSTANCE_NAMES = @() # Array of instance names
+$DOCKER_INSTANCE_PORTS = @() # Array of ports
+$DOCKER_INSTANCE_VERS = @()  # Array of versions
+$DOCKER_INSTANCE_RUNNING = @() # Array of running status
+
+if ((Test-DockerInstalled) -and (Test-DockerCompose)) {
+    $composeFiles = @()
+    if (Test-Path "docker-compose.yml") { $composeFiles += "docker-compose.yml" }
+    Get-ChildItem -Filter "docker-compose-*.yml" -ErrorAction SilentlyContinue | ForEach-Object { $composeFiles += $_.Name }
+
+    foreach ($cf in $composeFiles) {
+        $content = Get-Content $cf -Raw -ErrorAction SilentlyContinue
+        if ($content -match "knowhunters/clawdeckx") {
+            $DOCKER_INSTANCES += $cf
+            # Extract instance name from filename
+            if ($cf -eq "docker-compose.yml") {
+                $DOCKER_INSTANCE_NAMES += "clawdeckx"
+            } else {
+                $iname = $cf -replace '^docker-compose-', '' -replace '\.yml$', ''
+                $DOCKER_INSTANCE_NAMES += $iname
+            }
+            # Extract port
+            $iport = $DEFAULT_PORT
+            if ($content -match '"(\d+):18800"') { $iport = [int]$Matches[1] }
+            $DOCKER_INSTANCE_PORTS += $iport
+            # Extract container name for version/status check
+            $icn = "clawdeckx"
+            if ($content -match 'container_name:\s*(\S+)') { $icn = $Matches[1] }
+            # Version
+            $iver = try { (& docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' $icn 2>$null) } catch { "unknown" }
+            if ($iver -eq '<no value>' -or -not $iver) { $iver = "unknown" }
+            $DOCKER_INSTANCE_VERS += $iver
+            # Running status
+            $irun = $false
+            $irc = & docker ps --filter "name=^${icn}$" --filter "status=running" --format '{{.Names}}' 2>$null
+            if ($irc) { $irun = $true }
+            $DOCKER_INSTANCE_RUNNING += $irun
+        }
+    }
+}
+
+$HAS_DOCKER = $DOCKER_INSTANCES.Count -gt 0
 $HAS_BINARY = Test-Installed
 if ($HAS_BINARY) { $script:PORT = Get-ConfigPort }
 
@@ -1165,13 +1272,18 @@ if ($HAS_DOCKER -or $HAS_BINARY) {
     Write-C "Detected installations / 检测到的安装：" Cyan
 
     if ($HAS_DOCKER) {
-        $dockerVer = Get-DockerVersion
-        $dockerRunning = Test-DockerRunning
-        $dockerPort = Get-ComposePort
-        if ($dockerRunning) {
-            Write-Host "  🐳 Docker: " -NoNewline; Write-Host "v$dockerVer" -ForegroundColor Green -NoNewline; Write-Host " (" -NoNewline; Write-Host "Running / 运行中" -ForegroundColor Green -NoNewline; Write-Host ") on port $dockerPort"
-        } else {
-            Write-Host "  🐳 Docker: " -NoNewline; Write-Host "v$dockerVer" -ForegroundColor Green -NoNewline; Write-Host " (" -NoNewline; Write-Host "Stopped / 已停止" -ForegroundColor Yellow -NoNewline; Write-Host ") on port $dockerPort"
+        for ($i = 0; $i -lt $DOCKER_INSTANCES.Count; $i++) {
+            $dName = $DOCKER_INSTANCE_NAMES[$i]
+            $dVer = $DOCKER_INSTANCE_VERS[$i]
+            $dPort = $DOCKER_INSTANCE_PORTS[$i]
+            $dRun = $DOCKER_INSTANCE_RUNNING[$i]
+            $dLabel = "Docker"
+            if ($DOCKER_INSTANCES.Count -gt 1 -or $dName -ne "clawdeckx") { $dLabel = "Docker [$dName]" }
+            if ($dRun) {
+                Write-Host "  🐳 ${dLabel}: " -NoNewline; Write-Host "v$dVer" -ForegroundColor Green -NoNewline; Write-Host " (" -NoNewline; Write-Host "Running / 运行中" -ForegroundColor Green -NoNewline; Write-Host ") on port $dPort"
+            } else {
+                Write-Host "  🐳 ${dLabel}: " -NoNewline; Write-Host "v$dVer" -ForegroundColor Green -NoNewline; Write-Host " (" -NoNewline; Write-Host "Stopped / 已停止" -ForegroundColor Yellow -NoNewline; Write-Host ") on port $dPort"
+            }
         }
     }
 
@@ -1198,21 +1310,25 @@ if ($HAS_DOCKER -or $HAS_BINARY) {
 # --- Build adaptive menu ---
 $menuItems = @()
 $menuActions = @()
+$menuDockerIndex = @()
 $n = 0
 
 if ($HAS_DOCKER) {
-    $n++; $menuItems += "$n) Manage Docker deployment / 管理 Docker 部署"; $menuActions += "manage_docker"
+    for ($i = 0; $i -lt $DOCKER_INSTANCES.Count; $i++) {
+        $dName = $DOCKER_INSTANCE_NAMES[$i]
+        $dLabel = "Manage Docker"
+        if ($DOCKER_INSTANCES.Count -gt 1 -or $dName -ne "clawdeckx") { $dLabel = "Manage Docker [$dName]" }
+        $n++; $menuItems += "$n) $dLabel / 管理 Docker $dName"; $menuActions += "manage_docker"; $menuDockerIndex += $i
+    }
 }
 if ($HAS_BINARY) {
-    $n++; $menuItems += "$n) Manage local ClawDeckX / 管理本机 ClawDeckX"; $menuActions += "manage_binary"
+    $n++; $menuItems += "$n) Manage local ClawDeckX / 管理本机 ClawDeckX"; $menuActions += "manage_binary"; $menuDockerIndex += -1
 }
 if (-not $HAS_BINARY) {
-    $n++; $menuItems += "$n) Install ClawDeckX locally / 在本机安装 ClawDeckX"; $menuActions += "install_binary"
+    $n++; $menuItems += "$n) Install ClawDeckX locally / 在本机安装 ClawDeckX"; $menuActions += "install_binary"; $menuDockerIndex += -1
 }
-if (-not $HAS_DOCKER) {
-    $n++; $menuItems += "$n) Install: Docker / 安装：Docker 整合包"; $menuActions += "install_docker"
-}
-$n++; $menuItems += "$n) Exit / 退出"; $menuActions += "exit"
+$n++; $menuItems += "$n) New Docker deployment / 新建 Docker 部署"; $menuActions += "install_docker"; $menuDockerIndex += -1
+$n++; $menuItems += "$n) Exit / 退出"; $menuActions += "exit"; $menuDockerIndex += -1
 
 Write-C "What would you like to do? / 您想做什么？" Yellow
 foreach ($item in $menuItems) {
@@ -1225,7 +1341,10 @@ $selectedAction = $menuActions[$mainChoice - 1]
 
 switch ($selectedAction) {
     "manage_docker" {
-        Show-DockerManagementMenu
+        $selIdx = $menuDockerIndex[$mainChoice - 1]
+        $selComposeFile = $DOCKER_INSTANCES[$selIdx]
+        $selInstanceName = $DOCKER_INSTANCE_NAMES[$selIdx]
+        Show-DockerManagementMenu -ComposeFile $selComposeFile -InstanceName $selInstanceName
         return
     }
     "manage_binary" {
@@ -1309,7 +1428,7 @@ switch ($selectedAction) {
         return
     }
     "install_docker" {
-        Install-DockerClawDeckX
+        Install-DockerClawDeckXNew
         return
     }
     "install_binary" {

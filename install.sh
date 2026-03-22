@@ -543,11 +543,61 @@ install_docker() {
     return 0
 }
 
+# Prompt user for a new Docker instance name, then call docker_install
+docker_install_new() {
+    echo ""
+    echo -e "${CYAN}Each Docker deployment needs a unique instance name."
+    echo -e "每个 Docker 部署需要一个唯一的实例名称。${NC}"
+    echo ""
+    echo -e "Default instance name: ${GREEN}clawdeckx${NC}"
+    echo -e "Examples: clawdeckx-2, clawdeckx-dev, clawdeckx-test"
+    echo ""
+    echo -n "Enter instance name (or press Enter for default) / 输入实例名称（回车使用默认）: "
+    read -r INSTANCE_NAME </dev/tty
+    INSTANCE_NAME="${INSTANCE_NAME:-clawdeckx}"
+    # Sanitize: lowercase, replace spaces with hyphens, remove invalid chars
+    INSTANCE_NAME=$(echo "$INSTANCE_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9_-]//g')
+    if [ -z "$INSTANCE_NAME" ]; then
+        INSTANCE_NAME="clawdeckx"
+    fi
+
+    # Check if this instance name is already in use
+    local check_file="docker-compose.yml"
+    if [ "$INSTANCE_NAME" != "clawdeckx" ]; then
+        check_file="docker-compose-${INSTANCE_NAME}.yml"
+    fi
+    if [ -f "$check_file" ]; then
+        echo -e "${YELLOW}⚠ Instance '$INSTANCE_NAME' already exists ($check_file)."
+        echo -e "  实例 '$INSTANCE_NAME' 已存在 ($check_file)${NC}"
+        echo -n "Continue anyway? (will overwrite) / 继续？（将覆盖） [y/N] "
+        read -n 1 -r </dev/tty
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+
+    docker_install "$INSTANCE_NAME"
+}
+
 # Install ClawDeckX via Docker
+# Usage: docker_install [instance_name]
+#   instance_name: unique name for this Docker deployment (default: clawdeckx)
+#   When not "clawdeckx", compose file is saved as docker-compose-{name}.yml
+#   with unique container name and volume names for isolation.
 docker_install() {
+    local instance_name="${1:-clawdeckx}"
+    local compose_file="docker-compose.yml"
+    if [ "$instance_name" != "clawdeckx" ]; then
+        compose_file="docker-compose-${instance_name}.yml"
+    fi
+
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${YELLOW}  Install ClawDeckX (Docker) / 安装 ClawDeckX (Docker)${NC}"
+    if [ "$instance_name" != "clawdeckx" ]; then
+        echo -e "${YELLOW}  Instance / 实例: ${instance_name}${NC}"
+    fi
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo ""
 
@@ -596,23 +646,19 @@ docker_install() {
     fi
 
     # Step 3: Download docker-compose.yml
-    if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        echo -e "${YELLOW}docker-compose.yml already exists in current directory."
-        echo -e "当前目录已存在 docker-compose.yml${NC}"
-        echo -n "Overwrite? / 覆盖？ [y/N] "
-        read -n 1 -r </dev/tty
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${CYAN}Using existing docker-compose.yml / 使用现有 docker-compose.yml${NC}"
-        else
-            echo -e "${CYAN}Downloading docker-compose.yml... / 正在下载 docker-compose.yml...${NC}"
-            download_with_fallback "$DOCKER_COMPOSE_URL" "$DOCKER_COMPOSE_URL_CN" "$DOCKER_COMPOSE_FILE"
-            echo -e "${GREEN}✓ Downloaded / 已下载${NC}"
-        fi
-    else
-        echo -e "${CYAN}Downloading docker-compose.yml... / 正在下载 docker-compose.yml...${NC}"
-        download_with_fallback "$DOCKER_COMPOSE_URL" "$DOCKER_COMPOSE_URL_CN" "$DOCKER_COMPOSE_FILE"
-        echo -e "${GREEN}✓ Downloaded / 已下载${NC}"
+    echo -e "${CYAN}Downloading docker-compose.yml... / 正在下载 docker-compose.yml...${NC}"
+    download_with_fallback "$DOCKER_COMPOSE_URL" "$DOCKER_COMPOSE_URL_CN" "$compose_file"
+    echo -e "${GREEN}✓ Downloaded / 已下载${NC}"
+
+    # Step 3.5: Customize compose file for non-default instance (unique names for isolation)
+    if [ "$instance_name" != "clawdeckx" ]; then
+        echo -e "${CYAN}Customizing for instance '$instance_name'... / 正在为实例 '$instance_name' 定制配置...${NC}"
+        sed_inplace "s/container_name: clawdeckx/container_name: ${instance_name}/" "$compose_file"
+        sed_inplace "s/name: clawdeckx-data/name: ${instance_name}-data/" "$compose_file"
+        sed_inplace "s/name: openclaw-data/name: ${instance_name}-openclaw-data/" "$compose_file"
+        sed_inplace "s/name: clawdeckx-runtime/name: ${instance_name}-runtime/" "$compose_file"
+        sed_inplace "s/name: clawdeckx-net/name: ${instance_name}-net/" "$compose_file"
+        echo -e "${GREEN}✓ Configured for instance: $instance_name${NC}"
     fi
 
     # Step 4: Smart port configuration — auto-detect available port
@@ -643,20 +689,22 @@ docker_install() {
 
     PORT=$auto_port
     if [ "$PORT" -ne "$DEFAULT_PORT" ]; then
-        sed_inplace "s/\"${DEFAULT_PORT}:${DEFAULT_PORT}\"/\"${PORT}:${DEFAULT_PORT}\"/" "$DOCKER_COMPOSE_FILE"
+        sed_inplace "s/\"${DEFAULT_PORT}:${DEFAULT_PORT}\"/\"${PORT}:${DEFAULT_PORT}\"/" "$compose_file"
     fi
     echo -e "${GREEN}✓ Port set to $PORT / 端口已设置为 $PORT${NC}"
 
     # Step 5: Apply image mirror if needed, then pull and start
-    apply_image_mirror "$DOCKER_COMPOSE_FILE"
+    apply_image_mirror "$compose_file"
+
+    local compose_run="$COMPOSE_CMD -f $compose_file -p $instance_name"
 
     echo ""
     echo -e "${BLUE}Pulling Docker image... / 正在拉取 Docker 镜像...${NC}"
-    $COMPOSE_CMD pull
+    $compose_run pull
 
     echo ""
     echo -e "${BLUE}Starting ClawDeckX container... / 正在启动 ClawDeckX 容器...${NC}"
-    $COMPOSE_CMD up -d
+    $compose_run up -d
 
     # Step 6: Wait for health check
     echo ""
@@ -676,8 +724,8 @@ docker_install() {
     if [ $waited -ge $max_wait ]; then
         echo -e "${YELLOW}⚠ ClawDeckX is still starting. Check status with:"
         echo -e "  ClawDeckX 仍在启动中，请用以下命令检查状态：${NC}"
-        echo -e "  ${GREEN}$COMPOSE_CMD ps${NC}"
-        echo -e "  ${GREEN}$COMPOSE_CMD logs --tail 30${NC}"
+        echo -e "  ${GREEN}$compose_run ps${NC}"
+        echo -e "  ${GREEN}$compose_run logs --tail 30${NC}"
     else
         echo -e "${GREEN}✓ ClawDeckX is ready! / ClawDeckX 已就绪！${NC}"
     fi
@@ -691,38 +739,52 @@ docker_install() {
     echo -e "  ${GREEN}http://localhost:${PORT}${NC}"
     echo ""
     echo -e "${CYAN}📂 Data volumes / 数据卷：${NC}"
-    echo -e "  ClawDeckX data: ${GREEN}/data/clawdeckx${NC}  → volume: clawdeckx-data"
-    echo -e "  OpenClaw data:  ${GREEN}/data/openclaw${NC}   → volume: openclaw-data"
-    echo -e "  Runtime:        ${GREEN}/data/runtime${NC}    → volume: clawdeckx-runtime"
+    echo -e "  ClawDeckX data: ${GREEN}/data/clawdeckx${NC}  → volume: ${instance_name}-data"
+    echo -e "  OpenClaw data:  ${GREEN}/data/openclaw${NC}   → volume: ${instance_name}-openclaw-data"
+    echo -e "  Runtime:        ${GREEN}/data/runtime${NC}    → volume: ${instance_name}-runtime"
     echo ""
     echo -e "${YELLOW}🔐 First-time login / 首次登录：${NC}"
     echo -e "  View initial admin credentials in container logs:"
     echo -e "  查看容器日志中的初始管理员账户信息："
     echo ""
     echo "────────────────────────────────────────"
-    $COMPOSE_CMD logs --tail 50
+    $compose_run logs --tail 50
     echo "────────────────────────────────────────"
     echo ""
     echo -e "${YELLOW}Docker management commands / Docker 管理命令：${NC}"
-    echo -e "  ${GREEN}$COMPOSE_CMD ps${NC}              - Status / 状态"
-    echo -e "  ${GREEN}$COMPOSE_CMD logs --tail 50${NC}  - Logs / 日志"
-    echo -e "  ${GREEN}$COMPOSE_CMD restart${NC}         - Restart / 重启"
-    echo -e "  ${GREEN}$COMPOSE_CMD stop${NC}            - Stop / 停止"
-    echo -e "  ${GREEN}$COMPOSE_CMD down${NC}            - Remove container / 删除容器"
+    echo -e "  ${GREEN}$compose_run ps${NC}              - Status / 状态"
+    echo -e "  ${GREEN}$compose_run logs --tail 50${NC}  - Logs / 日志"
+    echo -e "  ${GREEN}$compose_run restart${NC}         - Restart / 重启"
+    echo -e "  ${GREEN}$compose_run stop${NC}            - Stop / 停止"
+    echo -e "  ${GREEN}$compose_run down${NC}            - Remove container / 删除容器"
     echo ""
     exit 0
 }
 
 # Update ClawDeckX Docker deployment
+# Usage: docker_update <compose_file> <instance_name>
 docker_update() {
+    local compose_file="${1:-$DOCKER_COMPOSE_FILE}"
+    local instance_name="${2:-clawdeckx}"
+    local compose_run="$COMPOSE_CMD -f $compose_file -p $instance_name"
+
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${YELLOW}  Update ClawDeckX (Docker) / 更新 ClawDeckX (Docker)${NC}"
+    if [ "$instance_name" != "clawdeckx" ]; then
+        echo -e "${YELLOW}  Instance / 实例: ${instance_name}${NC}"
+    fi
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo ""
 
+    # Extract container name from compose file
+    local container_name
+    container_name=$(grep -oP 'container_name:\s*\K\S+' "$compose_file" 2>/dev/null | head -1)
+    container_name="${container_name:-$instance_name}"
+
     local current_ver
-    current_ver=$(get_docker_version)
+    current_ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container_name" 2>/dev/null || echo "unknown")
+    [ "$current_ver" = "<no value>" ] && current_ver="unknown"
     echo -e "${CYAN}Current image version / 当前镜像版本：${NC} $current_ver"
     echo -e "${CYAN}Will pull / 将拉取：${NC} $DOCKER_IMAGE"
     echo ""
@@ -744,18 +806,18 @@ docker_update() {
         echo -e "${YELLOW}⚠ Docker Hub appears unreachable — using mirrors"
         echo -e "  Docker Hub 不可访问 — 使用镜像加速器${NC}"
         configure_docker_mirror
-        apply_image_mirror "$DOCKER_COMPOSE_FILE"
+        apply_image_mirror "$compose_file"
     else
         echo -e "${GREEN}✓ Direct network access OK / 网络直连正常${NC}"
     fi
 
     echo ""
     echo -e "${BLUE}Pulling latest image... / 正在拉取最新镜像...${NC}"
-    $COMPOSE_CMD pull
+    $compose_run pull
 
     echo ""
     echo -e "${BLUE}Recreating container with new image... / 正在用新镜像重建容器...${NC}"
-    $COMPOSE_CMD up -d
+    $compose_run up -d
 
     # Wait for health check
     echo ""
@@ -773,7 +835,8 @@ docker_update() {
     echo ""
 
     local new_ver
-    new_ver=$(get_docker_version)
+    new_ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container_name" 2>/dev/null || echo "unknown")
+    [ "$new_ver" = "<no value>" ] && new_ver="unknown"
 
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
@@ -787,10 +850,15 @@ docker_update() {
 }
 
 # Uninstall ClawDeckX Docker deployment
+# Usage: docker_uninstall <compose_file> <instance_name>
 docker_uninstall() {
+    local compose_file="${1:-$DOCKER_COMPOSE_FILE}"
+    local instance_name="${2:-clawdeckx}"
+    local compose_run="$COMPOSE_CMD -f $compose_file -p $instance_name"
+
     echo ""
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${YELLOW}  Uninstall ClawDeckX (Docker) / 卸载 ClawDeckX (Docker)${NC}"
+    echo -e "${YELLOW}  Uninstall ClawDeckX (Docker: ${instance_name}) / 卸载 ClawDeckX (Docker: ${instance_name})${NC}"
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
     echo ""
 
@@ -820,12 +888,12 @@ docker_uninstall() {
 
     # Ask about compose file
     local remove_compose=false
-    echo -n "Also remove docker-compose.yml? / 同时删除 docker-compose.yml？ [y/N] "
+    echo -n "Also remove $compose_file? / 同时删除 $compose_file？ [y/N] "
     read -n 1 -r </dev/tty
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         remove_compose=true
-        echo -e "  ${RED}- docker-compose.yml will be removed / docker-compose.yml 将被删除${NC}"
+        echo -e "  ${RED}- $compose_file will be removed / $compose_file 将被删除${NC}"
     fi
 
     echo ""
@@ -840,10 +908,10 @@ docker_uninstall() {
     echo ""
     echo -e "${BLUE}Stopping and removing container... / 正在停止并删除容器...${NC}"
     if [ "$remove_volumes" = true ]; then
-        $COMPOSE_CMD down -v
+        $compose_run down -v
         echo -e "${GREEN}✓ Container and volumes removed / 容器和数据卷已删除${NC}"
     else
-        $COMPOSE_CMD down
+        $compose_run down
         echo -e "${GREEN}✓ Container removed (volumes preserved) / 容器已删除（数据卷已保留）${NC}"
     fi
 
@@ -861,8 +929,8 @@ docker_uninstall() {
     fi
 
     if [ "$remove_compose" = true ]; then
-        rm -f "$DOCKER_COMPOSE_FILE"
-        echo -e "${GREEN}✓ docker-compose.yml removed / docker-compose.yml 已删除${NC}"
+        rm -f "$compose_file"
+        echo -e "${GREEN}✓ $compose_file removed / $compose_file 已删除${NC}"
     fi
 
     echo ""
@@ -874,24 +942,37 @@ docker_uninstall() {
 }
 
 # Show Docker management menu for existing Docker deployment
+# Usage: docker_management_menu <compose_file> <instance_name>
 docker_management_menu() {
+    local compose_file="${1:-$DOCKER_COMPOSE_FILE}"
+    local instance_name="${2:-clawdeckx}"
+    local compose_run="$COMPOSE_CMD -f $compose_file -p $instance_name"
+
     check_docker_compose || return 1
 
+    # Extract container name from compose file
+    local container_name
+    container_name=$(grep -oP 'container_name:\s*\K\S+' "$compose_file" 2>/dev/null | head -1)
+    container_name="${container_name:-$instance_name}"
+
     local docker_ver
-    docker_ver=$(get_docker_version)
+    docker_ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container_name" 2>/dev/null || echo "unknown")
+    [ "$docker_ver" = "<no value>" ] && docker_ver="unknown"
+
     local is_running=false
-    if check_docker_running; then
+    if docker ps --filter "name=^${container_name}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q .; then
         is_running=true
     fi
 
-    # Read port from docker-compose.yml
+    # Read port from compose file
     local compose_port
-    compose_port=$(grep -oE '"[0-9]+:18800"' "$DOCKER_COMPOSE_FILE" 2>/dev/null | head -1 | grep -oE '^"[0-9]+' | tr -d '"')
+    compose_port=$(grep -oE '"[0-9]+:18800"' "$compose_file" 2>/dev/null | head -1 | grep -oE '^"[0-9]+' | tr -d '"')
     if [ -n "$compose_port" ]; then
         PORT=$compose_port
     fi
 
-    echo -e "${GREEN}✓ ClawDeckX Docker deployment detected / 检测到 ClawDeckX Docker 部署${NC}"
+    echo -e "${GREEN}✓ Docker deployment: ${instance_name}${NC}"
+    echo -e "${CYAN}Compose file / 配置文件：${NC} $compose_file"
     echo -e "${CYAN}Image version / 镜像版本：${NC} $docker_ver"
     echo -e "${CYAN}Port / 端口：${NC} $PORT"
     if [ "$is_running" = true ]; then
@@ -912,7 +993,7 @@ docker_management_menu() {
     echo "  4) Logs / 查看日志"
     echo "  5) Status / 查看状态"
     echo "  6) Uninstall / 卸载"
-    echo "  7) Exit / 退出"
+    echo "  7) Back / 返回"
     echo ""
     echo -n "Enter your choice [1-7] / 输入选择 [1-7]: "
     read -n 1 -r CHOICE </dev/tty
@@ -920,18 +1001,18 @@ docker_management_menu() {
 
     case $CHOICE in
         1)
-            docker_update
+            docker_update "$compose_file" "$instance_name"
             ;;
         2)
             if [ "$is_running" = true ]; then
                 echo ""
                 echo -e "${BLUE}Stopping ClawDeckX container... / 正在停止 ClawDeckX 容器...${NC}"
-                $COMPOSE_CMD stop
+                $compose_run stop
                 echo -e "${GREEN}✓ Stopped / 已停止${NC}"
             else
                 echo ""
                 echo -e "${BLUE}Starting ClawDeckX container... / 正在启动 ClawDeckX 容器...${NC}"
-                $COMPOSE_CMD up -d
+                $compose_run up -d
                 sleep 2
                 echo -e "${GREEN}✓ Started / 已启动${NC}"
                 echo -e "${CYAN}Access at / 访问：${NC} http://localhost:${PORT}"
@@ -940,21 +1021,21 @@ docker_management_menu() {
         3)
             echo ""
             echo -e "${BLUE}Restarting ClawDeckX container... / 正在重启 ClawDeckX 容器...${NC}"
-            $COMPOSE_CMD restart
+            $compose_run restart
             echo -e "${GREEN}✓ Restarted / 已重启${NC}"
             ;;
         4)
             echo ""
             echo -e "${CYAN}Recent logs / 最近日志：${NC}"
             echo "────────────────────────────────────────"
-            $COMPOSE_CMD logs --tail 50
+            $compose_run logs --tail 50
             echo "────────────────────────────────────────"
             ;;
         5)
             echo ""
-            $COMPOSE_CMD ps
+            $compose_run ps
             echo ""
-            if check_docker_running; then
+            if docker ps --filter "name=^${container_name}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q .; then
                 echo -e "${GREEN}✓ ClawDeckX is running / ClawDeckX 运行中${NC}"
                 echo -e "${CYAN}Access at / 访问：${NC} http://localhost:${PORT}"
             else
@@ -962,11 +1043,10 @@ docker_management_menu() {
             fi
             ;;
         6)
-            docker_uninstall
+            docker_uninstall "$compose_file" "$instance_name"
             ;;
         7)
-            echo -e "${YELLOW}Exiting / 退出${NC}"
-            exit 0
+            exec "$0" "$@"
             ;;
         *)
             echo -e "${RED}Invalid choice / 选择无效${NC}"
@@ -998,15 +1078,57 @@ echo -e "${CYAN}:: ClawDeckX Launcher - ${LATEST_VERSION} ::${NC}"
 echo ""
 
 # Detect all existing installations simultaneously
-HAS_DOCKER=false
 HAS_BINARY=false
 IS_CONTAINER=false
+
+# Docker: detect all instances (docker-compose.yml + docker-compose-*.yml)
+DOCKER_INSTANCES=()       # Array of compose files
+DOCKER_INSTANCE_NAMES=()  # Array of instance names
+DOCKER_INSTANCE_PORTS=()  # Array of ports
+DOCKER_INSTANCE_VERS=()   # Array of versions
+DOCKER_INSTANCE_RUNNING=() # Array of running status (true/false)
 
 if is_inside_docker; then
     IS_CONTAINER=true
 fi
 
-if [ "$IS_CONTAINER" = false ] && check_docker_deployed; then
+if [ "$IS_CONTAINER" = false ] && check_docker && check_docker_compose; then
+    # Scan for all compose files that reference our image
+    for cf in docker-compose.yml docker-compose-*.yml; do
+        [ -f "$cf" ] || continue
+        if grep -q "knowhunters/clawdeckx" "$cf" 2>/dev/null; then
+            DOCKER_INSTANCES+=("$cf")
+            # Extract instance name from filename
+            if [ "$cf" = "docker-compose.yml" ]; then
+                DOCKER_INSTANCE_NAMES+=("clawdeckx")
+            else
+                local_name="${cf#docker-compose-}"
+                local_name="${local_name%.yml}"
+                DOCKER_INSTANCE_NAMES+=("$local_name")
+            fi
+            # Extract port
+            local_port=$(grep -oE '"[0-9]+:18800"' "$cf" 2>/dev/null | head -1 | grep -oE '^"[0-9]+' | tr -d '"')
+            DOCKER_INSTANCE_PORTS+=("${local_port:-$DEFAULT_PORT}")
+            # Extract container name for version/status check
+            local_container=$(grep -oP 'container_name:\s*\K\S+' "$cf" 2>/dev/null | head -1)
+            local_container="${local_container:-clawdeckx}"
+            # Version
+            local_ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$local_container" 2>/dev/null || echo "unknown")
+            [ "$local_ver" = "<no value>" ] && local_ver="unknown"
+            DOCKER_INSTANCE_VERS+=("$local_ver")
+            # Running status
+            local_running=$(docker ps --filter "name=^${local_container}$" --filter "status=running" --format '{{.Names}}' 2>/dev/null)
+            if [ -n "$local_running" ]; then
+                DOCKER_INSTANCE_RUNNING+=("true")
+            else
+                DOCKER_INSTANCE_RUNNING+=("false")
+            fi
+        fi
+    done
+fi
+
+HAS_DOCKER=false
+if [ ${#DOCKER_INSTANCES[@]} -gt 0 ]; then
     HAS_DOCKER=true
 fi
 
@@ -1513,22 +1635,21 @@ if [ "$HAS_DOCKER" = true ] || [ "$HAS_BINARY" = true ]; then
     echo -e "${CYAN}Detected installations / 检测到的安装：${NC}"
 
     if [ "$HAS_DOCKER" = true ]; then
-        DOCKER_VER=$(get_docker_version)
-        DOCKER_RUNNING=false
-        if check_docker_running; then
-            DOCKER_RUNNING=true
-        fi
-        # Read Docker port
-        DOCKER_PORT=$DEFAULT_PORT
-        local_compose_port=$(grep -oE '"[0-9]+:18800"' "$DOCKER_COMPOSE_FILE" 2>/dev/null | head -1 | grep -oE '^"[0-9]+' | tr -d '"')
-        if [ -n "$local_compose_port" ]; then
-            DOCKER_PORT=$local_compose_port
-        fi
-        if [ "$DOCKER_RUNNING" = true ]; then
-            echo -e "  🐳 Docker: ${GREEN}v${DOCKER_VER}${NC} (${GREEN}Running / 运行中${NC}) on port ${DOCKER_PORT}"
-        else
-            echo -e "  🐳 Docker: ${GREEN}v${DOCKER_VER}${NC} (${YELLOW}Stopped / 已停止${NC}) on port ${DOCKER_PORT}"
-        fi
+        for i in "${!DOCKER_INSTANCES[@]}"; do
+            local_ver="${DOCKER_INSTANCE_VERS[$i]}"
+            local_port="${DOCKER_INSTANCE_PORTS[$i]}"
+            local_name="${DOCKER_INSTANCE_NAMES[$i]}"
+            local_running="${DOCKER_INSTANCE_RUNNING[$i]}"
+            local_label="Docker"
+            if [ ${#DOCKER_INSTANCES[@]} -gt 1 ] || [ "$local_name" != "clawdeckx" ]; then
+                local_label="Docker [$local_name]"
+            fi
+            if [ "$local_running" = "true" ]; then
+                echo -e "  🐳 ${local_label}: ${GREEN}v${local_ver}${NC} (${GREEN}Running / 运行中${NC}) on port ${local_port}"
+            else
+                echo -e "  🐳 ${local_label}: ${GREEN}v${local_ver}${NC} (${YELLOW}Stopped / 已停止${NC}) on port ${local_port}"
+            fi
+        done
     fi
 
     if [ "$HAS_BINARY" = true ]; then
@@ -1562,10 +1683,21 @@ fi
 # --- Build adaptive menu ---
 MENU_ITEMS=()
 MENU_ACTIONS=()
+MENU_DOCKER_INDEX=()  # Maps menu index to Docker instance index
 N=0
 
 if [ "$HAS_DOCKER" = true ]; then
-    N=$((N + 1)); MENU_ITEMS+=("$N) Manage Docker deployment / 管理 Docker 部署"); MENU_ACTIONS+=("manage_docker")
+    for i in "${!DOCKER_INSTANCES[@]}"; do
+        local_name="${DOCKER_INSTANCE_NAMES[$i]}"
+        local_label="Manage Docker"
+        if [ ${#DOCKER_INSTANCES[@]} -gt 1 ] || [ "$local_name" != "clawdeckx" ]; then
+            local_label="Manage Docker [$local_name]"
+        fi
+        N=$((N + 1))
+        MENU_ITEMS+=("$N) ${local_label} / 管理 Docker ${local_name}")
+        MENU_ACTIONS+=("manage_docker")
+        MENU_DOCKER_INDEX+=("$i")
+    done
 fi
 
 if [ "$HAS_BINARY" = true ]; then
@@ -1576,9 +1708,7 @@ if [ "$IS_CONTAINER" = false ]; then
     if [ "$HAS_BINARY" = false ]; then
         N=$((N + 1)); MENU_ITEMS+=("$N) Install ClawDeckX locally / 在本机安装 ClawDeckX"); MENU_ACTIONS+=("install_binary")
     fi
-    if [ "$HAS_DOCKER" = false ]; then
-        N=$((N + 1)); MENU_ITEMS+=("$N) Install: Docker / 安装：Docker 整合包"); MENU_ACTIONS+=("install_docker")
-    fi
+    N=$((N + 1)); MENU_ITEMS+=("$N) New Docker deployment / 新建 Docker 部署"); MENU_ACTIONS+=("install_docker")
 fi
 
 N=$((N + 1)); MENU_ITEMS+=("$N) Exit / 退出"); MENU_ACTIONS+=("exit")
@@ -1604,7 +1734,11 @@ SELECTED_ACTION="${MENU_ACTIONS[$((MAIN_CHOICE - 1))]}"
 
 case "$SELECTED_ACTION" in
     manage_docker)
-        docker_management_menu
+        # Find which Docker instance was selected
+        SELECTED_DOCKER_IDX="${MENU_DOCKER_INDEX[$((MAIN_CHOICE - 1))]}"
+        DOCKER_COMPOSE_FILE="${DOCKER_INSTANCES[$SELECTED_DOCKER_IDX]}"
+        DOCKER_MGMT_NAME="${DOCKER_INSTANCE_NAMES[$SELECTED_DOCKER_IDX]}"
+        docker_management_menu "$DOCKER_COMPOSE_FILE" "$DOCKER_MGMT_NAME"
         exit 0
         ;;
     manage_binary)
@@ -1701,7 +1835,7 @@ case "$SELECTED_ACTION" in
         exit 0
         ;;
     install_docker)
-        docker_install
+        docker_install_new
         ;;
     install_binary)
         # Fall through to binary install below
