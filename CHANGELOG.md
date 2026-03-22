@@ -6,10 +6,12 @@ _2026-03-22_
 
 ### ✨ New Features / 新功能
 
+- enable wallpaper image by default for new users
 - add Docker install/manage/mirror support to install scripts
 
 ### 🐛 Bug Fixes / 修复
 
+- show user-configured model count instead of total gateway models
 - set explicit network name and auto-show logs after install
 - hide console window for all exec.Command calls on Windows
 - use logs --tail 50 for credential viewing hint
@@ -403,6 +405,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 

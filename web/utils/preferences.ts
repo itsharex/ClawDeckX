@@ -55,7 +55,7 @@ const PREFS_KEY = 'clawdeck-preferences';
 
 const DEFAULT_WALLPAPER: WallpaperConfig = {
   gradientEnabled: true,
-  imageEnabled: false,
+  imageEnabled: true,
   source: 'random',
   customUrl: '',
   cachedUrl: '',
