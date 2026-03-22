@@ -113,6 +113,8 @@
 
 ### 一键安装 / 卸载 / 维护
 
+统一安装脚本自动检测已有安装，通过自适应菜单即可**安装、更新、管理或卸载** Binary 和 Docker 两种部署方式。
+
 **macOS / Linux**
 
 ```bash
@@ -160,6 +162,10 @@ irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
 > 首次运行时，若未指定 `--user` 和 `--pass`，系统会自动生成管理员账户，凭据将打印到控制台。请在登录后立即前往系统设置或账户安全页面修改用户名和密码。
 
 ### Docker 安装
+
+> **推荐：** 使用上方[一键安装脚本](#一键安装--卸载--维护)，选择 **Docker** 模式即可。脚本会自动下载配置文件、设置端口、检测镜像源并显示登录凭据。
+
+**手动安装：**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml -o docker-compose.yml

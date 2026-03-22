@@ -120,6 +120,8 @@ Install ClawDeckX on your local machine and connect to remote OpenClaw instances
 
 ### One-Click Install & Maintain
 
+The unified installer detects existing installations and lets you **install, update, manage, or uninstall** both Binary and Docker deployments from a single adaptive menu.
+
 **macOS / Linux**
 
 ```bash
@@ -132,7 +134,7 @@ curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.sh
 irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
 ```
 
-### Manual Download
+### Manual Binary Download
 
 Download the binary from [Releases](https://github.com/ClawDeckX/ClawDeckX/releases). No dependencies. Just run.
 
@@ -177,8 +179,11 @@ Download the binary from [Releases](https://github.com/ClawDeckX/ClawDeckX/relea
 
 ### Docker Install
 
+> **Recommended:** Use the [one-click installer](#one-click-install--maintain) above — choose **Docker** when prompted. It handles download, port configuration, mirror detection, and shows credentials automatically.
+
+**Manual method:**
+
 ```bash
-# Download and start
 curl -fsSL https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/docker-compose.yml -o docker-compose.yml
 docker compose up -d
 ```
