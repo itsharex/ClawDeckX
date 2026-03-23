@@ -483,11 +483,13 @@ interface ConfigSectionProps {
   children: React.ReactNode;
   collapsible?: boolean;
   defaultOpen?: boolean;
+  forceOpen?: boolean;
   actions?: React.ReactNode;
 }
 
-export const ConfigSection: React.FC<ConfigSectionProps> = ({ title, icon, iconColor = 'text-primary', desc, children, collapsible = true, defaultOpen = true, actions }) => {
+export const ConfigSection: React.FC<ConfigSectionProps> = ({ title, icon, iconColor = 'text-primary', desc, children, collapsible = true, defaultOpen = true, forceOpen, actions }) => {
   const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
   const toggleSection = () => {
     if (collapsible) setOpen(!open);
   };

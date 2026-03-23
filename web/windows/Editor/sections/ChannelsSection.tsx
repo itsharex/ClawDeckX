@@ -253,6 +253,98 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
   const [showZaloPairing, setShowZaloPairing] = useState(false);
   const channels = getField(['channels']) || {};
   const channelKeys = Object.keys(channels);
+
+  // Auto-migrate legacy single-account configs into accounts.default
+  const [migrated, setMigrated] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    for (const ch of channelKeys) {
+      if (ch === 'defaults' || migrated[ch]) continue;
+      const chCfg = channels[ch];
+      if (!chCfg || typeof chCfg !== 'object') continue;
+      // Skip if accounts already exists
+      if (chCfg.accounts && typeof chCfg.accounts === 'object' && Object.keys(chCfg.accounts).length > 0) continue;
+      // Check if there are top-level account fields (legacy format)
+      const CHANNEL_GLOBAL_KEYS = ['accounts', 'defaultAccount'];
+      const legacyKeys = Object.keys(chCfg).filter(k => !CHANNEL_GLOBAL_KEYS.includes(k));
+      if (legacyKeys.length === 0) continue;
+      // Migrate: move all top-level fields into accounts.default
+      const acctData: Record<string, any> = {};
+      for (const k of legacyKeys) acctData[k] = chCfg[k];
+      // Write accounts.default with the legacy fields
+      setField(['channels', ch, 'accounts', 'default'], acctData);
+      // Remove legacy top-level fields
+      for (const k of legacyKeys) deleteField(['channels', ch, k]);
+      setMigrated(prev => ({ ...prev, [ch]: true }));
+    }
+  }, [channelKeys.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Multi-account state: tracks which account tab is active per channel
+  const [activeAccounts, setActiveAccounts] = useState<Record<string, string>>({});
+  const [addAccountChannel, setAddAccountChannel] = useState<string | null>(null);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [deleteAccountConfirm, setDeleteAccountConfirm] = useState<{ ch: string; acct: string } | null>(null);
+
+  // Get the list of account IDs for a channel (reads from channels.{ch}.accounts)
+  const getAccountIds = useCallback((ch: string): string[] => {
+    const chCfg = channels[ch] || {};
+    const accounts = chCfg.accounts;
+    if (!accounts || typeof accounts !== 'object') return ['default'];
+    const keys = Object.keys(accounts).filter(Boolean);
+    return keys.length > 0 ? keys : ['default'];
+  }, [channels]);
+
+  // Get the active account for a channel (default to 'default')
+  const getActiveAccount = useCallback((ch: string): string => {
+    return activeAccounts[ch] || 'default';
+  }, [activeAccounts]);
+
+  // Build the config path prefix for a given channel + account
+  const accountPath = useCallback((ch: string, acct: string): string[] => {
+    return ['channels', ch, 'accounts', acct];
+  }, []);
+
+  const handleAddAccount = useCallback((ch: string) => {
+    const name = newAccountName.trim().toLowerCase();
+    if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+      toast('error', es.acctNameInvalid);
+      return;
+    }
+    const existing = getAccountIds(ch);
+    if (existing.includes(name)) {
+      toast('error', es.acctNameExists);
+      return;
+    }
+    setField(['channels', ch, 'accounts', name], { enabled: true });
+    setActiveAccounts(prev => ({ ...prev, [ch]: name }));
+    setAddAccountChannel(null);
+    setNewAccountName('');
+  }, [newAccountName, getAccountIds, setField, es, toast]);
+
+  const handleDeleteAccount = useCallback((ch: string, acct: string) => {
+    const acctIds = getAccountIds(ch);
+    if (acctIds.length <= 1) return;
+    deleteField(['channels', ch, 'accounts', acct]);
+    // If this was the active tab, switch to another account
+    setActiveAccounts(prev => {
+      const next = { ...prev };
+      if (next[ch] === acct) {
+        const remaining = acctIds.filter(a => a !== acct);
+        next[ch] = remaining[0] || 'default';
+      }
+      return next;
+    });
+    // If default account was this one, clear it
+    const defaultAcct = getField(['channels', ch, 'defaultAccount']);
+    if (defaultAcct === acct) {
+      deleteField(['channels', ch, 'defaultAccount']);
+    }
+    setDeleteAccountConfirm(null);
+  }, [deleteField, getField]);
+
+  const handleSetDefaultAccount = useCallback((ch: string, acct: string) => {
+    setField(['channels', ch, 'defaultAccount'], acct);
+  }, [setField]);
+
   const [addingChannel, setAddingChannel] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState(0); // 0=select, 1=prep, 2=creds, 3=access, 4=confirm
   const [logoutChannel, setLogoutChannel] = useState<string | null>(null);
@@ -478,10 +570,17 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
   }, [es]);
 
   const addChannel = useCallback((type: string) => {
-    setField(['channels', type], { enabled: true });
+    if (channelKeys.includes(type)) {
+      // Channel already exists — open the card and show the add-account inline form
+      setAddAccountChannel(type);
+      setNewAccountName('');
+      return;
+    }
+    // First account: save directly under accounts.default
+    setField(['channels', type, 'accounts', 'default'], { enabled: true });
     setAddingChannel(type);
     setWizardStep(1);
-  }, [setField]);
+  }, [setField, channelKeys]);
 
   const resetWizard = useCallback(() => {
     setAddingChannel(null);
@@ -549,8 +648,95 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
     }
   };
 
-  const renderChannelFields = (ch: string, cfg: any) => {
-    const p = (f: string[]) => ['channels', ch, ...f];
+  const renderAccountTabBar = (ch: string) => {
+    const acctIds = getAccountIds(ch);
+    const activeAcct = getActiveAccount(ch);
+    const defaultAcct = getField(['channels', ch, 'defaultAccount']) || '';
+    if (acctIds.length <= 1 && addAccountChannel !== ch) return null;
+    return (
+      <div className="mb-3 pb-2 border-b border-slate-100 dark:border-white/[0.06]">
+        <div className="flex items-center gap-1 flex-wrap">
+          {acctIds.map(aid => {
+            const isActive = aid === activeAcct;
+            const isDefAcct = !defaultAcct ? aid === 'default' : aid === defaultAcct;
+            return (
+              <button key={aid} onClick={() => setActiveAccounts(prev => ({ ...prev, [ch]: aid }))}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${isActive ? 'bg-primary/10 text-primary border border-primary/30' : 'text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent'}`}>
+                {aid === 'default' ? es.acctDefault : aid}
+                {isDefAcct && <span className="material-symbols-outlined text-[10px] text-amber-500" title={es.acctIsDefault}>star</span>}
+                {isActive && acctIds.length > 1 && (
+                  <span className="inline-flex items-center gap-0.5 ms-0.5">
+                    {!isDefAcct && (
+                      <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); handleSetDefaultAccount(ch, aid); }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); handleSetDefaultAccount(ch, aid); } }}
+                        className="text-slate-400 hover:text-amber-500 cursor-pointer" title={es.acctSetDefault}>
+                        <span className="material-symbols-outlined text-[11px]">star</span>
+                      </span>
+                    )}
+                    <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setDeleteAccountConfirm({ ch, acct: aid }); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setDeleteAccountConfirm({ ch, acct: aid }); } }}
+                      className="text-slate-400 hover:text-red-500 cursor-pointer" title={es.acctDeleteAccount}>
+                      <span className="material-symbols-outlined text-[11px]">close</span>
+                    </span>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {addAccountChannel !== ch && (
+            <button onClick={() => { setAddAccountChannel(ch); setNewAccountName(''); }}
+              className="px-1.5 py-1 rounded-lg text-[10px] text-primary/60 hover:text-primary hover:bg-primary/5 border border-dashed border-primary/20 hover:border-primary/40 transition-all">
+              <span className="material-symbols-outlined text-[12px]">add</span>
+            </button>
+          )}
+        </div>
+        {addAccountChannel === ch && (
+          <div className="mt-2 px-3 py-2.5 rounded-xl bg-primary/[0.04] dark:bg-primary/[0.06] border border-primary/20 dark:border-primary/15 space-y-2">
+            <div className="text-[10px] font-bold text-primary flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">person_add</span>
+              {es.acctAddAccount}
+            </div>
+            <div className="text-[10px] text-slate-500 dark:text-white/40">{es.acctNamePrompt}</div>
+            <div className="flex items-center gap-2">
+              <input value={newAccountName} onChange={e => setNewAccountName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddAccount(ch); if (e.key === 'Escape') setAddAccountChannel(null); }}
+                placeholder={es.acctNamePlaceholder} autoFocus
+                className="flex-1 h-8 px-3 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg text-xs text-slate-700 dark:text-white/70 outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all sci-input" />
+            </div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <button onClick={() => handleAddAccount(ch)} disabled={!newAccountName.trim()}
+                className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold disabled:opacity-40 hover:bg-primary/90 transition-all">
+                {es.acctAddAccount}
+              </button>
+              <button onClick={() => setAddAccountChannel(null)}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-bold theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+                {es.cancel}
+              </button>
+            </div>
+          </div>
+        )}
+        {deleteAccountConfirm?.ch === ch && (
+          <div className="mt-2 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 space-y-2">
+            <div className="text-[10px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">warning</span>
+              {es.acctDeleteAccount}
+            </div>
+            <p className="text-[10px] text-red-600/80 dark:text-red-400/80">{es.acctDeleteConfirm}</p>
+            <div className="flex items-center gap-2 pt-0.5">
+              <button onClick={() => handleDeleteAccount(ch, deleteAccountConfirm.acct)}
+                className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[10px] font-bold hover:bg-red-600 transition-all">{es.delete}</button>
+              <button onClick={() => setDeleteAccountConfirm(null)}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">{es.cancel}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderChannelFields = (ch: string, cfg: any, basePath?: string[]) => {
+    const base = basePath || ['channels', ch];
+    const p = (f: string[]) => [...base, ...f];
     const g = (f: string[]) => getField(p(f));
     const s = (f: string[], v: any) => setField(p(f), v);
     const labelToken = es.chToken;
@@ -1486,8 +1672,12 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
               iconColor={cfg.enabled !== false ? 'text-green-500' : 'text-slate-400'}
               desc={info ? (es as any)[info.descKey] : undefined}
               defaultOpen={false}
+              forceOpen={sendChannel === ch || logoutChannel === ch || addAccountChannel === ch}
               actions={
                 <div className="flex items-center gap-1">
+                  <button onClick={e => { e.stopPropagation(); setAddAccountChannel(addAccountChannel === ch ? null : ch); setNewAccountName(''); }} className="text-slate-400 hover:text-primary transition-colors" title={es.acctAddAccount} aria-label={es.acctAddAccount}>
+                    <span className="material-symbols-outlined text-[14px]">person_add</span>
+                  </button>
                   <button onClick={() => { setSendChannel(sendChannel === ch ? null : ch); setSendResult(null); }} className="text-slate-400 hover:text-sky-500 transition-colors" title={es.chSendTest} aria-label={es.chSendTest}>
                     <span className="material-symbols-outlined text-[14px]">send</span>
                   </button>
@@ -1547,7 +1737,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                   {logoutMsg.text}
                 </div>
               )}
-              {renderChannelFields(ch, cfg)}
+              {renderAccountTabBar(ch)}
+              {(() => {
+                const act = getActiveAccount(ch);
+                const bp = accountPath(ch, act);
+                const ac = getField(bp) || {};
+                return renderChannelFields(ch, ac, bp);
+              })()}
             </ConfigSection>
           );
         })
@@ -1567,7 +1763,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       ) : (() => {
         const chId = addingChannel !== 'selecting' ? addingChannel : '';
         const chInfo = CHANNEL_TYPES.find(c => c.id === chId);
-        const cfg = chId ? (channels[chId] || {}) : {};
+        const chCfg = chId ? (channels[chId] || {}) : {};
+        const cfg = chId ? (chCfg?.accounts?.default || {}) : {};
+        const wizBasePath = chId ? ['channels', chId, 'accounts', 'default'] : undefined;
         const prepSteps: string[] = chId ? ((cw as any)[`${chId}Prep`] || []) : [];
         const pitfall: string = chId ? ((cw as any)[`${chId}Pitfall`] || '') : '';
 
@@ -1612,7 +1810,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                 <div className="px-4 pb-4 border-t border-slate-100 dark:border-white/[0.04]">
                   <div className="space-y-3 pt-3">
                     {CATEGORY_ORDER.map(cat => {
-                      const items = CHANNEL_TYPES.filter(c => c.category === cat && !channelKeys.includes(c.id) && !c.disabled);
+                      const items = CHANNEL_TYPES.filter(c => c.category === cat && !c.disabled);
                       if (items.length === 0) return null;
                       return (
                         <div key={cat}>
@@ -1627,7 +1825,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                                   <span className="material-symbols-outlined text-[16px] text-slate-500 dark:text-white/40 group-hover:text-primary transition-colors">{c.icon}</span>
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-[11px] font-bold text-slate-700 dark:text-white/80 group-hover:text-primary transition-colors truncate">{(es as any)[c.labelKey]}</div>
+                                  <div className="text-[11px] font-bold text-slate-700 dark:text-white/80 group-hover:text-primary transition-colors truncate flex items-center gap-1">
+                                    {(es as any)[c.labelKey]}
+                                    {channelKeys.includes(c.id) && <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0">+ {es.acctAddAccount}</span>}
+                                  </div>
                                   <div className="text-[11px] text-slate-400 dark:text-white/40 truncate">{(es as any)[c.descKey]}</div>
                                 </div>
                               </button>
@@ -1803,7 +2004,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
               {stepActive(2) && chId && (
                 <div className="px-4 pb-4 border-t border-slate-100 dark:border-white/[0.04]">
                   <div className="pt-3 space-y-2">
-                    {renderChannelFields(chId, cfg)}
+                    {renderChannelFields(chId, cfg, wizBasePath)}
                   </div>
                   {/* WhatsApp QR Login */}
                   {chId === 'whatsapp' && (
@@ -1895,7 +2096,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                 <span className={`material-symbols-outlined text-[16px] ${stepDone(3) ? 'text-green-500' : stepActive(3) ? 'text-primary' : 'text-slate-400'}`}>shield</span>
                 <div className="flex-1 min-w-0">
                   <span className={`text-xs font-bold ${stepActive(3) ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-white/60'}`}>{WIZARD_STEPS[3].label}</span>
-                  {stepDone(3) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{dmPolicyText(getField(['channels', chId, 'dmPolicy']) || 'pairing')}</p>}
+                  {stepDone(3) && <p className="text-[10px] text-slate-400 dark:text-white/40 truncate">{dmPolicyText(getField([...(wizBasePath || ['channels', chId]), 'dmPolicy']) || 'pairing')}</p>}
                 </div>
                 <span className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform ${stepActive(3) ? 'rotate-180' : ''}`}>expand_more</span>
               </div>
@@ -1912,10 +2113,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                           { value: 'open', icon: 'lock_open', label: es.optOpen, desc: cw.openDesc || '' },
                           { value: 'closed', icon: 'block', label: es.optClosed, desc: cw.disabledDesc || '' },
                         ] as const).map((opt) => (
-                          <button key={opt.value} onClick={() => setField(['channels', chId, 'dmPolicy'], opt.value)}
-                            className={`p-2.5 rounded-lg border-2 text-start transition-all ${(getField(['channels', chId, 'dmPolicy']) || 'pairing') === opt.value ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-200 dark:border-white/10 hover:border-primary/40'}`}>
+                          <button key={opt.value} onClick={() => setField([...(wizBasePath || ['channels', chId]), 'dmPolicy'], opt.value)}
+                            className={`p-2.5 rounded-lg border-2 text-start transition-all ${(getField([...(wizBasePath || ['channels', chId]), 'dmPolicy']) || 'pairing') === opt.value ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-slate-200 dark:border-white/10 hover:border-primary/40'}`}>
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className={`material-symbols-outlined text-[14px] ${(getField(['channels', chId, 'dmPolicy']) || 'pairing') === opt.value ? 'text-primary' : 'text-slate-400 dark:text-white/40'}`}>{opt.icon}</span>
+                              <span className={`material-symbols-outlined text-[14px] ${(getField([...(wizBasePath || ['channels', chId]), 'dmPolicy']) || 'pairing') === opt.value ? 'text-primary' : 'text-slate-400 dark:text-white/40'}`}>{opt.icon}</span>
                               <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">{opt.label}</span>
                             </div>
                             {opt.desc && <div className="text-[11px] text-slate-400 dark:text-white/35 leading-relaxed">{opt.desc}</div>}
@@ -1925,7 +2126,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 dark:text-white/60 mb-1.5 block">{es.allowFrom}</label>
-                      <ArrayField label="" value={getField(['channels', chId, 'allowFrom']) || []} onChange={v => setField(['channels', chId, 'allowFrom'], v)} placeholder={es.tipAllowFromPh} />
+                      <ArrayField label="" value={getField([...(wizBasePath || ['channels', chId]), 'allowFrom']) || []} onChange={v => setField([...(wizBasePath || ['channels', chId]), 'allowFrom'], v)} placeholder={es.tipAllowFromPh} />
                     </div>
                   </div>
                   {/* Access control warnings */}
