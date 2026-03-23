@@ -8,6 +8,7 @@ import { get } from '../../services/request';
 import { extractSchemaKeys, getUnmappedKeys } from './sectionRegistry';
 import { EditorFieldsI18nProvider } from './fields';
 import type { SectionProps } from './sectionTypes';
+import { validateChannelsConfig } from './sections/ChannelsSection';
 interface EditorProps {
   language: Language;
   pendingSection?: string | null;
@@ -102,11 +103,23 @@ const Editor: React.FC<EditorProps> = ({ language, pendingSection, onSectionCons
   const editor = useConfigEditor();
   const { toast } = useToast();
   const handleSave = useCallback(async () => {
+    // Pre-save: validate required channel credentials
+    if (editor.config) {
+      const chErrors = validateChannelsConfig(editor.config, es);
+      if (chErrors.length > 0) {
+        const msgs = chErrors.map(e => {
+          const label = e.account === 'default' ? e.channel : `${e.channel}/${e.account}`;
+          return `${label}: ${e.fields.join(', ')}`;
+        });
+        toast('error', (es.saveCredentialMissing || 'Required channel fields missing') + '\n' + msgs.join('\n'));
+        return;
+      }
+    }
     const ok = await editor.save();
     if (ok) {
       toast('success', ed.saveOkReloading || 'Config saved. Gateway is reloading...');
     }
-  }, [editor, toast, ed]);
+  }, [editor, toast, ed, es]);
   const [activeSection, setActiveSection] = useState<SectionId>('models');
   useEffect(() => {
     if (pendingSection && SECTIONS.some(s => s.id === pendingSection)) {

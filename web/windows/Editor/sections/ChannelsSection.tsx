@@ -38,7 +38,7 @@ const CHANNEL_TYPES: ChannelDef[] = [
   { id: 'feishu', icon: 'apartment', labelKey: 'chFeishu', category: 'china', descKey: 'chDescFeishu' },
   { id: 'wecom', icon: 'business', labelKey: 'chWecom', category: 'china', descKey: 'chDescWecom' },
   { id: 'wecom_kf', icon: 'support_agent', labelKey: 'chWecomKf', category: 'china', descKey: 'chDescWecomKf' },
-  { id: 'wechat', icon: 'mark_chat_unread', labelKey: 'chWechat', category: 'china', descKey: 'chDescWechat', disabled: true },
+  { id: 'openclaw-weixin', icon: 'mark_chat_unread', labelKey: 'chWeixin', category: 'china', descKey: 'chDescWeixin' },
   { id: 'qq', icon: 'smart_toy', labelKey: 'chQq', category: 'china', descKey: 'chDescQq' },
   { id: 'yuanbao', icon: 'token', labelKey: 'chYuanbao', category: 'china', descKey: 'chDescYuanbao' },
   { id: 'dingtalk', icon: 'notifications', labelKey: 'chDingtalk', category: 'china', descKey: 'chDescDingtalk' },
@@ -120,7 +120,7 @@ const TIP_KEYS: Record<string, string> = {
 // ============================================================================
 // Required credential fields per channel (used for wizard validation)
 // ============================================================================
-const REQUIRED_CREDENTIALS: Record<string, { field: string; labelKey: string }[]> = {
+export const REQUIRED_CREDENTIALS: Record<string, { field: string; labelKey: string }[]> = {
   telegram: [{ field: 'botToken', labelKey: 'botToken' }],
   discord: [{ field: 'token', labelKey: 'chToken' }],
   slack: [{ field: 'botToken', labelKey: 'botToken' }, { field: 'appToken', labelKey: 'appToken' }],
@@ -137,12 +137,39 @@ const REQUIRED_CREDENTIALS: Record<string, { field: string; labelKey: string }[]
   qq: [{ field: 'appId', labelKey: 'appId' }, { field: 'clientSecret', labelKey: 'clientSecret' }],
 };
 
-const getCredentialErrors = (chId: string, cfg: any, es: any): string[] => {
+export const getCredentialErrors = (chId: string, cfg: any, es: any): string[] => {
   const reqs = REQUIRED_CREDENTIALS[chId];
   if (!reqs) return [];
   return reqs
     .filter(r => !cfg?.[r.field] || (typeof cfg[r.field] === 'string' && !cfg[r.field].trim()))
     .map(r => (es[r.labelKey] || r.field));
+};
+
+// Validate all channel accounts before save. Returns array of { channel, account, fields[] }
+export const validateChannelsConfig = (config: Record<string, any>, es: any): { channel: string; account: string; fields: string[] }[] => {
+  const channels = config?.channels;
+  if (!channels || typeof channels !== 'object') return [];
+  const errors: { channel: string; account: string; fields: string[] }[] = [];
+  for (const ch of Object.keys(channels)) {
+    if (ch === 'defaults') continue;
+    const chCfg = channels[ch];
+    if (!chCfg || typeof chCfg !== 'object') continue;
+    const accounts = chCfg.accounts;
+    if (accounts && typeof accounts === 'object') {
+      for (const acct of Object.keys(accounts)) {
+        const acctCfg = accounts[acct];
+        if (!acctCfg || acctCfg.enabled === false) continue;
+        const fields = getCredentialErrors(ch, acctCfg, es);
+        if (fields.length > 0) errors.push({ channel: ch, account: acct, fields });
+      }
+    } else {
+      // Legacy top-level format
+      if (chCfg.enabled === false) continue;
+      const fields = getCredentialErrors(ch, chCfg, es);
+      if (fields.length > 0) errors.push({ channel: ch, account: 'default', fields });
+    }
+  }
+  return errors;
 };
 
 const getAccessWarnings = (chId: string, cfg: any, es: any): string[] => {
@@ -318,6 +345,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
     setActiveAccounts(prev => ({ ...prev, [ch]: name }));
     setAddAccountChannel(null);
     setNewAccountName('');
+    // Trigger wizard flow for the new account (skip step 0 select + step 1 prep)
+    setAddingChannel(ch);
+    setWizardAccount(name);
+    setWizardStep(2);
   }, [newAccountName, getAccountIds, setField, es, toast]);
 
   const handleDeleteAccount = useCallback((ch: string, acct: string) => {
@@ -347,6 +378,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
 
   const [addingChannel, setAddingChannel] = useState<string | null>(null);
   const [wizardStep, setWizardStep] = useState(0); // 0=select, 1=prep, 2=creds, 3=access, 4=confirm
+  const [wizardAccount, setWizardAccount] = useState<string | null>(null); // non-null = adding named account to existing channel
   const [logoutChannel, setLogoutChannel] = useState<string | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [logoutMsg, setLogoutMsg] = useState<{ ch: string; ok: boolean; text: string } | null>(null);
@@ -414,24 +446,24 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
     setTimeout(() => { setWizTestStatus('idle'); setWizTestMsg(''); }, 5000);
   }, [channels, es]);
 
-  // WhatsApp web login
+  // WhatsApp / Weixin QR web login
   const [webLoginBusy, setWebLoginBusy] = useState(false);
-  const [webLoginResult, setWebLoginResult] = useState<{ ok: boolean; text: string; qr?: string } | null>(null);
+  const [webLoginResult, setWebLoginResult] = useState<{ ok: boolean; text: string; qr?: string; qrDataUrl?: string } | null>(null);
 
   const handleWebLogin = useCallback(async () => {
     setWebLoginBusy(true);
     setWebLoginResult(null);
     try {
       const res = await gwApi.webLoginStart({}) as any;
-      if (res?.qr) {
-        setWebLoginResult({ ok: true, text: cw.qrReady, qr: res.qr });
-        // Wait for scan
+      if (res?.qr || res?.qrDataUrl) {
+        setWebLoginResult({ ok: true, text: res?.message || cw.qrReady, qr: res.qr, qrDataUrl: res.qrDataUrl });
+        // Wait for scan (weixin needs longer timeout — up to 480s)
         try {
-          await gwApi.webLoginWait({ timeoutMs: 60000 });
+          await gwApi.webLoginWait({ timeoutMs: res?.qrDataUrl ? 480000 : 60000, sessionKey: res?.sessionKey });
           setWebLoginResult({ ok: true, text: cw.loginSuccess });
         } catch { setWebLoginResult({ ok: false, text: cw.loginTimeout }); }
       } else {
-        setWebLoginResult({ ok: true, text: res?.status || cw.started });
+        setWebLoginResult({ ok: true, text: res?.message || res?.status || cw.started });
       }
     } catch (err: any) {
       setWebLoginResult({ ok: false, text: `${cw.loginFailed}: ${err?.message || ''}` });
@@ -453,6 +485,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
       dingtalk: '@openclaw-china/dingtalk',
       wecom: '@wecom/wecom-openclaw-plugin',
       wecom_kf: '@openclaw-china/wecom-app',
+      'openclaw-weixin': '@tencent-weixin/openclaw-weixin',
       qq: '@sliverp/qqbot@latest',
       yuanbao: 'openclaw-plugin-yuanbao@latest',
       msteams: '@openclaw/msteams',
@@ -585,6 +618,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
   const resetWizard = useCallback(() => {
     setAddingChannel(null);
     setWizardStep(0);
+    setWizardAccount(null);
     setShowPairing(false);
     setPairingCode('');
     setPairingStatus('idle');
@@ -592,14 +626,15 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
   }, []);
 
   const handleFinishWizard = useCallback(async (chId: string) => {
-    const cfg = channels[chId] || {};
-    const credErrors = getCredentialErrors(chId, cfg, es);
+    const acctKey = wizardAccount || 'default';
+    const acctCfg = channels[chId]?.accounts?.[acctKey] || {};
+    const credErrors = getCredentialErrors(chId, acctCfg, es);
     if (credErrors.length > 0) {
       toast('error', (es.wizCredentialRequired || 'Required fields missing') + ': ' + credErrors.join(', '));
       setWizardStep(2);
       return;
     }
-    const dmPolicy = getField(['channels', chId, 'dmPolicy']) || 'pairing';
+    const dmPolicy = getField(['channels', chId, 'accounts', acctKey, 'dmPolicy']) || 'pairing';
     const requiresPairing = chId !== 'yuanbao' && dmPolicy === 'pairing';
     setRestarting(true);
     try {
@@ -621,7 +656,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
     } else {
       resetWizard();
     }
-  }, [getField, resetWizard, save, channels, es, toast]);
+  }, [getField, resetWizard, save, channels, es, toast, wizardAccount]);
 
   const handleApprovePairing = useCallback(async (chId: string) => {
     if (!pairingCode.trim()) return;
@@ -1510,6 +1545,20 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
           </>
         )}
 
+        {/* 微信 ClawBot (openclaw-weixin) */}
+        {ch === 'openclaw-weixin' && (
+          <>
+            <TextField label={es.weixinName || 'Display Name'} value={g(['name']) || ''} onChange={v => s(['name'], v)} tooltip={es.tipWeixinName} />
+            <TextField label={labelBaseUrl} value={g(['baseUrl']) || ''} onChange={v => s(['baseUrl'], v)} placeholder="https://ilinkai.weixin.qq.com" tooltip={es.tipWeixinBaseUrl} />
+            <TextField label={es.cdnBaseUrl || 'CDN Base URL'} value={g(['cdnBaseUrl']) || ''} onChange={v => s(['cdnBaseUrl'], v)} placeholder="https://novac2c.cdn.weixin.qq.com/c2c" tooltip={es.tipWeixinCdnUrl} />
+            <NumberField label={es.routeTag || 'Route Tag'} value={g(['routeTag'])} onChange={v => s(['routeTag'], v)} tooltip={es.tipWeixinRouteTag} />
+            <SelectField label={es.dmPolicy} value={g(['dmPolicy']) || 'pairing'} onChange={v => s(['dmPolicy'], v)} options={dmPolicy(es)} tooltip={tip('dmPolicy')} />
+            <ArrayField label={es.allowFrom} value={g(['allowFrom']) || []} onChange={v => s(['allowFrom'], v)} placeholder={es.phWeixinUserId || 'xxx@im.wechat'} tooltip={tip('allowFrom')} />
+            <TextField label={es.defaultTo || 'Default To'} value={g(['defaultTo']) || ''} onChange={v => s(['defaultTo'], v)} tooltip={tip('defaultTo')} />
+            <NumberField label={es.textChunkLimit || 'Text Chunk Limit'} value={g(['textChunkLimit'])} onChange={v => s(['textChunkLimit'], v)} placeholder="4000" tooltip={tip('textChunkLimit')} />
+          </>
+        )}
+
         {/* 钉钉 */}
         {ch === 'dingtalk' && (
           <>
@@ -1764,8 +1813,9 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
         const chId = addingChannel !== 'selecting' ? addingChannel : '';
         const chInfo = CHANNEL_TYPES.find(c => c.id === chId);
         const chCfg = chId ? (channels[chId] || {}) : {};
-        const cfg = chId ? (chCfg?.accounts?.default || {}) : {};
-        const wizBasePath = chId ? ['channels', chId, 'accounts', 'default'] : undefined;
+        const wizAcctKey = wizardAccount || 'default';
+        const cfg = chId ? (chCfg?.accounts?.[wizAcctKey] || {}) : {};
+        const wizBasePath = chId ? ['channels', chId, 'accounts', wizAcctKey] : undefined;
         const prepSteps: string[] = chId ? ((cw as any)[`${chId}Prep`] || []) : [];
         const pitfall: string = chId ? ((cw as any)[`${chId}Pitfall`] || '') : '';
 
@@ -1786,15 +1836,22 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xs font-bold text-slate-700 dark:text-white/80 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm text-primary">auto_fix_high</span>
-                {es.addChannel}
+                {wizardAccount ? `${es.acctAddAccount || 'Add Account'}: ${wizardAccount}` : es.addChannel}
               </h3>
-              <button onClick={() => { if (chId) deleteField(['channels', chId]); resetWizard(); }} className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
+              <button onClick={() => {
+                if (wizardAccount && chId) {
+                  deleteField(['channels', chId, 'accounts', wizardAccount]);
+                } else if (chId) {
+                  deleteField(['channels', chId]);
+                }
+                resetWizard();
+              }} className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/60">
                 {es.cancel}
               </button>
             </div>
 
-            {/* ── Step 0: 选择频道 ── */}
-            <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(0) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(0) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
+            {/* ── Step 0: 选择频道 (hidden in account wizard mode) ── */}
+            {!wizardAccount && <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(0) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(0) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
               <div className={`flex items-center gap-2.5 px-4 py-3 ${stepDone(0) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`} onClick={() => stepDone(0) && setWizardStep(0)}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${stepDone(0) ? 'bg-green-500 text-white' : stepActive(0) ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}>
                   {stepDone(0) ? <span className="material-symbols-outlined text-[14px]">check</span> : 1}
@@ -1840,10 +1897,10 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
-            {/* ── Step 1: 前置准备 ── */}
-            <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(1) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(1) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
+            {/* ── Step 1: 前置准备 (hidden in account wizard mode) ── */}
+            {!wizardAccount && <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(1) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(1) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
               <div className={`flex items-center gap-2.5 px-4 py-3 ${stepDone(1) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`} onClick={() => stepDone(1) && setWizardStep(1)}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${stepDone(1) ? 'bg-green-500 text-white' : stepActive(1) ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}>
                   {stepDone(1) ? <span className="material-symbols-outlined text-[14px]">check</span> : 2}
@@ -1868,17 +1925,18 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                       </a>
                     )}
                     {/* Plugin install hint for channels that need plugins */}
-                    {chId && ['feishu', 'dingtalk', 'qq', 'yuanbao', 'msteams', 'zalo', 'voicecall', 'matrix', 'wecom', 'wecom_kf'].includes(chId) && (() => {
+                    {chId && ['feishu', 'dingtalk', 'qq', 'yuanbao', 'msteams', 'zalo', 'voicecall', 'matrix', 'wecom', 'wecom_kf', 'openclaw-weixin'].includes(chId) && (() => {
                       const pluginSpec = chId === 'feishu' ? '@openclaw/feishu' :
                         chId === 'dingtalk' ? '@openclaw-china/dingtalk' :
                           chId === 'wecom' ? '@wecom/wecom-openclaw-plugin' :
                             chId === 'wecom_kf' ? '@openclaw-china/wecom-app' :
-                              chId === 'qq' ? '@sliverp/qqbot@latest' :
-                                chId === 'yuanbao' ? 'openclaw-plugin-yuanbao@latest' :
-                                chId === 'msteams' ? '@openclaw/msteams' :
-                                  chId === 'zalo' ? '@openclaw/zalo' :
-                                    chId === 'matrix' ? '@openclaw/matrix' :
-                                      chId === 'voicecall' ? '@openclaw/voice-call' : '';
+                              chId === 'openclaw-weixin' ? '@tencent-weixin/openclaw-weixin' :
+                                chId === 'qq' ? '@sliverp/qqbot@latest' :
+                                  chId === 'yuanbao' ? 'openclaw-plugin-yuanbao@latest' :
+                                  chId === 'msteams' ? '@openclaw/msteams' :
+                                    chId === 'zalo' ? '@openclaw/zalo' :
+                                      chId === 'matrix' ? '@openclaw/matrix' :
+                                        chId === 'voicecall' ? '@openclaw/voice-call' : '';
                       const isInstalled = pluginInstalled[chId] === true;
                       
                       // Already installed - show green success
@@ -1986,13 +2044,13 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                   </div>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* ── Step 2: 填写凭证 ── */}
             <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(2) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(2) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
               <div className={`flex items-center gap-2.5 px-4 py-3 ${stepDone(2) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`} onClick={() => stepDone(2) && setWizardStep(2)}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${stepDone(2) ? 'bg-green-500 text-white' : stepActive(2) ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}>
-                  {stepDone(2) ? <span className="material-symbols-outlined text-[14px]">check</span> : 3}
+                  {stepDone(2) ? <span className="material-symbols-outlined text-[14px]">check</span> : wizardAccount ? 1 : 3}
                 </div>
                 <span className={`material-symbols-outlined text-[16px] ${stepDone(2) ? 'text-green-500' : stepActive(2) ? 'text-primary' : 'text-slate-400'}`}>key</span>
                 <div className="flex-1 min-w-0">
@@ -2006,15 +2064,19 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                   <div className="pt-3 space-y-2">
                     {renderChannelFields(chId, cfg, wizBasePath)}
                   </div>
-                  {/* WhatsApp QR Login */}
-                  {chId === 'whatsapp' && (
+                  {/* QR Login (WhatsApp / Weixin) */}
+                  {(chId === 'whatsapp' || chId === 'openclaw-weixin') && (
                     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-primary text-[18px]">qr_code_2</span>
-                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">{cw.whatsappLogin}</span>
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80">
+                            {chId === 'openclaw-weixin' ? (cw.weixinLogin || 'WeChat QR Login') : cw.whatsappLogin}
+                          </span>
                         </div>
-                        <p className="text-[10px] text-slate-500 dark:text-white/50">{cw.whatsappLoginDesc}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-white/50">
+                          {chId === 'openclaw-weixin' ? (cw.weixinLoginDesc || 'Scan the QR code with WeChat to connect your account.') : cw.whatsappLoginDesc}
+                        </p>
                         <button onClick={handleWebLogin} disabled={webLoginBusy}
                           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[11px] font-bold bg-green-500 hover:bg-green-600 text-white transition-all disabled:opacity-50">
                           <span className={`material-symbols-outlined text-[16px] ${webLoginBusy ? 'animate-spin' : ''}`}>
@@ -2025,6 +2087,12 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                         {webLoginResult && (
                           <div className={`px-3 py-2.5 rounded-lg text-[10px] ${webLoginResult.ok ? 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-500 border border-red-200 dark:border-red-500/20'}`}>
                             <p className="font-bold">{webLoginResult.text}</p>
+                            {webLoginResult.qrDataUrl && (
+                              <div className="mt-2 flex flex-col items-center gap-2">
+                                <img src={webLoginResult.qrDataUrl} alt="WeChat QR" className="w-48 h-48 rounded-lg border border-slate-200 dark:border-white/10" />
+                                <a href={webLoginResult.qrDataUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 hover:underline break-all">{cw.openQrInBrowser || 'Open QR in browser'}</a>
+                              </div>
+                            )}
                             {webLoginResult.qr && (
                               <pre className="mt-2 p-2 bg-white dark:bg-black/20 rounded text-[9px] font-mono whitespace-pre overflow-x-auto">{webLoginResult.qr}</pre>
                             )}
@@ -2034,7 +2102,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
                     </div>
                   )}
                   {/* Test connection */}
-                  {chId !== 'whatsapp' && (
+                  {chId !== 'whatsapp' && chId !== 'openclaw-weixin' && (
                     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={() => handleWizardTest(chId)} disabled={wizTestStatus === 'testing'}
@@ -2091,7 +2159,7 @@ export const ChannelsSection: React.FC<SectionProps> = ({ config, setField, getF
             <div className={`border rounded-xl overflow-hidden transition-colors ${stepActive(3) ? 'border-primary/40 bg-white dark:bg-white/[0.02]' : stepDone(3) ? 'border-green-300 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-white/[0.06] opacity-50'}`}>
               <div className={`flex items-center gap-2.5 px-4 py-3 ${stepDone(3) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`} onClick={() => stepDone(3) && setWizardStep(3)}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${stepDone(3) ? 'bg-green-500 text-white' : stepActive(3) ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}>
-                  {stepDone(3) ? <span className="material-symbols-outlined text-[14px]">check</span> : 4}
+                  {stepDone(3) ? <span className="material-symbols-outlined text-[14px]">check</span> : wizardAccount ? 2 : 4}
                 </div>
                 <span className={`material-symbols-outlined text-[16px] ${stepDone(3) ? 'text-green-500' : stepActive(3) ? 'text-primary' : 'text-slate-400'}`}>shield</span>
                 <div className="flex-1 min-w-0">

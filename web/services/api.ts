@@ -1097,7 +1097,7 @@ export const gwApi = {
   // Web (WhatsApp) login
   webLoginStart: (params?: { force?: boolean; timeoutMs?: number; accountId?: string }) =>
     rpc('web.login.start', params),
-  webLoginWait: (params?: { timeoutMs?: number; accountId?: string }) =>
+  webLoginWait: (params?: { timeoutMs?: number; accountId?: string; sessionKey?: string }) =>
     rpc('web.login.wait', params),
   // Doctor: Memory status
   memoryStatus: () => rpc<{
