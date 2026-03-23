@@ -751,9 +751,12 @@ docker_install() {
     $compose_run up -d
 
     # Step 6: Wait for health check
+    # The entrypoint waits up to 120s for the gateway on first boot, then starts
+    # ClawDeckX. We need to wait longer than 120s to allow the full startup chain.
     echo ""
-    echo -e "${CYAN}Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪...${NC}"
-    local max_wait=60
+    echo -e "${CYAN}Waiting for ClawDeckX to become ready (first boot may take ~2 min)...${NC}"
+    echo -e "${CYAN}等待 ClawDeckX 就绪（首次启动可能需要约 2 分钟）...${NC}"
+    local max_wait=150
     local waited=0
     while [ $waited -lt $max_wait ]; do
         if curl -sf "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
@@ -761,9 +764,11 @@ docker_install() {
         fi
         sleep 2
         waited=$((waited + 2))
-        printf "."
+        if [ $((waited % 10)) -eq 0 ]; then
+            printf "\r  ${waited}s / ${max_wait}s ..."
+        fi
     done
-    echo ""
+    printf "\r                          \r"
 
     if [ $waited -ge $max_wait ]; then
         echo -e "${YELLOW}⚠ ClawDeckX is still starting. Check status with:"
@@ -877,7 +882,7 @@ docker_update() {
     # Wait for health check
     echo ""
     echo -e "${CYAN}Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪...${NC}"
-    local max_wait=60
+    local max_wait=150
     local waited=0
     while [ $waited -lt $max_wait ]; do
         if curl -sf "http://localhost:${PORT}/api/v1/health" >/dev/null 2>&1; then
@@ -885,9 +890,11 @@ docker_update() {
         fi
         sleep 2
         waited=$((waited + 2))
-        printf "."
+        if [ $((waited % 10)) -eq 0 ]; then
+            printf "\r  ${waited}s / ${max_wait}s ..."
+        fi
     done
-    echo ""
+    printf "\r                          \r"
 
     local new_ver
     new_ver=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$container_name" 2>/dev/null || echo "unknown")

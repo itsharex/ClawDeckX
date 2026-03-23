@@ -988,9 +988,12 @@ function Install-DockerClawDeckX {
     Invoke-ComposeCmd @("up", "-d") -ComposeFile $composeFile -ProjectName $InstanceName
 
     # Step 6: Wait for health check
+    # The entrypoint waits up to 120s for the gateway on first boot, then starts
+    # ClawDeckX. We need to wait longer than 120s to allow the full startup chain.
     Write-Host ""
-    Write-C "Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪..." Cyan
-    $maxWait = 60
+    Write-C "Waiting for ClawDeckX to become ready (first boot may take ~2 min)..." Cyan
+    Write-C "等待 ClawDeckX 就绪（首次启动可能需要约 2 分钟）..." Cyan
+    $maxWait = 150
     $waited = 0
     while ($waited -lt $maxWait) {
         try {
@@ -999,8 +1002,11 @@ function Install-DockerClawDeckX {
         } catch { $null = $_ }
         Start-Sleep -Seconds 2
         $waited += 2
-        Write-Host "." -NoNewline
+        if ($waited % 10 -eq 0) {
+            Write-Host "`r  ${waited}s / ${maxWait}s ..." -NoNewline
+        }
     }
+    Write-Host "`r                          `r" -NoNewline
     Write-Host ""
 
     if ($waited -ge $maxWait) {
@@ -1093,7 +1099,7 @@ function Update-DockerClawDeckX {
 
     Write-Host ""
     Write-C "Waiting for ClawDeckX to become ready... / 等待 ClawDeckX 就绪..." Cyan
-    $maxWait = 60
+    $maxWait = 150
     $waited = 0
     while ($waited -lt $maxWait) {
         try {
@@ -1102,8 +1108,11 @@ function Update-DockerClawDeckX {
         } catch { $null = $_ }
         Start-Sleep -Seconds 2
         $waited += 2
-        Write-Host "." -NoNewline
+        if ($waited % 10 -eq 0) {
+            Write-Host "`r  ${waited}s / ${maxWait}s ..." -NoNewline
+        }
     }
+    Write-Host "`r                          `r" -NoNewline
     Write-Host ""
 
     $newVer = try { (& docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' $containerName 2>$null) } catch { "unknown" }
