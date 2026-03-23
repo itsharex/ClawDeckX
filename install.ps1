@@ -1016,10 +1016,21 @@ function Install-DockerClawDeckX {
     Write-Host ""
     Print-AccessUrls
     Write-Host ""
-    Write-C "� Data volumes / 数据卷：" Cyan
-    Write-Host "  ClawDeckX data: /data/clawdeckx  -> volume: $InstanceName-data" -ForegroundColor Green
-    Write-Host "  OpenClaw data:  /data/openclaw   -> volume: $InstanceName-openclaw-data" -ForegroundColor Green
-    Write-Host "  Runtime:        /data/runtime    -> volume: $InstanceName-runtime" -ForegroundColor Green
+    # Resolve actual volume names from compose file
+    $volData = "$InstanceName-data"
+    $volOpenclaw = "$InstanceName-openclaw-data"
+    $volRuntime = "$InstanceName-runtime"
+    try {
+        $cf = Get-Content $ComposeFile -Raw
+        if ($cf -match 'clawdeckx-data:\s*\n\s*name:\s*(\S+)') { $volData = $Matches[1] }
+        if ($cf -match 'clawdeckx-openclaw-data:\s*\n\s*name:\s*(\S+)') { $volOpenclaw = $Matches[1] }
+        if ($cf -match 'clawdeckx-runtime:\s*\n\s*name:\s*(\S+)') { $volRuntime = $Matches[1] }
+    } catch { }
+    $volBase = "/var/lib/docker/volumes"
+    Write-C "📂 Data volumes (host path) / 数据卷（宿主机路径）：" Cyan
+    Write-Host "  ClawDeckX:  $volBase/$volData/_data" -ForegroundColor Green
+    Write-Host "  OpenClaw:   $volBase/$volOpenclaw/_data" -ForegroundColor Green
+    Write-Host "  Runtime:    $volBase/$volRuntime/_data" -ForegroundColor Green
     Write-Host ""
     Write-C "�🔐 First-time login / 首次登录：" Yellow
     Write-Host "  View initial admin credentials in container logs:"

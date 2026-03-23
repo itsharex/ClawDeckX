@@ -781,10 +781,16 @@ docker_install() {
     echo ""
     print_access_urls "$PORT"
     echo ""
-    echo -e "${CYAN}📂 Data volumes / 数据卷：${NC}"
-    echo -e "  ClawDeckX data: ${GREEN}/data/clawdeckx${NC}  → volume: ${instance_name}-data"
-    echo -e "  OpenClaw data:  ${GREEN}/data/openclaw${NC}   → volume: ${instance_name}-openclaw-data"
-    echo -e "  Runtime:        ${GREEN}/data/runtime${NC}    → volume: ${instance_name}-runtime"
+    # Resolve actual volume names from compose file (handles custom instance renaming)
+    local vol_data vol_openclaw vol_runtime
+    vol_data=$(grep -A1 'clawdeckx-data:' "$compose_file" 2>/dev/null | grep 'name:' | awk '{print $2}' || echo "${instance_name}-data")
+    vol_openclaw=$(grep -A1 'clawdeckx-openclaw-data:' "$compose_file" 2>/dev/null | grep 'name:' | awk '{print $2}' || echo "${instance_name}-openclaw-data")
+    vol_runtime=$(grep -A1 'clawdeckx-runtime:' "$compose_file" 2>/dev/null | grep 'name:' | awk '{print $2}' || echo "${instance_name}-runtime")
+    local vol_base="/var/lib/docker/volumes"
+    echo -e "${CYAN}📂 Data volumes (host path) / 数据卷（宿主机路径）：${NC}"
+    echo -e "  ClawDeckX:  ${GREEN}${vol_base}/${vol_data}/_data${NC}"
+    echo -e "  OpenClaw:   ${GREEN}${vol_base}/${vol_openclaw}/_data${NC}"
+    echo -e "  Runtime:    ${GREEN}${vol_base}/${vol_runtime}/_data${NC}"
     echo ""
     echo -e "${YELLOW}🔐 First-time login / 首次登录：${NC}"
     echo -e "  View initial admin credentials in container logs:"
