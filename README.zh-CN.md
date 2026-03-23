@@ -158,6 +158,9 @@ irm https://raw.githubusercontent.com/ClawDeckX/ClawDeckX/main/install.ps1 | iex
 > [!TIP]
 > 忘记登录凭据时，可运行 `ClawDeckX list-users` 查看用户名，然后使用 `ClawDeckX reset-password <用户名> <新密码>` 重置密码。
 
+> [!WARNING]
+> 连续输错密码 **5 次**，账户将被自动锁定 **15 分钟**。锁定期间即使输入正确密码也无法登录。如需立即解锁，可运行 `ClawDeckX unlock <用户名>`。
+
 > [!IMPORTANT]
 > 首次运行时，若未指定 `--user` 和 `--pass`，系统会自动生成管理员账户，凭据将打印到控制台。请在登录后立即前往系统设置或账户安全页面修改用户名和密码。
 

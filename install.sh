@@ -626,8 +626,19 @@ docker_install() {
     if detect_network; then
         NEED_MIRROR=true
         DOCKER_MIRROR="${DOCKER_MIRRORS[0]}"
-        echo -e "${YELLOW}⚠ Docker Hub appears unreachable (likely China mainland network)"
-        echo -e "  Docker Hub 似乎不可访问（可能为中国大陆网络）${NC}"
+        echo ""
+        echo -e "${YELLOW}┌─────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${YELLOW}│  ⚠  ACCELERATED DOWNLOAD MODE / 加速下载模式已启用      │${NC}"
+        echo -e "${YELLOW}├─────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${YELLOW}│  Docker Hub unreachable — using mirror proxies.         │${NC}"
+        echo -e "${YELLOW}│  Docker Hub 不可访问 — 已启用镜像加速代理。             │${NC}"
+        echo -e "${YELLOW}│                                                         │${NC}"
+        echo -e "${YELLOW}│  Mirror / 镜像站: ${CYAN}${DOCKER_MIRROR}${YELLOW}              │${NC}"
+        echo -e "${YELLOW}│  GitHub Proxy / 代理: ${CYAN}ghfast.top${YELLOW}                       │${NC}"
+        echo -e "${YELLOW}│                                                         │${NC}"
+        echo -e "${YELLOW}│  If download fails, the mirror site may be down.        │${NC}"
+        echo -e "${YELLOW}│  若下载失败，可能是加速站点不可用，请检查网络或换源。   │${NC}"
+        echo -e "${YELLOW}└─────────────────────────────────────────────────────────┘${NC}"
     else
         echo -e "${GREEN}✓ Direct network access OK / 网络直连正常${NC}"
     fi
@@ -863,8 +874,14 @@ docker_update() {
     if detect_network; then
         NEED_MIRROR=true
         DOCKER_MIRROR="${DOCKER_MIRRORS[0]}"
-        echo -e "${YELLOW}⚠ Docker Hub appears unreachable — using mirrors"
-        echo -e "  Docker Hub 不可访问 — 使用镜像加速器${NC}"
+        echo ""
+        echo -e "${YELLOW}┌─────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${YELLOW}│  ⚠  ACCELERATED DOWNLOAD MODE / 加速下载模式已启用      │${NC}"
+        echo -e "${YELLOW}├─────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${YELLOW}│  Mirror / 镜像站: ${CYAN}${DOCKER_MIRROR}${YELLOW}              │${NC}"
+        echo -e "${YELLOW}│  If download fails, the mirror site may be down.        │${NC}"
+        echo -e "${YELLOW}│  若下载失败，可能是加速站点不可用，请检查网络或换源。   │${NC}"
+        echo -e "${YELLOW}└─────────────────────────────────────────────────────────┘${NC}"
         configure_docker_mirror
         apply_image_mirror "$compose_file"
     else
@@ -1593,6 +1610,17 @@ update() {
         if detect_network; then
             NEED_MIRROR=true
         fi
+    fi
+    if [ "$NEED_MIRROR" = true ]; then
+        echo ""
+        echo -e "${YELLOW}┌─────────────────────────────────────────────────────────┐${NC}"
+        echo -e "${YELLOW}│  ⚠  ACCELERATED DOWNLOAD MODE / 加速下载模式已启用      │${NC}"
+        echo -e "${YELLOW}├─────────────────────────────────────────────────────────┤${NC}"
+        echo -e "${YELLOW}│  GitHub Proxy / 代理: ${CYAN}ghfast.top${YELLOW}                       │${NC}"
+        echo -e "${YELLOW}│  If download fails, the mirror site may be down.        │${NC}"
+        echo -e "${YELLOW}│  若下载失败，可能是加速站点不可用，请检查网络或换源。   │${NC}"
+        echo -e "${YELLOW}└─────────────────────────────────────────────────────────┘${NC}"
+        echo ""
     fi
 
     # Get download URL for update

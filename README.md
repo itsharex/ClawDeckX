@@ -172,6 +172,9 @@ Download from [Releases](https://github.com/ClawDeckX/ClawDeckX/releases). Singl
 > [!TIP]
 > **Forgot your credentials?** Run `ClawDeckX list-users` to find your username, then `ClawDeckX reset-password <username> <new_password>` to reset your password.
 
+> [!WARNING]
+> **Account lockout:** After **5** consecutive failed login attempts, the account is automatically locked for **15 minutes**. During this period, login is blocked even with the correct password. To unlock immediately, run `ClawDeckX unlock <username>`.
+
 > [!IMPORTANT]
 > **Security Reminder:** On first run, if no `--user` and `--pass` are provided, the auto-generated admin credentials will be printed to the console. Please change your username and password in the settings page immediately after logging in.
 

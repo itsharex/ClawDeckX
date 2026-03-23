@@ -874,8 +874,23 @@ function Install-DockerClawDeckX {
     if (-not (Test-NetworkDirect)) {
         $script:NEED_MIRROR = $true
         $script:DOCKER_MIRROR = $DOCKER_MIRRORS[0]
-        Write-C "⚠ Docker Hub appears unreachable (likely China mainland network)" Yellow
-        Write-C "  Docker Hub 似乎不可访问（可能为中国大陆网络）" Yellow
+        Write-Host ""
+        Write-C "┌─────────────────────────────────────────────────────────┐" Yellow
+        Write-C "│  ⚠  ACCELERATED DOWNLOAD MODE / 加速下载模式已启用      │" Yellow
+        Write-C "├─────────────────────────────────────────────────────────┤" Yellow
+        Write-C "│  Docker Hub unreachable — using mirror proxies.         │" Yellow
+        Write-C "│  Docker Hub 不可访问 — 已启用镜像加速代理。             │" Yellow
+        Write-C "│                                                         │" Yellow
+        Write-Host -NoNewline "│  Mirror / 镜像站: " -ForegroundColor Yellow
+        Write-Host -NoNewline "$($script:DOCKER_MIRROR)" -ForegroundColor Cyan
+        Write-Host "              │" -ForegroundColor Yellow
+        Write-Host -NoNewline "│  GitHub Proxy / 代理: " -ForegroundColor Yellow
+        Write-Host -NoNewline "ghfast.top" -ForegroundColor Cyan
+        Write-Host "                       │" -ForegroundColor Yellow
+        Write-C "│                                                         │" Yellow
+        Write-C "│  If download fails, the mirror site may be down.        │" Yellow
+        Write-C "│  若下载失败，可能是加速站点不可用，请检查网络或换源。   │" Yellow
+        Write-C "└─────────────────────────────────────────────────────────┘" Yellow
     } else {
         Write-C "✓ Direct network access OK / 网络直连正常" Green
     }
@@ -1081,8 +1096,16 @@ function Update-DockerClawDeckX {
     if (-not (Test-NetworkDirect)) {
         $script:NEED_MIRROR = $true
         $script:DOCKER_MIRROR = $DOCKER_MIRRORS[0]
-        Write-C "⚠ Docker Hub appears unreachable — using mirrors" Yellow
-        Write-C "  Docker Hub 不可访问 — 使用镜像加速器" Yellow
+        Write-Host ""
+        Write-C "┌─────────────────────────────────────────────────────────┐" Yellow
+        Write-C "│  ⚠  ACCELERATED DOWNLOAD MODE / 加速下载模式已启用      │" Yellow
+        Write-C "├─────────────────────────────────────────────────────────┤" Yellow
+        Write-Host -NoNewline "│  Mirror / 镜像站: " -ForegroundColor Yellow
+        Write-Host -NoNewline "$($script:DOCKER_MIRROR)" -ForegroundColor Cyan
+        Write-Host "              │" -ForegroundColor Yellow
+        Write-C "│  If download fails, the mirror site may be down.        │" Yellow
+        Write-C "│  若下载失败，可能是加速站点不可用，请检查网络或换源。   │" Yellow
+        Write-C "└─────────────────────────────────────────────────────────┘" Yellow
         Set-DockerMirror
         Set-ImageMirror $ComposeFile
     } else {
