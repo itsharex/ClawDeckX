@@ -112,8 +112,8 @@ func (h *WizardHandler) TestModel(w http.ResponseWriter, r *http.Request) {
 		req.APIKey = resolvedFromRef
 	}
 
-	// For existing provider configs loaded via config.get(redact=true), apiKey may
-	// arrive as a redacted placeholder. Resolve the real key via gateway config.get(redact=false).
+	// For existing provider configs, apiKey may arrive as a redacted placeholder.
+	// Resolve the real key via gateway config.get or local config.
 	if req.Provider != "ollama" && isRedactedAPIKey(req.APIKey) {
 		if realKey := h.resolveProviderAPIKeyViaGW(req.Provider); realKey != "" {
 			req.APIKey = strings.TrimSpace(h.resolveAPIKeyReference(realKey))
@@ -334,8 +334,8 @@ func (h *WizardHandler) DiscoverModels(w http.ResponseWriter, r *http.Request) {
 		req.APIKey = resolvedFromRef
 	}
 
-	// For existing provider configs loaded via config.get(redact=true), apiKey may
-	// arrive as a redacted placeholder. Resolve the real key via gateway config.get(redact=false).
+	// For existing provider configs, apiKey may arrive as a redacted placeholder.
+	// Resolve the real key via gateway config.get or local config.
 	if req.Provider != "ollama" && isRedactedAPIKey(req.APIKey) {
 		if realKey := h.resolveProviderAPIKeyViaGW(req.Provider); realKey != "" {
 			req.APIKey = strings.TrimSpace(h.resolveAPIKeyReference(realKey))
@@ -860,17 +860,15 @@ func readEnvFileValue(path, key string) string {
 }
 
 // resolveProviderAPIKeyViaGW fetches the real API key from a remote gateway
-// via the config.get RPC call (without redact). This covers the case where
+// via the config.get RPC call. This covers the case where
 // ClawDeckX is connected to a remote gateway and the local config file does
 // not contain the provider credentials.
 func (h *WizardHandler) resolveProviderAPIKeyViaGW(provider string) string {
 	if h.gwClient == nil {
 		return ""
 	}
-	// Request unredacted config to get real API keys
-	raw, err := h.gwClient.Request("config.get", map[string]interface{}{
-		"redact": false,
-	})
+	// Request config to get real API keys
+	raw, err := h.gwClient.Request("config.get", nil)
 	if err != nil {
 		return ""
 	}
@@ -1505,7 +1503,7 @@ func (h *WizardHandler) buildYuanbaoValidationConfig(req TestChannelRequest) map
 	config := map[string]interface{}{}
 
 	if h.gwClient != nil {
-		if raw, err := h.gwClient.Request("config.get", map[string]interface{}{"redact": false}); err == nil {
+		if raw, err := h.gwClient.Request("config.get", nil); err == nil {
 			var doc map[string]interface{}
 			if err := json.Unmarshal(raw, &doc); err == nil {
 				if cfg, ok := doc["config"].(map[string]interface{}); ok {
