@@ -1077,6 +1077,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     } else {
       loadSessions({ silent: true });
     }
+    // Subscribe to session list changes via gateway RPC
+    gwApi.sessionsSubscribe().catch(() => {});
     let timer: ReturnType<typeof setInterval> | null = setInterval(() => loadSessions({ silent: true }), 30000);
     const onVisibility = () => {
       if (document.hidden) {
@@ -1090,14 +1092,17 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      gwApi.sessionsUnsubscribe().catch(() => {});
       if (timer) clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gwReady]);
 
-  // Load chat history only when selected session changes.
-  // Also reset all streaming state to prevent stale run data from the previous session.
+  // Session-level message subscription: subscribe to the active session's
+  // message stream and unsubscribe from the previous one on switch.
+  // This narrows the WS event flow to only the relevant session.
+  const prevSessionKeyRef = useRef<string | null>(null);
   useEffect(() => {
     // Clean up streaming state from the previous session
     if (streamRafRef.current !== null) { clearTimeout(streamRafRef.current); streamRafRef.current = null; }
@@ -1110,8 +1115,21 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     pendingRunRef.current = null;
 
     if (gwReady && hasStartedInitialDetectingRef.current) {
+      // Unsubscribe from previous session's message stream
+      if (prevSessionKeyRef.current && prevSessionKeyRef.current !== sessionKey) {
+        gwApi.sessionsMessagesUnsubscribe(prevSessionKeyRef.current).catch(() => {});
+      }
+      // Subscribe to the new session's message stream
+      gwApi.sessionsMessagesSubscribe(sessionKey).catch(() => {});
+      prevSessionKeyRef.current = sessionKey;
       loadHistory();
     }
+    return () => {
+      // Cleanup: unsubscribe when unmounting or session changes
+      if (sessionKey) {
+        gwApi.sessionsMessagesUnsubscribe(sessionKey).catch(() => {});
+      }
+    };
   }, [gwReady, sessionKey, loadHistory]);
 
   // Fallback reconciliation: if stream events are missing, poll history until assistant reply appears.
@@ -1196,6 +1214,30 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setRunPhase('idle');
     }, 3000);
     return () => clearTimeout(timer);
+  }, [runPhase]);
+
+  // Stuck 'waiting' phase recovery: if no first delta arrives within 90s after send,
+  // auto-abort the run and recover. This covers cases where the gateway accepted the
+  // request but the model/provider never responds.
+  useEffect(() => {
+    if (runPhase !== 'waiting') return;
+    const timer = setInterval(() => {
+      const pending = pendingRunRef.current;
+      if (pending && Date.now() - pending.startedAt > 90000) {
+        console.warn('[sessions] waiting phase idle (90s), auto-aborting and recovering');
+        // Attempt to abort the stuck run
+        gwApi.sessionsAbort(sessionKeyRef.current, pending.runId).catch(() => {});
+        if (streamRafRef.current !== null) { clearTimeout(streamRafRef.current); streamRafRef.current = null; }
+        streamTextRef.current = '';
+        setStream(null);
+        setRunId(null);
+        setRunPhase('idle');
+        pendingRunRef.current = null;
+        setError(cRef.current.sendTimeout || 'Request timed out — no response from model');
+        loadHistoryRef.current?.({ silent: true });
+      }
+    }, 5000);
+    return () => clearInterval(timer);
   }, [runPhase]);
 
   // Stuck 'running' phase recovery: if runPhase is 'running' (tool execution) for over
@@ -1527,7 +1569,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     } catch (err: any) {
       clearStream();
       setRunPhase('error');
-      const errMsg = err?.message || cRef.current.error;
+      let errMsg = err?.message || cRef.current.error;
       setError(errMsg);
       // Mark the optimistic user message as failed (instead of appending an error assistant msg)
       setMessages(prev => {
@@ -1543,6 +1585,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       pendingRunRef.current = null;
       // If gateway connection just flapped, force a status refresh sooner.
       gwRefresh();
+      // Async skill bins diagnostic: check if a missing skill binary caused the error
+      if (typeof errMsg === 'string' && /skill|tool|binary|not found/i.test(errMsg)) {
+        gwApi.skillsBins().then(bins => {
+          if (Array.isArray(bins) && bins.length === 0) {
+            setError(prev => prev ? `${prev}  (no skill binaries installed — run "openclaw skills install")` : prev);
+          }
+        }).catch(() => {});
+      }
     } finally {
       sendingRef.current = false;
       setSending(false);
@@ -1571,6 +1621,16 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setTimeout(() => setCopiedIdx(null), 2000);
     }).catch(() => {});
   }, []);
+
+  // TTS speak assistant message
+  const handleSpeak = useCallback((text: string) => {
+    if (!gwReady || !text) return;
+    // Truncate very long messages to avoid overloading TTS
+    const truncated = text.length > 2000 ? text.slice(0, 2000) + '…' : text;
+    gwApi.talkSpeak(truncated, { sessionKey }).catch(() => {
+      toast('warning', cRef.current.ttsError || 'TTS unavailable');
+    });
+  }, [gwReady, sessionKey, toast]);
 
   // Inject system message (via REST proxy)
   const handleInject = useCallback(async () => {
@@ -2677,6 +2737,13 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                           className="flex items-center gap-0.5 text-[11px] text-slate-400 hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-[12px]">{copiedIdx === idx ? 'check' : 'content_copy'}</span>
                           {copiedIdx === idx ? c.copied : c.copy}
+                        </button>
+                      )}
+                      {!isUser && text && (
+                        <button onClick={() => handleSpeak(text)}
+                          className="flex items-center gap-0.5 text-[11px] text-slate-400 hover:text-sky-500 transition-colors"
+                          title={c.ttsSpeak || 'Speak'}>
+                          <span className="material-symbols-outlined text-[12px]">volume_up</span>
                         </button>
                       )}
                       {/* Resend for user messages */}

@@ -992,6 +992,8 @@ export const gwApi = {
     rpc('skills.update', params),
   skillsInstall: (params: { name: string; installId: string; timeoutMs?: number }) =>
     rpc<{ ok: boolean; message: string }>('skills.install', params),
+  skillsBins: () =>
+    rpc<Array<{ name: string; path: string; version?: string }>>('skills.bins'),
   // Config
   configGet: () => rpc('config.get'),
   configSet: (key: string, value: any) => {
@@ -1104,6 +1106,10 @@ export const gwApi = {
   // Talk mode
   talkMode: (enabled: boolean, phase?: string) =>
     rpc('talk.mode', { enabled, ...(phase ? { phase } : {}) }),
+  talkConfig: () =>
+    rpc<{ enabled?: boolean; provider?: string; voice?: string; speed?: number; language?: string }>('talk.config'),
+  talkSpeak: (text: string, params?: { voice?: string; provider?: string; sessionKey?: string }) =>
+    rpc('talk.speak', { text, ...params }),
   // Browser
   browserRequest: (method: string, path: string) =>
     rpc('browser.request', { method, path }),
