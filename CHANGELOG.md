@@ -17,6 +17,7 @@ _2026-03-24_
 
 ### 🐛 Bug Fixes / 修复
 
+- harden runtime apt install in prebuilt image
 - decouple docker install version from compat
 - add builder diagnostics for prebuilt image
 - remove openclaw-cn compat and harden binary detection
@@ -510,6 +511,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 

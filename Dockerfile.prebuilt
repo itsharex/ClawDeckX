@@ -60,17 +60,30 @@ RUN set -eux; \
 # ── Stage 2: Runtime (no build tools) ──
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl git gnupg && \
-    mkdir -p /etc/apt/keyrings && \
+RUN set -eux; \
+    retry_apt() { \
+      for attempt in 1 2 3; do \
+        if "$@"; then \
+          return 0; \
+        fi; \
+        echo "==> apt command failed on attempt ${attempt}: $*"; \
+        dpkg --configure -a || true; \
+        apt-get -f install -y || true; \
+        sleep 5; \
+      done; \
+      return 1; \
+    }; \
+    retry_apt apt-get update; \
+    retry_apt apt-get install -y --no-install-recommends ca-certificates curl git gnupg; \
+    mkdir -p /etc/apt/keyrings; \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg; \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
-        > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        nodejs python3 make tzdata tini wget jq ripgrep procps lsof ffmpeg golang && \
-    rm -rf /var/lib/apt/lists/* && \
+        > /etc/apt/sources.list.d/nodesource.list; \
+    retry_apt apt-get update; \
+    retry_apt apt-get install -y --no-install-recommends nodejs python3 make tzdata tini wget jq ripgrep procps lsof; \
+    retry_apt apt-get install -y --no-install-recommends ffmpeg golang; \
+    rm -rf /var/lib/apt/lists/*; \
     # Install uv via official standalone installer (no pip needed)
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
