@@ -973,9 +973,9 @@ export const gwApi = {
   sessionsUnsubscribe: () =>
     rpc('sessions.unsubscribe', {}),
   sessionsMessagesSubscribe: (key: string) =>
-    rpc('sessions.messages.subscribe', { sessionKey: key }),
+    rpc('sessions.messages.subscribe', { key }),
   sessionsMessagesUnsubscribe: (key: string) =>
-    rpc('sessions.messages.unsubscribe', { sessionKey: key }),
+    rpc('sessions.messages.unsubscribe', { key }),
   gatewayIdentity: () =>
     rpc('gateway.identity.get', {}),
   sessionsUsageTimeseries: (key: string, params?: { startDate?: string; endDate?: string; granularity?: string }) =>
