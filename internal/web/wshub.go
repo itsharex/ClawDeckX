@@ -165,7 +165,7 @@ func (h *WSHub) HandleWS(jwtSecret string) http.HandlerFunc {
 		// Auth via query param or HttpOnly cookie
 		tokenStr := r.URL.Query().Get("token")
 		if tokenStr == "" {
-			if cookie, err := r.Cookie("claw_token"); err == nil {
+			if cookie, err := r.Cookie(CookieName()); err == nil {
 				tokenStr = cookie.Value
 			}
 		}

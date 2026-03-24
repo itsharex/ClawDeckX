@@ -87,6 +87,9 @@ func RunServe(args []string) int {
 		}
 	}
 
+	// Init port-specific cookie name to prevent cross-instance collision
+	web.InitCookieName(cfg.Server.Port)
+
 	// Init logger
 	logger.Init(cfg.Log)
 	logger.Log.Info().Str("version", version.Version).Msg(i18n.T(i18n.MsgLogServeStarting))

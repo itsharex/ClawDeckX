@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ClawDeckX/internal/database"
+	"ClawDeckX/internal/web"
 	"ClawDeckX/internal/webconfig"
 
 	"github.com/glebarez/sqlite"
@@ -334,11 +335,11 @@ func TestLogout(t *testing.T) {
 	cookies := w.Result().Cookies()
 	var found bool
 	for _, c := range cookies {
-		if c.Name == "claw_token" {
+		if c.Name == web.CookieName() {
 			found = true
 			assert.Equal(t, "", c.Value)
 			assert.True(t, c.MaxAge < 0)
 		}
 	}
-	assert.True(t, found, "claw_token cookie should be set")
+	assert.True(t, found, "auth cookie should be set")
 }

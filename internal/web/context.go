@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"sync"
 )
 
 type contextKey string
@@ -15,6 +17,27 @@ const (
 	usernameKey  contextKey = "username"
 	roleKey      contextKey = "role"
 )
+
+// cookieName is the port-specific cookie name used for auth tokens.
+// This prevents cross-instance cookie collision when multiple ClawDeckX
+// instances run on the same host with different ports.
+var (
+	cookieName     string = "claw_token"
+	cookieNameOnce sync.Once
+)
+
+// InitCookieName sets the auth cookie name based on the server port.
+// Must be called once during startup before any auth middleware runs.
+func InitCookieName(port int) {
+	cookieNameOnce.Do(func() {
+		cookieName = fmt.Sprintf("claw_token_%d", port)
+	})
+}
+
+// CookieName returns the current auth cookie name.
+func CookieName() string {
+	return cookieName
+}
 
 func SetRequestID(r *http.Request, id string) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), requestIDKey, id))

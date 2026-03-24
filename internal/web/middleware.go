@@ -293,7 +293,7 @@ func AuthMiddleware(jwtSecret string, skipPaths []string) func(http.Handler) htt
 				tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
 			} else {
 				// Try cookie
-				if cookie, err := r.Cookie("claw_token"); err == nil {
+				if cookie, err := r.Cookie(CookieName()); err == nil {
 					tokenStr = cookie.Value
 				}
 			}
