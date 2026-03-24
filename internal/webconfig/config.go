@@ -159,12 +159,18 @@ func Load() (Config, error) {
 	path := ConfigPath()
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "[webconfig] ERROR reading config file %s: %v\n", path, err)
 		return cfg, err
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "[webconfig] config file not found: %s (will use defaults)\n", path)
 	}
 	if err == nil && len(strings.TrimSpace(string(data))) > 0 {
 		if err := json.Unmarshal(data, &cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "[webconfig] ERROR parsing config file %s: %v\n", path, err)
 			return Default(), err
 		}
+		fmt.Fprintf(os.Stderr, "[webconfig] loaded config from %s (jwt_secret present: %v)\n", path, cfg.Auth.JWTSecret != "")
 	}
 	if cfg.Server.SkillHubDataURL == "" {
 		if cfg.SkillHub != nil && strings.TrimSpace(cfg.SkillHub.DataURL) != "" {
