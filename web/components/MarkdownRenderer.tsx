@@ -58,12 +58,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, str
   }, [content]);
 
   if (renderError) {
-    return <pre className="text-[11px] whitespace-pre-wrap break-words text-text">{content}</pre>;
+    return <pre className="text-[13px] whitespace-pre-wrap break-words text-text">{content}</pre>;
   }
 
   try {
     return (
-      <div className={`markdown-body text-[11px] leading-relaxed ${className ?? ''}`}>
+      <div className={`markdown-body text-[13px] leading-relaxed ${className ?? ''}`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -74,7 +74,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, str
                 return <CodeBlock code={codeStr} copyLabel={labels?.copyCode} />;
               }
               return (
-                <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-white/10 dark:text-[var(--color-neon-cyan)]/80 text-[10px] font-mono">
+                <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-white/10 dark:text-[var(--color-neon-cyan)]/80 text-[11px] font-mono">
                   {children}
                 </code>
               );
@@ -90,7 +90,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, str
             table({ children }) {
               return (
                 <div className="overflow-x-auto my-2 sci-card rounded-lg">
-                  <table className="min-w-full text-[10px] border-collapse border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+                  <table className="min-w-full text-[11px] border-collapse border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
                     {children}
                   </table>
                 </div>
@@ -115,6 +115,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, str
     );
   } catch {
     setRenderError(true);
-    return <pre className="text-[11px] whitespace-pre-wrap break-words text-text">{content}</pre>;
+    return <pre className="text-[13px] whitespace-pre-wrap break-words text-text">{content}</pre>;
   }
 };

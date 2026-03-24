@@ -474,12 +474,13 @@ const Desktop: React.FC<DesktopProps> = ({
 
       {/* 桌面图标区域 — macOS 风格可拖拽 */}
       <main className="flex-1 w-full relative overflow-hidden">
-        {wallpaper?.imageEnabled && (
-          <div className="absolute top-12 end-3 z-[9000] flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 dark:bg-black/30 backdrop-blur-xl px-2 py-2 shadow-lg opacity-40 hover:opacity-100 transition-opacity duration-300">
+        {wallpaper?.imageEnabled && !dockAutoHide && (
+          <div className="group/wp absolute top-12 end-3 z-[9000] flex items-center rounded-2xl border border-white/10 bg-black/20 dark:bg-black/30 backdrop-blur-xl shadow-lg opacity-40 hover:opacity-100 transition-all duration-300 px-2 py-2">
+            <div className="flex items-center gap-2 max-w-0 group-hover/wp:max-w-[300px] overflow-hidden transition-all duration-300 ease-in-out">
             <button
               onClick={() => handleWallpaperHistoryStep(-1)}
               disabled={!getWallpaperHistoryUrl(wallpaper, -1)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
               title={(t as any).pref?.wallpaperPrevious || 'Previous wallpaper'}
             >
               <span className="material-symbols-outlined text-[18px]">navigate_before</span>
@@ -487,14 +488,14 @@ const Desktop: React.FC<DesktopProps> = ({
             <button
               onClick={handleWallpaperRefresh}
               disabled={wallpaperBusy || wallpaper.lockEnabled}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
               title={wallpaperBusy ? ((t as any).pref?.wallpaperRefreshing || 'Refreshing wallpaper') : ((t as any).pref?.wallpaperRefresh || 'Refresh')}
             >
               <span className={`material-symbols-outlined text-[18px] transition-transform duration-500 ${wallpaperRefreshing ? 'animate-spin' : ''}`}>refresh</span>
             </button>
             <button
               onClick={handleWallpaperFavoriteToggle}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
               title={isFavoriteWallpaper ? ((t as any).pref?.wallpaperRemoveFavorite || 'Remove from favorites') : ((t as any).pref?.wallpaperAddFavorite || 'Add to favorites')}
             >
               <span className="material-symbols-outlined text-[18px]">{isFavoriteWallpaper ? 'favorite' : 'favorite_border'}</span>
@@ -502,28 +503,29 @@ const Desktop: React.FC<DesktopProps> = ({
             <button
               onClick={() => handleWallpaperHistoryStep(1)}
               disabled={!getWallpaperHistoryUrl(wallpaper, 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10 disabled:opacity-40"
               title={(t as any).pref?.wallpaperNext || 'Next wallpaper'}
             >
               <span className="material-symbols-outlined text-[18px]">navigate_next</span>
             </button>
             <button
               onClick={handleWallpaperLockToggle}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
               title={wallpaper.lockEnabled ? ((t as any).pref?.wallpaperUnlock || 'Unlock wallpaper rotation') : ((t as any).pref?.wallpaperLock || 'Lock current wallpaper')}
             >
               <span className="material-symbols-outlined text-[18px]">{wallpaper.lockEnabled ? 'lock' : 'lock_open'}</span>
             </button>
+            </div>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'settings', tab: 'preferences' } }))}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/90 hover:bg-white/10"
               title={(t as any).pref?.title || 'Settings'}
             >
               <span className="material-symbols-outlined text-[18px]">settings</span>
             </button>
           </div>
         )}
-        {wallpaper?.imageEnabled && wallpaperRefreshing && (
+        {wallpaper?.imageEnabled && wallpaperRefreshing && !dockAutoHide && (
           <div className="absolute top-[6.5rem] end-3 z-[9000] flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 backdrop-blur-xl px-3 py-1.5 shadow-lg animate-[fade-in_0.2s_ease-out]">
             <span className="material-symbols-outlined text-[14px] text-white/80 animate-spin">progress_activity</span>
             <span className="text-[11px] text-white/80 whitespace-nowrap">

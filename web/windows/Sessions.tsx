@@ -2379,7 +2379,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         {/* Collapsible Session Override Settings Panel */}
         {settingsOpen && activeSession && (
           <div className="shrink-0 border-b border-slate-200/60 dark:border-white/[0.06] bg-slate-50/50 dark:bg-white/[0.015] px-4 py-3 animate-fade-in">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-6xl mx-auto">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px] text-primary">tune</span>
@@ -2480,7 +2480,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
         {/* Messages */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar neon-scrollbar relative">
-          <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
+          <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4">
             {/* Session history cleared notice */}
             {sessionNotice && (
               <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 mb-4">
@@ -2660,7 +2660,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   ) : (
                     <div className="w-7 md:w-8 shrink-0" />
                   )}
-                  <div className={`max-w-[85%] md:max-w-[75%] group ${isUser ? 'ms-auto' : ''}`}
+                  <div className={`max-w-[90%] md:max-w-[90%] group ${isUser ? 'ms-auto' : ''}`}
                     onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, idx, text, isUser }); }}>
                     <div className={`p-3.5 md:p-4 shadow-sm border backdrop-blur-sm select-text cursor-text ${isUser
                       ? `bg-primary/95 text-white border-primary/30 ${showAvatar ? 'rounded-2xl rounded-se-sm' : isLast ? 'rounded-2xl rounded-se-sm' : 'rounded-xl rounded-se-sm'}`
@@ -2840,7 +2840,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 <div className="w-7 h-7 md:w-8 md:h-8 shrink-0 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mt-0.5">
                   <span className="material-symbols-outlined text-[14px] md:text-[16px]">build</span>
                 </div>
-                <div className="max-w-[85%] md:max-w-[75%] space-y-1.5">
+                <div className="max-w-[90%] md:max-w-[90%] space-y-1.5">
                   {Array.from(liveToolCalls.values()).map(tc => (
                     <div key={tc.toolCallId} className={`rounded-xl border overflow-hidden transition-all ${
                       tc.phase === 'done'
@@ -2891,7 +2891,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 <div className="w-7 h-7 md:w-8 md:h-8 shrink-0 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mt-0.5">
                   <span className="material-symbols-outlined text-[14px] md:text-[16px]">smart_toy</span>
                 </div>
-                <div className="max-w-[85%] md:max-w-[75%]">
+                <div className="max-w-[90%] md:max-w-[90%]">
                   <div className="p-3.5 md:p-4 rounded-2xl rounded-ss-sm shadow-sm border bg-white dark:bg-white/[0.03] border-slate-200 dark:border-white/[0.06]">
                     {stream ? (
                       <MarkdownMessageBoundary content={stream} streaming copyCodeLabel={c.copyCode} />
