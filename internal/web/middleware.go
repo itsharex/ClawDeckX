@@ -302,6 +302,7 @@ func AuthMiddleware(jwtSecret string, skipPaths []string) func(http.Handler) htt
 				if authAuditFn != nil {
 					authAuditFn("auth.failed", "failed", "no token: "+path, r.RemoteAddr, "", 0)
 				}
+				logger.Auth.Warn().Str("path", path).Str("ip", r.RemoteAddr).Msg("auth failed: no token (cookie missing)")
 				Fail(w, r, ErrUnauthorized.Code, ErrUnauthorized.Message, ErrUnauthorized.HTTPStatus)
 				return
 			}
@@ -311,6 +312,8 @@ func AuthMiddleware(jwtSecret string, skipPaths []string) func(http.Handler) htt
 				if authAuditFn != nil {
 					authAuditFn("auth.failed", "failed", "invalid/expired token: "+path, r.RemoteAddr, "", 0)
 				}
+				logger.Auth.Warn().Err(err).Str("path", path).Str("ip", r.RemoteAddr).
+					Int("tokenLen", len(tokenStr)).Msg("auth failed: token validation error")
 				Fail(w, r, ErrTokenExpired.Code, ErrTokenExpired.Message, ErrTokenExpired.HTTPStatus)
 				return
 			}
