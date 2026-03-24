@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "Required channel credentials missing — please fill in before saving",
   "wizCredentialRequired": "आवश्यक फ़ील्ड भरे नहीं गए",
   "wizWarnDmAllowlistEmpty": "DM नीति \"अनुमति सूची\" है लेकिन Allow From खाली है — सभी DM चुपचाप छोड़ दिए जाएंगे",
-  "wizWarnGroupAllowlistEmpty": "समूह नीति \"अनुमति सूची\" है लेकिन Allow From / Group Allow From खाली हैं — सभी समूह संदेश चुपचाप छोड़ दिए जाएंगे"
+  "wizWarnGroupAllowlistEmpty": "समूह नीति \"अनुमति सूची\" है लेकिन Allow From / Group Allow From खाली हैं — सभी समूह संदेश चुपचाप छोड़ दिए जाएंगे",
+  "mcpServers": "MCP सर्वर",
+  "mcpServersDesc": "नामित MCP सर्वर परिभाषाएं। प्रत्येक कुंजी command, args और env फ़ील्ड के साथ एक सर्वर नाम है।"
 }

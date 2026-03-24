@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "频道必填凭证未填写 — 请补充后再保存",
   "wizCredentialRequired": "必填字段未填写",
   "wizWarnDmAllowlistEmpty": "私聊策略为「白名单」但 Allow From 为空 — 所有私聊消息将被静默丢弃",
-  "wizWarnGroupAllowlistEmpty": "群聊策略为「白名单」但 Allow From / Group Allow From 均为空 — 所有群聊消息将被静默丢弃"
+  "wizWarnGroupAllowlistEmpty": "群聊策略为「白名单」但 Allow From / Group Allow From 均为空 — 所有群聊消息将被静默丢弃",
+  "mcpServers": "MCP 服务器",
+  "mcpServersDesc": "命名的 MCP 服务器定义。每个键是一个服务器名称，包含 command、args 和 env 字段。"
 }

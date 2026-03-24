@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "Erforderliche Kanal-Anmeldedaten fehlen — bitte vor dem Speichern ausfüllen",
   "wizCredentialRequired": "Pflichtfelder fehlen",
   "wizWarnDmAllowlistEmpty": "DM-Richtlinie ist \"Allowlist\", aber Allow From ist leer — alle DMs werden stillschweigend verworfen",
-  "wizWarnGroupAllowlistEmpty": "Gruppenrichtlinie ist \"Allowlist\", aber Allow From / Group Allow From sind leer — alle Gruppennachrichten werden stillschweigend verworfen"
+  "wizWarnGroupAllowlistEmpty": "Gruppenrichtlinie ist \"Allowlist\", aber Allow From / Group Allow From sind leer — alle Gruppennachrichten werden stillschweigend verworfen",
+  "mcpServers": "MCP-Server",
+  "mcpServersDesc": "Benannte MCP-Server-Definitionen. Jeder Schlüssel ist ein Servername mit command-, args- und env-Feldern."
 }

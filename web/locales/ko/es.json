@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "채널 필수 인증 정보가 누락되었습니다 — 입력 후 저장해주세요",
   "wizCredentialRequired": "필수 항목이 비어 있습니다",
   "wizWarnDmAllowlistEmpty": "DM 정책이 \"허용 목록\"이지만 Allow From이 비어 있습니다 — 모든 DM이 무시됩니다",
-  "wizWarnGroupAllowlistEmpty": "그룹 정책이 \"허용 목록\"이지만 Allow From / Group Allow From이 비어 있습니다 — 모든 그룹 메시지가 무시됩니다"
+  "wizWarnGroupAllowlistEmpty": "그룹 정책이 \"허용 목록\"이지만 Allow From / Group Allow From이 비어 있습니다 — 모든 그룹 메시지가 무시됩니다",
+  "mcpServers": "MCP 서버",
+  "mcpServersDesc": "명명된 MCP 서버 정의. 각 키는 command, args, env 필드를 가진 서버 이름입니다."
 }

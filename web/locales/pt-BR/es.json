@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "Credenciais de canal obrigatórias ausentes — preencha antes de salvar",
   "wizCredentialRequired": "Campos obrigatórios não preenchidos",
   "wizWarnDmAllowlistEmpty": "Política de DM é \"Lista de permissão\" mas Allow From está vazio — todas as DMs serão descartadas silenciosamente",
-  "wizWarnGroupAllowlistEmpty": "Política de grupo é \"Lista de permissão\" mas Allow From / Group Allow From estão vazios — todas as mensagens de grupo serão descartadas silenciosamente"
+  "wizWarnGroupAllowlistEmpty": "Política de grupo é \"Lista de permissão\" mas Allow From / Group Allow From estão vazios — todas as mensagens de grupo serão descartadas silenciosamente",
+  "mcpServers": "Servidores MCP",
+  "mcpServersDesc": "Definições de servidores MCP nomeados. Cada chave é um nome de servidor com campos command, args e env."
 }

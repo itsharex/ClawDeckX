@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { SectionProps } from '../sectionTypes';
 import { ConfigSection, TextField, SelectField, SwitchField, KeyValueField, NumberField, ArrayField } from '../fields';
 import { getTranslation } from '../../../locales';
@@ -11,6 +11,23 @@ export const MiscSection: React.FC<SectionProps> = ({ setField, getField, delete
   const tip = (key: string) => getTooltip(key, language);
   const gg = (p: string[]) => getField(['gateway', ...p]);
   const gs = (p: string[], v: any) => setField(['gateway', ...p], v);
+
+  const mcpVal = getField(['mcpServers']) || {};
+  const [mcpDraft, setMcpDraft] = useState(() => JSON.stringify(mcpVal, null, 2));
+  const [mcpError, setMcpError] = useState('');
+  const applyMcp = useCallback(() => {
+    try {
+      const parsed = JSON.parse(mcpDraft);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        setMcpError(es.mcpMustBeObject || 'Must be a JSON object');
+        return;
+      }
+      setField(['mcpServers'], parsed);
+      setMcpError('');
+    } catch (e: any) {
+      setMcpError(e.message || 'Invalid JSON');
+    }
+  }, [mcpDraft, setField, es]);
 
   const UPDATE_CHANNEL_OPTIONS = useMemo(() => [
     { value: 'stable', label: es.optStable }, { value: 'beta', label: es.optBeta }, { value: 'dev', label: es.optDev },
@@ -49,6 +66,24 @@ export const MiscSection: React.FC<SectionProps> = ({ setField, getField, delete
         <TextField label={es.cuiRoot} tooltip={tip('gateway.controlUi.root')} value={gg(['controlUi', 'root']) || ''} onChange={v => gs(['controlUi', 'root'], v)} />
         <ArrayField label={es.allowedOrigins} tooltip={tip('gateway.controlUi.allowedOrigins')} value={gg(['controlUi', 'allowedOrigins']) || []} onChange={v => gs(['controlUi', 'allowedOrigins'], v)} placeholder={es.phHttps} />
         <SwitchField label={es.cuiAllowInsecureAuth} tooltip={tip('gateway.controlUi.allowInsecureAuth')} value={gg(['controlUi', 'allowInsecureAuth']) === true} onChange={v => gs(['controlUi', 'allowInsecureAuth'], v)} />
+      </ConfigSection>
+
+      {/* MCP Servers */}
+      <ConfigSection title={es.mcpServers || 'MCP Servers'} icon="hub" iconColor="text-violet-500" defaultOpen={false}>
+        <div className="space-y-2">
+          <p className="text-[10px] text-slate-500 dark:text-white/40">{es.mcpServersDesc || 'Named MCP server definitions. Each key is a server name with command, args, and env fields.'}</p>
+          <textarea
+            value={mcpDraft}
+            onChange={e => { setMcpDraft(e.target.value); setMcpError(''); }}
+            rows={8}
+            spellCheck={false}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 text-[11px] font-mono text-slate-800 dark:text-white/80 outline-none focus:border-primary/50 resize-y"
+          />
+          {mcpError && <p className="text-[10px] text-red-500">{mcpError}</p>}
+          <button onClick={applyMcp} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+            {es.apply || 'Apply'}
+          </button>
+        </div>
       </ConfigSection>
 
       {/* Env */}

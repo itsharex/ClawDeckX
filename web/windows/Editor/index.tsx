@@ -90,7 +90,7 @@ const SECTIONS: SectionDef[] = [
   { id: 'live', icon: 'cloud_sync', labelKey: 'secLive', color: 'text-amber-500',
     searchKeys: ['liveConfig', 'viewSchema', 'liveLoadConfig', 'configApplyBtn', 'configPatchBtn', 'configSetTitle', 'configSetDesc', 'wizardTitle', 'wizardStart'] },
   { id: 'misc', icon: 'tune', labelKey: 'secMisc', color: 'text-slate-500',
-    searchKeys: ['updateConfig', 'updateChannel', 'checkOnStart', 'autoUpdateEnabled', 'uiConfig', 'assistantName', 'assistantAvatar', 'seamColor', 'controlUi', 'basePath', 'allowedOrigins', 'cliConfig', 'cliTaglineMode', 'shellEnvEnabled', 'envVars', 'discovery'] },
+    searchKeys: ['updateConfig', 'updateChannel', 'checkOnStart', 'autoUpdateEnabled', 'uiConfig', 'assistantName', 'assistantAvatar', 'seamColor', 'controlUi', 'basePath', 'allowedOrigins', 'cliConfig', 'cliTaglineMode', 'shellEnvEnabled', 'envVars', 'discovery', 'mcpServers', 'MCP'] },
   { id: 'unmapped', icon: 'new_releases', labelKey: 'secUnmapped', color: 'text-amber-500' },
   { id: 'json', icon: 'data_object', labelKey: 'secJson', color: 'text-slate-400' },
 ];

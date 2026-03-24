@@ -597,7 +597,6 @@
   "optPairing": "Pairing",
   "optOpen": "Open",
   "optClosed": "Closed",
-  "optAllowlist": "Allowlist",
   "optDisabled": "Disabled",
   "optPartial": "Partial Stream",
   "optFull": "Full Stream",
@@ -1424,5 +1423,7 @@
   "saveCredentialMissing": "Required channel credentials missing — please fill in before saving",
   "wizCredentialRequired": "Required fields missing",
   "wizWarnDmAllowlistEmpty": "DM policy is \"Allowlist\" but Allow From is empty — all DMs will be silently dropped",
-  "wizWarnGroupAllowlistEmpty": "Group policy is \"Allowlist\" but Allow From / Group Allow From are both empty — all group messages will be silently dropped"
+  "wizWarnGroupAllowlistEmpty": "Group policy is \"Allowlist\" but Allow From / Group Allow From are both empty — all group messages will be silently dropped",
+  "mcpServers": "MCP Servers",
+  "mcpServersDesc": "Named MCP server definitions. Each key is a server name with command, args, and env fields."
 }

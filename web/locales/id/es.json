@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "Kredensial channel wajib belum diisi — harap lengkapi sebelum menyimpan",
   "wizCredentialRequired": "Kolom wajib belum diisi",
   "wizWarnDmAllowlistEmpty": "Kebijakan DM \"Daftar Izin\" tetapi Allow From kosong — semua DM akan diabaikan",
-  "wizWarnGroupAllowlistEmpty": "Kebijakan grup \"Daftar Izin\" tetapi Allow From / Group Allow From kosong — semua pesan grup akan diabaikan"
+  "wizWarnGroupAllowlistEmpty": "Kebijakan grup \"Daftar Izin\" tetapi Allow From / Group Allow From kosong — semua pesan grup akan diabaikan",
+  "mcpServers": "Server MCP",
+  "mcpServersDesc": "Definisi server MCP bernama. Setiap kunci adalah nama server dengan field command, args, dan env."
 }

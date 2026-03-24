@@ -1423,5 +1423,7 @@
   "saveCredentialMissing": "Отсутствуют обязательные учётные данные канала — заполните перед сохранением",
   "wizCredentialRequired": "Обязательные поля не заполнены",
   "wizWarnDmAllowlistEmpty": "Политика ЛС — \"Список разрешённых\", но Allow From пуст — все ЛС будут молча отброшены",
-  "wizWarnGroupAllowlistEmpty": "Групповая политика — \"Список разрешённых\", но Allow From / Group Allow From пусты — все групповые сообщения будут молча отброшены"
+  "wizWarnGroupAllowlistEmpty": "Групповая политика — \"Список разрешённых\", но Allow From / Group Allow From пусты — все групповые сообщения будут молча отброшены",
+  "mcpServers": "Серверы MCP",
+  "mcpServersDesc": "Именованные определения серверов MCP. Каждый ключ  имя сервера с полями command, args и env."
 }

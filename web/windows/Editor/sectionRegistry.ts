@@ -16,7 +16,8 @@
 // Gateway + discovery + web
 const GATEWAY_KEYS = [
   'gateway.port', 'gateway.mode', 'gateway.bind', 'gateway.customBindHost',
-  'gateway.channelHealthCheckMinutes', 'gateway.allowRealIpFallback',
+  'gateway.channelHealthCheckMinutes', 'gateway.channelStaleEventThresholdMinutes',
+  'gateway.channelMaxRestartsPerHour', 'gateway.allowRealIpFallback',
   'gateway.auth.*',
   'gateway.tailscale.*',
   'gateway.tls.*',
@@ -114,6 +115,8 @@ const MISC_KEYS = [
   'cli.*',
   // Internal/meta keys — not user-facing, suppress from unmapped
   'meta.*', 'wizard.*', '$schema',
+  // MCP
+  'mcpServers.*',
   // Remaining top-level sections with wildcard coverage
   'secrets.*', 'acp.*', 'approvals.*', 'nodeHost.*',
 ];
