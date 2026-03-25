@@ -1257,6 +1257,21 @@ export const contextBudgetApi = {
     post<{ results: OptimizeResult[]; totalSaved: number }>('/api/v1/maintenance/context/optimize-all', { agentId }),
 };
 
+// ==================== 工作区记忆日志 ====================
+export interface MemoryFileEntry {
+  name: string;
+  size: number;
+  modTime: string;
+}
+export const workspaceMemoryApi = {
+  list: (agentId?: string) =>
+    get<{ files: MemoryFileEntry[]; dir: string }>(`/api/v1/workspace/memory${agentId ? `?agent=${agentId}` : ''}`),
+  getFile: (name: string, agentId?: string) =>
+    get<{ name: string; content: string }>(`/api/v1/workspace/memory/file?name=${encodeURIComponent(name)}${agentId ? `&agent=${agentId}` : ''}`),
+  setFile: (name: string, content: string, agentId?: string) =>
+    put<{ name: string; size: number }>(`/api/v1/workspace/memory/file?name=${encodeURIComponent(name)}${agentId ? `&agent=${agentId}` : ''}`, { content }),
+};
+
 // ==================== 多 Agent 部署 ====================
 export interface MultiAgentDeployRequest {
   template: {

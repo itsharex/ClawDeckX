@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Не удалось получить каналы",
     "skillsFetchFailed": "Не удалось получить навыки",
     "configFetchFailed": "Не удалось получить конфигурацию",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Журналы памяти",
+    "noMemoryLogs": "Ежедневных журналов памяти пока нет",
+    "memoryToday": "Сегодня",
+    "memoryYesterday": "Вчера",
+    "showMore": "Показать больше",
+    "showLess": "Показать меньше",
+    "memoryLogFiles": "{count} файлов",
+    "memoryLoadFailed": "Не удалось загрузить журналы памяти"
   }
 }

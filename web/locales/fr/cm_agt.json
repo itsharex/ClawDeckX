@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Échec de la récupération des canaux",
     "skillsFetchFailed": "Échec de la récupération des skills",
     "configFetchFailed": "Échec de la récupération de la config",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Journaux de mémoire",
+    "noMemoryLogs": "Pas encore de journaux de mémoire quotidiens",
+    "memoryToday": "Aujourd'hui",
+    "memoryYesterday": "Hier",
+    "showMore": "Afficher plus",
+    "showLess": "Afficher moins",
+    "memoryLogFiles": "{count} fichiers",
+    "memoryLoadFailed": "Échec du chargement des journaux de mémoire"
   }
 }

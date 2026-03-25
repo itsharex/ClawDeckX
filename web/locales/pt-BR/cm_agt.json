@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Falha ao buscar canais",
     "skillsFetchFailed": "Falha ao buscar skills",
     "configFetchFailed": "Falha ao buscar configuração",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Logs de Memória",
+    "noMemoryLogs": "Nenhum log de memória diário ainda",
+    "memoryToday": "Hoje",
+    "memoryYesterday": "Ontem",
+    "showMore": "Mostrar Mais",
+    "showLess": "Mostrar Menos",
+    "memoryLogFiles": "{count} arquivos",
+    "memoryLoadFailed": "Falha ao carregar logs de memória"
   }
 }

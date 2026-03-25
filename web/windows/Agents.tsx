@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi } from '../services/api';
+import { gwApi, workspaceMemoryApi, MemoryFileEntry } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { fmtAgoCompact } from '../utils/time';
 import { subscribeManagerWS } from '../services/manager-ws';
@@ -98,6 +98,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [fileSaving, setFileSaving] = useState(false);
   const [tplDropdown, setTplDropdown] = useState(false);
   const [fileTemplates, setFileTemplates] = useState<WorkspaceTemplate[]>([]);
+  const [memoryFiles, setMemoryFiles] = useState<MemoryFileEntry[]>([]);
+  const [memoryExpanded, setMemoryExpanded] = useState(true);
+  const [memoryShowCount, setMemoryShowCount] = useState(7);
   const [skillsReport, setSkillsReport] = useState<any>(null);
   const [skillsFilter, setSkillsFilter] = useState<'all' | 'ready' | 'notReady'>('ready');
   const [channelsSnap, setChannelsSnap] = useState<any>(null);
@@ -247,6 +250,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setSelectedId(id);
     setDrawerOpen(false);
     setFilesList(null); setFileActive(null); setFileContents({}); setFileDrafts({});
+    setMemoryFiles([]); setMemoryShowCount(7);
     setSkillsReport(null); setSkillsLoaded(false);
   }, [hasUnsavedDraft, confirm, a]);
 
@@ -263,6 +267,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setPanel(p);
     if (p === 'files' && selectedId) {
       gwApi.agentFilesList(selectedId).then(setFilesList).catch((err: any) => { toast('error', err?.message || a.fetchFailed); });
+      workspaceMemoryApi.list(selectedId).then(r => setMemoryFiles(r?.files || [])).catch(() => setMemoryFiles([]));
     }
     if (p === 'skills' && selectedId) {
       setSkillsLoaded(false);
@@ -283,25 +288,39 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setFileActive(name);
     if (fileContents[name] != null) return;
     try {
-      const res = await gwApi.agentFileGet(selectedId, name);
-      const content = (res as any)?.file?.content || '';
-      setFileContents(prev => ({ ...prev, [name]: content }));
-      setFileDrafts(prev => ({ ...prev, [name]: content }));
+      if (name.startsWith('memory/')) {
+        const realName = name.slice('memory/'.length);
+        const res = await workspaceMemoryApi.getFile(realName, selectedId);
+        const content = res?.content || '';
+        setFileContents(prev => ({ ...prev, [name]: content }));
+        setFileDrafts(prev => ({ ...prev, [name]: content }));
+      } else {
+        const res = await gwApi.agentFileGet(selectedId, name);
+        const content = (res as any)?.file?.content || '';
+        setFileContents(prev => ({ ...prev, [name]: content }));
+        setFileDrafts(prev => ({ ...prev, [name]: content }));
+      }
     } catch (err: any) { toast('error', err?.message || a.fileLoadFailed); }
   }, [selectedId, fileContents]);
 
   const saveFile = useCallback(async () => {
     if (!selectedId || !fileActive) return;
+    const displayName = fileActive.startsWith('memory/') ? fileActive.slice('memory/'.length) : fileActive;
     const confirmed = await confirm({
       title: a.confirmSave,
-      message: (a.confirmSaveMsg || '').replace('{file}', fileActive),
+      message: (a.confirmSaveMsg || '').replace('{file}', displayName),
       confirmText: a.save,
       cancelText: a.cancel,
     });
     if (!confirmed) return;
     setFileSaving(true);
     try {
-      await gwApi.agentFileSet(selectedId, fileActive, fileDrafts[fileActive] || '');
+      if (fileActive.startsWith('memory/')) {
+        const realName = fileActive.slice('memory/'.length);
+        await workspaceMemoryApi.setFile(realName, fileDrafts[fileActive] || '', selectedId);
+      } else {
+        await gwApi.agentFileSet(selectedId, fileActive, fileDrafts[fileActive] || '');
+      }
       setFileContents(prev => ({ ...prev, [fileActive!]: fileDrafts[fileActive!] || '' }));
     } catch (err: any) { toast('error', err?.message || a.fileSaveFailed); }
     setFileSaving(false);
@@ -806,7 +825,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                   <div className="w-full md:w-48 shrink-0 space-y-1">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-bold theme-text-muted uppercase">{a.coreFiles}</span>
-                      <button onClick={() => selectedId && gwApi.agentFilesList(selectedId).then(setFilesList).catch((err: any) => { toast('error', err?.message || a.fetchFailed); })} className="text-[10px] text-primary hover:underline">{a.refresh}</button>
+                      <button onClick={() => { if (selectedId) { gwApi.agentFilesList(selectedId).then(setFilesList).catch((err: any) => { toast('error', err?.message || a.fetchFailed); }); workspaceMemoryApi.list(selectedId).then(r => setMemoryFiles(r?.files || [])).catch(() => setMemoryFiles([])); } }} className="text-[10px] text-primary hover:underline">{a.refresh}</button>
                     </div>
                     {(filesList?.files || []).length === 0 ? (
                       <p className="text-[10px] text-slate-400 dark:text-white/20 py-4 text-center">{a.noFiles}</p>
@@ -819,6 +838,59 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         </p>
                       </button>
                     ))}
+
+                    {/* Memory Logs Section */}
+                    <div className="border-t border-slate-200/40 dark:border-white/[0.06] mt-3 pt-3">
+                      <button onClick={() => setMemoryExpanded(!memoryExpanded)}
+                        className="w-full flex items-center justify-between mb-2 group">
+                        <div className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[13px] text-primary/70 transition-transform" style={{ transform: memoryExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>expand_more</span>
+                          <span className="text-[10px] font-bold theme-text-muted uppercase">{a.memoryLogs || 'Memory Logs'}</span>
+                          {memoryFiles.length > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">{memoryFiles.length}</span>
+                          )}
+                        </div>
+                      </button>
+                      {memoryExpanded && (
+                        <>
+                          {memoryFiles.length === 0 ? (
+                            <p className="text-[10px] text-slate-400 dark:text-white/20 py-3 text-center">{a.noMemoryLogs || 'No daily memory logs yet'}</p>
+                          ) : (
+                            <>
+                              {memoryFiles.slice(0, memoryShowCount).map((mf: MemoryFileEntry) => {
+                                const key = 'memory/' + mf.name;
+                                const dateStr = mf.name.replace('.md', '');
+                                const today = new Date().toISOString().slice(0, 10);
+                                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                                const label = dateStr === today ? (a.memoryToday || 'Today') : dateStr === yesterday ? (a.memoryYesterday || 'Yesterday') : dateStr;
+                                return (
+                                  <button key={key} onClick={() => loadFile(key)}
+                                    className={`w-full text-start px-2.5 py-1.5 rounded-lg text-[10px] transition-all ${fileActive === key ? 'bg-primary/10 text-primary border border-primary/20' : 'hover:bg-slate-100 dark:hover:bg-white/[0.03] border border-transparent'}`}>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="material-symbols-outlined text-[12px] text-slate-400 dark:text-white/30">calendar_today</span>
+                                      <span className="font-mono font-semibold truncate">{label}</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 dark:text-white/30 mt-0.5 ps-5">{fmtBytes(mf.size)}</p>
+                                  </button>
+                                );
+                              })}
+                              {memoryFiles.length > memoryShowCount && (
+                                <button onClick={() => setMemoryShowCount(prev => prev + 30)}
+                                  className="w-full text-center text-[10px] text-primary hover:underline py-1.5">
+                                  {a.showMore || 'Show More'} ({memoryFiles.length - memoryShowCount})
+                                </button>
+                              )}
+                              {memoryShowCount > 7 && memoryFiles.length <= memoryShowCount && (
+                                <button onClick={() => setMemoryShowCount(7)}
+                                  className="w-full text-center text-[10px] text-slate-400 hover:text-primary hover:underline py-1.5">
+                                  {a.showLess || 'Show Less'}
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     {!fileActive ? (
@@ -826,7 +898,14 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     ) : (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-mono font-bold theme-text-secondary">{fileActive}</span>
+                          <span className="text-[11px] font-mono font-bold theme-text-secondary">
+                            {fileActive?.startsWith('memory/') ? (
+                              <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[13px] text-primary/60">calendar_today</span>
+                                {fileActive.slice('memory/'.length)}
+                              </span>
+                            ) : fileActive}
+                          </span>
                           <div className="flex gap-2">
                             {/* Template insert dropdown */}
                             {fileActive && fileTemplates.filter(t => t.targetFile === fileActive).length > 0 && (

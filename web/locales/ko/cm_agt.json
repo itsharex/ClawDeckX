@@ -137,6 +137,14 @@
     "channelsFetchFailed": "채널을 불러오지 못했습니다",
     "skillsFetchFailed": "스킬을 불러오지 못했습니다",
     "configFetchFailed": "설정을 가져오지 못했습니다",
-    "themeHint": "에이전트 성격 / 지시 사항..."
+    "themeHint": "에이전트 성격 / 지시 사항...",
+    "memoryLogs": "기억 로그",
+    "noMemoryLogs": "일별 기억 로그가 아직 없습니다",
+    "memoryToday": "오늘",
+    "memoryYesterday": "어제",
+    "showMore": "더 보기",
+    "showLess": "접기",
+    "memoryLogFiles": "{count}개 파일",
+    "memoryLoadFailed": "기억 로그를 불러오지 못했습니다"
   }
 }

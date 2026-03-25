@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Kanäle konnten nicht abgerufen werden",
     "skillsFetchFailed": "Skills konnten nicht abgerufen werden",
     "configFetchFailed": "Konfiguration konnte nicht abgerufen werden",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Gedächtnisprotokolle",
+    "noMemoryLogs": "Noch keine täglichen Gedächtnisprotokolle",
+    "memoryToday": "Heute",
+    "memoryYesterday": "Gestern",
+    "showMore": "Mehr anzeigen",
+    "showLess": "Weniger anzeigen",
+    "memoryLogFiles": "{count} Dateien",
+    "memoryLoadFailed": "Gedächtnisprotokolle konnten nicht geladen werden"
   }
 }

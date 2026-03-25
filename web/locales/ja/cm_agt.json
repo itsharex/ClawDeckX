@@ -137,6 +137,14 @@
     "channelsFetchFailed": "チャンネルの取得に失敗しました",
     "skillsFetchFailed": "スキルの取得に失敗しました",
     "configFetchFailed": "設定の取得に失敗しました",
-    "themeHint": "エージェントの性格 / 指示..."
+    "themeHint": "エージェントの性格 / 指示...",
+    "memoryLogs": "記憶ログ",
+    "noMemoryLogs": "日次記憶ログはまだありません",
+    "memoryToday": "今日",
+    "memoryYesterday": "昨日",
+    "showMore": "もっと見る",
+    "showLess": "折りたたむ",
+    "memoryLogFiles": "{count} ファイル",
+    "memoryLoadFailed": "記憶ログの読み込みに失敗しました"
   }
 }

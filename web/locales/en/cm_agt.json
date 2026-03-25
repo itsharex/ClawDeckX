@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Failed to fetch channels",
     "skillsFetchFailed": "Failed to fetch skills",
     "configFetchFailed": "Failed to fetch config",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Memory Logs",
+    "noMemoryLogs": "No daily memory logs yet",
+    "memoryToday": "Today",
+    "memoryYesterday": "Yesterday",
+    "showMore": "Show More",
+    "showLess": "Show Less",
+    "memoryLogFiles": "{count} files",
+    "memoryLoadFailed": "Failed to load memory logs"
   }
 }

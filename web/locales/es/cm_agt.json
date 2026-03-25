@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Error al obtener canales",
     "skillsFetchFailed": "Error al obtener skills",
     "configFetchFailed": "Error al obtener configuración",
-    "themeHint": "Personalidad del agente / instrucciones..."
+    "themeHint": "Personalidad del agente / instrucciones...",
+    "memoryLogs": "Registros de memoria",
+    "noMemoryLogs": "Aún no hay registros de memoria diarios",
+    "memoryToday": "Hoy",
+    "memoryYesterday": "Ayer",
+    "showMore": "Mostrar más",
+    "showLess": "Mostrar menos",
+    "memoryLogFiles": "{count} archivos",
+    "memoryLoadFailed": "Error al cargar registros de memoria"
   }
 }

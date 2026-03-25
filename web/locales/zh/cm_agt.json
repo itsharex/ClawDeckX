@@ -137,6 +137,14 @@
     "channelsFetchFailed": "获取频道失败",
     "skillsFetchFailed": "获取技能失败",
     "configFetchFailed": "获取配置失败",
-    "themeHint": "代理个性 / 指令描述..."
+    "themeHint": "代理个性 / 指令描述...",
+    "memoryLogs": "记忆日志",
+    "noMemoryLogs": "暂无每日记忆日志",
+    "memoryToday": "今天",
+    "memoryYesterday": "昨天",
+    "showMore": "显示更多",
+    "showLess": "收起",
+    "memoryLogFiles": "{count} 个文件",
+    "memoryLoadFailed": "加载记忆日志失败"
   }
 }

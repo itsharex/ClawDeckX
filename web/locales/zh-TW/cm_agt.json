@@ -137,6 +137,14 @@
     "channelsFetchFailed": "獲取頻道失敗",
     "skillsFetchFailed": "獲取技能失敗",
     "configFetchFailed": "獲取配置失敗",
-    "themeHint": "代理個性 / 指令描述..."
+    "themeHint": "代理個性 / 指令描述...",
+    "memoryLogs": "記憶日誌",
+    "noMemoryLogs": "尚無每日記憶日誌",
+    "memoryToday": "今天",
+    "memoryYesterday": "昨天",
+    "showMore": "顯示更多",
+    "showLess": "收起",
+    "memoryLogFiles": "{count} 個檔案",
+    "memoryLoadFailed": "載入記憶日誌失敗"
   }
 }

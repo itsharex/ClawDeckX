@@ -137,6 +137,14 @@
     "channelsFetchFailed": "Gagal mengambil channel",
     "skillsFetchFailed": "Gagal mengambil skill",
     "configFetchFailed": "Gagal mengambil konfigurasi",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Log Memori",
+    "noMemoryLogs": "Belum ada log memori harian",
+    "memoryToday": "Hari ini",
+    "memoryYesterday": "Kemarin",
+    "showMore": "Tampilkan Lebih",
+    "showLess": "Tampilkan Sedikit",
+    "memoryLogFiles": "{count} file",
+    "memoryLoadFailed": "Gagal memuat log memori"
   }
 }

@@ -137,6 +137,14 @@
     "channelsFetchFailed": "चैनल लाने में विफल",
     "skillsFetchFailed": "स्किल्स लाने में विफल",
     "configFetchFailed": "कॉन्फ़िग लाने में विफल",
-    "themeHint": "Agent personality / instructions..."
+    "themeHint": "Agent personality / instructions...",
+    "memoryLogs": "Memory Logs",
+    "noMemoryLogs": "No daily memory logs yet",
+    "memoryToday": "Today",
+    "memoryYesterday": "Yesterday",
+    "showMore": "Show More",
+    "showLess": "Show Less",
+    "memoryLogFiles": "{count} files",
+    "memoryLoadFailed": "Failed to load memory logs"
   }
 }
