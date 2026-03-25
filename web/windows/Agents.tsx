@@ -105,6 +105,13 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [skillsFilter, setSkillsFilter] = useState<'all' | 'ready' | 'notReady'>('ready');
   const [channelsSnap, setChannelsSnap] = useState<any>(null);
   const [channelsLoading, setChannelsLoading] = useState(false);
+  const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
+  const [bindingSaving, setBindingSaving] = useState(false);
+  const [a2aSaving, setA2aSaving] = useState(false);
+  const [a2aExpanded, setA2aExpanded] = useState(false);
+  const [a2aDraft, setA2aDraft] = useState<{ enabled: boolean; allow: string[]; ppTurns: number } | null>(null);
+  const [subSaving, setSubSaving] = useState(false);
+  const [subDraft, setSubDraft] = useState<string[] | null>(null);
   const [cronStatus, setCronStatus] = useState<any>(null);
   const [cronJobs, setCronJobs] = useState<any[]>([]);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
@@ -252,6 +259,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setFilesList(null); setFileActive(null); setFileContents({}); setFileDrafts({});
     setMemoryFiles([]); setMemoryShowCount(7);
     setSkillsReport(null); setSkillsLoaded(false);
+    setSubDraft(null);
   }, [hasUnsavedDraft, confirm, a]);
 
   const selectPanel = useCallback(async (p: Panel) => {
@@ -275,7 +283,11 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     }
     if (p === 'channels') {
       setChannelsLoading(true);
-      gwApi.channels().then(setChannelsSnap).catch((err: any) => { toast('error', err?.message || a.channelsFetchFailed); }).finally(() => setChannelsLoading(false));
+      setExpandedChannel(null);
+      Promise.all([
+        gwApi.channels().then(setChannelsSnap),
+        gwApi.configGet().then(setConfig),
+      ]).catch((err: any) => { toast('error', err?.message || a.channelsFetchFailed); }).finally(() => setChannelsLoading(false));
     }
     if (p === 'cron') {
       gwApi.cronStatus().then(setCronStatus).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
@@ -467,8 +479,6 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       // Patch config for model/default/emoji/theme if specified
       if (crudModel.trim() || crudDefault || crudEmoji.trim() || crudTheme.trim()) {
         try {
-          const cfgRaw = await gwApi.configGet() as any;
-          const baseHash = cfgRaw?.hash || cfgRaw?.baseHash || '';
           const agentEntry: Record<string, any> = { id: crudName.trim() };
           if (crudModel.trim()) agentEntry.model = crudModel.trim();
           if (crudDefault) agentEntry.default = true;
@@ -476,7 +486,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
           if (crudEmoji.trim()) identityPatch.emoji = crudEmoji.trim();
           if (crudTheme.trim()) identityPatch.theme = crudTheme.trim();
           if (Object.keys(identityPatch).length > 0) agentEntry.identity = identityPatch;
-          await gwApi.configPatch(JSON.stringify({ agents: { list: [agentEntry] } }), baseHash);
+          await gwApi.configSafePatch({ agents: { list: [agentEntry] } });
         } catch { /* best-effort */ }
       }
       setCrudMode(null);
@@ -505,10 +515,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       if (crudTheme.trim()) identityPatch.theme = crudTheme.trim();
       if (Object.keys(identityPatch).length > 0) agentEntry.identity = identityPatch;
       // Patch config via config.patch (merges agents.list by id)
-      const cfgRaw = await gwApi.configGet() as any;
-      const baseHash = cfgRaw?.hash || cfgRaw?.baseHash || '';
-      const patch = { agents: { list: [agentEntry] } };
-      await gwApi.configPatch(JSON.stringify(patch), baseHash);
+      await gwApi.configSafePatch({ agents: { list: [agentEntry] } });
       setCrudMode(null);
       loadAgents();
       loadConfig();
@@ -523,9 +530,48 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     if (!gwReady || crudBusy || !selectedId) return;
     setCrudBusy(true); setCrudError(null);
     try {
-      await gwApi.proxy('agents.delete', { agentId: selectedId, deleteFiles });
+      const deletedId = selectedId;
+      await gwApi.proxy('agents.delete', { agentId: deletedId, deleteFiles });
+      // Clean up stale agent ID from A2A allow list and subagent configs
+      try {
+        const cfg: any = await gwApi.configGet();
+        const parsed = cfg?.parsed || cfg?.config || cfg || {};
+        const patch: Record<string, any> = {};
+        let needsPatch = false;
+        // Remove deleted agent from tools.agentToAgent.allow
+        const a2aAllow: string[] = parsed?.tools?.agentToAgent?.allow;
+        if (Array.isArray(a2aAllow) && a2aAllow.includes(deletedId)) {
+          const cleaned = a2aAllow.filter(id => id !== deletedId);
+          patch.tools = { agentToAgent: { ...parsed.tools.agentToAgent, allow: cleaned.length > 0 ? cleaned : undefined } };
+          needsPatch = true;
+        }
+        // Remove deleted agent from all subagent allowAgents lists
+        const agentsList: any[] = parsed?.agents?.list;
+        if (Array.isArray(agentsList)) {
+          let listChanged = false;
+          const cleanedList = agentsList.map((entry: any) => {
+            const subs: string[] = entry?.subagents?.allowAgents;
+            if (!Array.isArray(subs) || !subs.includes(deletedId)) return entry;
+            listChanged = true;
+            const filtered = subs.filter(id => id !== deletedId);
+            const sub = { ...(entry.subagents || {}), allowAgents: filtered.length > 0 ? filtered : undefined };
+            if (!sub.allowAgents && !sub.model && !sub.thinking) return { ...entry, subagents: undefined };
+            return { ...entry, subagents: sub };
+          });
+          if (listChanged) {
+            patch.agents = { ...(parsed.agents || {}), list: cleanedList };
+            needsPatch = true;
+          }
+        }
+        if (needsPatch) {
+          const fresh = await gwApi.configSafePatch(patch);
+          setConfig(fresh);
+        }
+      } catch { /* best-effort cleanup */ }
       setDeleteConfirm(false);
       setSelectedId(null);
+      setA2aDraft(null);
+      setSubDraft(null);
       loadAgents();
     } catch (err: any) {
       setCrudError(aRef.current.deleteFailed + ': ' + (err?.message || ''));
@@ -560,6 +606,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       workspace: entry?.workspace || defaults?.workspace || a.workspaceDefault,
       skills: entry?.skills || null,
       tools: entry?.tools || toolsCfg,
+      subagents: entry?.subagents || null,
+      _entry: entry,
+      _defaults: defaults,
     };
   };
 
@@ -630,7 +679,6 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     { id: 'skills', icon: 'extension', label: a.skills },
     { id: 'channels', icon: 'forum', label: a.channels },
     { id: 'cron', icon: 'schedule', label: a.cron },
-    { id: 'run', icon: 'play_arrow', label: a.run },
     { id: 'scenarios', icon: 'auto_awesome', label: sc.title || 'Scenarios' },
     { id: 'collaboration', icon: 'groups', label: ma.title || 'Multi-Agent' },
   ];
@@ -701,6 +749,144 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
             );
           })}
         </div>
+
+        {/* Agent-to-Agent Communication — global setting (hidden if ≤1 agent) */}
+        {agents.length >= 2 && (() => {
+          const parsed = config?.parsed || config?.config || config || {};
+          const a2aCfg = parsed?.tools?.agentToAgent || {};
+          const serverEnabled = a2aCfg.enabled === true;
+          const serverAllow: string[] = Array.isArray(a2aCfg.allow) ? a2aCfg.allow : [];
+          const serverPPTurns: number = typeof parsed?.session?.agentToAgent?.maxPingPongTurns === 'number' ? parsed.session.agentToAgent.maxPingPongTurns : 5;
+          // Draft state: use draft if editing, otherwise mirror server
+          const a2aEnabled = a2aDraft?.enabled ?? serverEnabled;
+          const a2aAllow = a2aDraft?.allow ?? serverAllow;
+          const ppTurns = a2aDraft?.ppTurns ?? serverPPTurns;
+          const agentOpts = agents.filter((ag: any) => !a2aAllow.includes(ag.id)).map((ag: any) => ag.id);
+          const a2aDirty = a2aDraft !== null && (a2aDraft.enabled !== serverEnabled || JSON.stringify(a2aDraft.allow) !== JSON.stringify(serverAllow) || a2aDraft.ppTurns !== serverPPTurns);
+          const initDraft = () => a2aDraft || { enabled: serverEnabled, allow: [...serverAllow], ppTurns: serverPPTurns };
+
+          const saveA2aAll = async () => {
+            if (!a2aDraft) return;
+            setA2aSaving(true);
+            try {
+              const fresh = await gwApi.configSafePatch({
+                tools: { agentToAgent: { enabled: a2aDraft.enabled, allow: a2aDraft.allow.length > 0 ? a2aDraft.allow : undefined } },
+                session: { agentToAgent: { maxPingPongTurns: a2aDraft.ppTurns } },
+              });
+              setConfig(fresh);
+              setA2aDraft(null);
+              toast('success', a.a2aSaved || 'Saved');
+            } catch (err: any) {
+              toast('error', err?.message || a.a2aSaveFailed || 'Failed to save');
+            }
+            setA2aSaving(false);
+          };
+
+          return (
+            <div className="shrink-0 border-t border-slate-200/60 dark:border-white/[0.06] p-2.5">
+              <div className={`rounded-lg border p-2.5 transition-colors ${a2aEnabled ? 'bg-violet-50/50 dark:bg-violet-500/[0.03] border-violet-200/60 dark:border-violet-500/[0.12]' : 'bg-white/50 dark:bg-white/[0.02] border-slate-200/40 dark:border-white/[0.04]'}`}>
+                <button className="flex items-center justify-between w-full" onClick={() => setA2aExpanded(v => !v)}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`material-symbols-outlined text-[15px] ${a2aEnabled ? 'text-violet-500' : 'text-slate-400 dark:text-white/25'}`}>swap_horiz</span>
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-white/60 truncate">{a.a2aTitle || 'Agent-to-Agent'}</span>
+                    {a2aEnabled && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />}
+                  </div>
+                  <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/25 transition-transform ${a2aExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+
+                {a2aExpanded && (
+                  <div className="mt-2.5 pt-2 border-t border-slate-200/40 dark:border-white/[0.06] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase">{a.a2aEnabled || 'Enabled'}</span>
+                      <button
+                        onClick={() => { const d = initDraft(); setA2aDraft({ ...d, enabled: !d.enabled }); }}
+                        disabled={a2aSaving}
+                        className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${a2aEnabled ? 'bg-violet-500' : 'bg-slate-300 dark:bg-white/15'} ${a2aSaving ? 'opacity-50' : 'cursor-pointer'}`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow-sm transition-all ${a2aEnabled ? 'start-[17px]' : 'start-0.5'}`} />
+                      </button>
+                    </div>
+
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-wider mb-1.5">
+                        {a.a2aAllowTitle || 'Allowed Agents'}
+                      </p>
+
+                      {a2aAllow.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {a2aAllow.map(id => {
+                            const isWildcard = id === '*' || id.includes('*');
+                            return (
+                              <div key={id} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
+                                isWildcard
+                                  ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/20'
+                                  : 'bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20'
+                              }`}>
+                                {id}
+                                <button onClick={() => { const d = initDraft(); setA2aDraft({ ...d, allow: d.allow.filter(x => x !== id) }); }} disabled={a2aSaving}
+                                  className="p-0 opacity-40 hover:opacity-100 transition-opacity">
+                                  <span className="material-symbols-outlined text-[9px]">close</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <CustomSelect
+                        value=""
+                        onChange={(v: string) => { if (v && !a2aAllow.includes(v)) { const d = initDraft(); setA2aDraft({ ...d, allow: [...d.allow, v] }); } }}
+                        options={[
+                          { value: '', label: a.a2aAddAgent || 'Add agent…' },
+                          { value: '*', label: `* (${a.a2aAllWildcard || 'all agents'})` },
+                          ...agentOpts.map((id: string) => ({ value: id, label: id }))
+                        ]}
+                        className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60"
+                        disabled={a2aSaving}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-dashed border-slate-200/40 dark:border-white/[0.06]">
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase">{a.a2aPingPong || 'Ping-Pong'}</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { const d = initDraft(); if (d.ppTurns > 0) setA2aDraft({ ...d, ppTurns: d.ppTurns - 1 }); }} disabled={a2aSaving || ppTurns <= 0}
+                          className="w-5 h-5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-violet-100 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 transition-colors disabled:opacity-30 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[12px]">remove</span>
+                        </button>
+                        <span className="w-5 text-center text-[11px] font-bold text-violet-600 dark:text-violet-400">{ppTurns}</span>
+                        <button onClick={() => { const d = initDraft(); if (d.ppTurns < 5) setA2aDraft({ ...d, ppTurns: d.ppTurns + 1 }); }} disabled={a2aSaving || ppTurns >= 5}
+                          className="w-5 h-5 rounded bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-violet-100 dark:hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400 transition-colors disabled:opacity-30 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[12px]">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(a2aDirty || a2aSaving) && (
+                  <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-200/40 dark:border-white/[0.06]">
+                    <button
+                      onClick={saveA2aAll}
+                      disabled={a2aSaving || !a2aDirty}
+                      className="h-6 px-3 rounded-md text-[10px] font-bold text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                    >
+                      {a2aSaving
+                        ? <><span className="material-symbols-outlined text-[11px] animate-spin">progress_activity</span>{a.saving}</>
+                        : <><span className="material-symbols-outlined text-[11px]">save</span>{a.save}</>}
+                    </button>
+                    {a2aDirty && !a2aSaving && (
+                      <button
+                        onClick={() => setA2aDraft(null)}
+                        className="h-6 px-2 rounded-md text-[10px] font-bold text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                      >{a.reset}</button>
+                    )}
+                    {a2aDirty && <span className="text-[9px] text-amber-500 font-bold">{a.unsaved}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Main Content */}
@@ -827,6 +1013,123 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         <p className="text-[11px] text-slate-600 dark:text-white/50">{selected.identity.theme}</p>
                       </div>
                     )}
+
+                    {/* Subagents (per-agent task delegation, hidden if ≤1 agent) */}
+                    {agents.length >= 2 && (() => {
+                      const parsed = config?.parsed || config?.config || config || {};
+                      const cfg0 = parsed?.agents || {};
+                      const list: any[] = cfg0?.list || [];
+                      const entry = list.find((e: any) => e?.id === selected.id);
+                      const subCfg = entry?.subagents || {};
+                      const serverAllow: string[] = Array.isArray(subCfg.allowAgents) ? subCfg.allowAgents : [];
+                      const allowAgents = subDraft ?? serverAllow;
+                      const hasSubagents = allowAgents.length > 0;
+                      const otherAgents = agents.filter((ag: any) => ag.id !== selected.id && !allowAgents.includes(ag.id)).map((ag: any) => ag.id);
+                      const subDirty = subDraft !== null && JSON.stringify(subDraft) !== JSON.stringify(serverAllow);
+
+                      const saveSubAll = async () => {
+                        if (subDraft === null) return;
+                        setSubSaving(true);
+                        try {
+                          const updatedList = list.map((e: any) => {
+                            if (e?.id !== selected.id) return e;
+                            const sub = { ...(e.subagents || {}), allowAgents: subDraft.length > 0 ? subDraft : undefined };
+                            if (!sub.allowAgents && !sub.model && !sub.thinking) return { ...e, subagents: undefined };
+                            return { ...e, subagents: sub };
+                          });
+                          const fresh = await gwApi.configSafePatch({ agents: { ...cfg0, list: updatedList } });
+                          setConfig(fresh);
+                          setSubDraft(null);
+                          toast('success', a.subSaved || 'Saved');
+                        } catch (err: any) {
+                          toast('error', err?.message || a.subSaveFailed || 'Failed to save');
+                        }
+                        setSubSaving(false);
+                      };
+
+                      return (
+                        <div className={`rounded-xl border p-4 transition-colors ${hasSubagents ? 'bg-cyan-50/50 dark:bg-cyan-500/[0.03] border-cyan-200/60 dark:border-cyan-500/[0.12]' : 'bg-white dark:bg-white/[0.03] border-slate-200/60 dark:border-white/[0.06]'}`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className={`material-symbols-outlined text-[18px] ${hasSubagents ? 'text-cyan-500' : 'text-slate-400 dark:text-white/30'}`}>account_tree</span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-[11px] font-bold text-slate-700 dark:text-white/70 uppercase">{a.subTitle || 'Subagents'}</h4>
+                              <p className="text-[10px] text-slate-400 dark:text-white/30">{a.subDesc || 'Agents this agent can delegate tasks to via sessions_spawn'}</p>
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-slate-400 dark:text-white/25 mb-3">
+                            {hasSubagents
+                              ? (a.subAllowHint || 'This agent can spawn the listed agents as subagents')
+                              : (a.subAllowEmpty || 'No subagent delegation configured — this agent cannot spawn other agents')}
+                          </p>
+
+                          {hasSubagents && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {allowAgents.map(id => {
+                                const isWildcard = id === '*';
+                                const ag = agents.find((x: any) => x.id === id);
+                                return (
+                                  <div key={id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                                    isWildcard
+                                      ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/20'
+                                      : ag
+                                        ? 'bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200/60 dark:border-cyan-500/20'
+                                        : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40 border border-slate-200/60 dark:border-white/10'
+                                  }`}>
+                                    <span className="material-symbols-outlined text-[11px]">
+                                      {isWildcard ? 'select_all' : 'smart_toy'}
+                                    </span>
+                                    {id}
+                                    <button
+                                      onClick={() => setSubDraft((subDraft ?? [...serverAllow]).filter(x => x !== id))}
+                                      disabled={subSaving}
+                                      className="p-0 ms-0.5 opacity-40 hover:opacity-100 transition-opacity"
+                                    >
+                                      <span className="material-symbols-outlined text-[10px]">close</span>
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <CustomSelect
+                              value=""
+                              onChange={(v: string) => { if (v && !allowAgents.includes(v)) setSubDraft([...(subDraft ?? [...serverAllow]), v]); }}
+                              options={[
+                                { value: '', label: a.subAddAgent || 'Add subagent…' },
+                                { value: '*', label: `* (${a.a2aAllWildcard || 'all agents'})` },
+                                ...otherAgents.map((id: string) => ({ value: id, label: id }))
+                              ]}
+                              className="flex-1 h-8 px-2.5 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg text-[11px] text-slate-600 dark:text-white/60"
+                              disabled={subSaving}
+                            />
+                          </div>
+
+                          {(subDirty || subSaving) && (
+                            <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-200/40 dark:border-white/[0.06]">
+                              <button
+                                onClick={saveSubAll}
+                                disabled={subSaving || !subDirty}
+                                className="h-6 px-3 rounded-md text-[10px] font-bold text-white bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 transition-colors flex items-center gap-1"
+                              >
+                                {subSaving
+                                  ? <><span className="material-symbols-outlined text-[11px] animate-spin">progress_activity</span>{a.saving}</>
+                                  : <><span className="material-symbols-outlined text-[11px]">save</span>{a.save}</>}
+                              </button>
+                              {subDirty && !subSaving && (
+                                <button
+                                  onClick={() => setSubDraft(null)}
+                                  className="h-6 px-2 rounded-md text-[10px] font-bold text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                                >{a.reset}</button>
+                              )}
+                              {subDirty && <span className="text-[9px] text-amber-500 font-bold">{a.unsaved}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
@@ -1129,11 +1432,89 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     };
                   });
                 }
+
+                // Extract bindings + channel config from parsed config
+                const parsed = config?.parsed || config?.config || config || {};
+                const allBindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
+                const channelsCfg = parsed.channels || {};
+                const agentOpts = agents.map((ag: any) => ag.id);
+
+                const getChannelBindings = (chId: string) =>
+                  allBindings.filter((b: any) => b.match?.channel?.toLowerCase() === chId.toLowerCase());
+
+                const getChannelPeerBindings = (chId: string) =>
+                  allBindings.filter((b: any) =>
+                    b.match?.channel?.toLowerCase() === chId.toLowerCase() &&
+                    b.match?.peer?.id &&
+                    ['group', 'channel', 'direct'].includes(b.match?.peer?.kind?.toLowerCase() || '')
+                  );
+
+                const removePeerBinding = (chId: string, peerKind: string, peerId: string) => {
+                  const updated = allBindings.filter((b: any) => !(
+                    b.match?.channel?.toLowerCase() === chId.toLowerCase() &&
+                    b.match?.peer?.id?.toLowerCase() === peerId.toLowerCase() &&
+                    b.match?.peer?.kind?.toLowerCase() === peerKind.toLowerCase()
+                  ));
+                  saveBindings(updated);
+                };
+
+                const getChannelAccountIds = (chId: string, ch: any): string[] => {
+                  const cfg = channelsCfg[chId];
+                  if (cfg?.accounts && typeof cfg.accounts === 'object') return Object.keys(cfg.accounts);
+                  if (ch.accounts?.length > 0) return ch.accounts.map((acc: any) => acc.id || acc.accountId || 'default').filter(Boolean);
+                  return cfg?.enabled !== undefined ? ['default'] : [];
+                };
+
+                const getBoundAgent = (chId: string, accountId: string): string | null => {
+                  const bindings = getChannelBindings(chId);
+                  const exact = bindings.find((b: any) => b.match?.accountId?.toLowerCase() === accountId.toLowerCase());
+                  if (exact) return exact.agentId || null;
+                  const wild = bindings.find((b: any) => b.match?.accountId === '*');
+                  if (wild) return wild.agentId || null;
+                  return null;
+                };
+
+                const hasWildcardBinding = (chId: string): string | null => {
+                  const wild = getChannelBindings(chId).find((b: any) => b.match?.accountId === '*');
+                  return wild ? (wild.agentId || null) : null;
+                };
+
+                const saveBindings = async (newBindings: any[]) => {
+                  setBindingSaving(true);
+                  try {
+                    const fresh = await gwApi.configSafePatch({ bindings: newBindings });
+                    setConfig(fresh);
+                    toast('success', a.bindingSaved || 'Binding saved');
+                  } catch (err: any) {
+                    toast('error', err?.message || a.bindingSaveFailed || 'Failed to save binding');
+                  }
+                  setBindingSaving(false);
+                };
+
+                const setBinding = (chId: string, accountId: string, agentId: string | null) => {
+                  let updated = allBindings.filter((b: any) =>
+                    !(b.match?.channel?.toLowerCase() === chId.toLowerCase() && b.match?.accountId?.toLowerCase() === accountId.toLowerCase())
+                  );
+                  if (agentId) {
+                    updated.push({ agentId, match: { channel: chId, accountId } });
+                  }
+                  saveBindings(updated);
+                };
+
+                const refreshChannels = () => {
+                  setChannelsLoading(true);
+                  setExpandedChannel(null);
+                  Promise.all([
+                    gwApi.channels().then(setChannelsSnap),
+                    gwApi.configGet().then(setConfig),
+                  ]).catch((err: any) => { toast('error', err?.message || a.channelsFetchFailed); }).finally(() => setChannelsLoading(false));
+                };
+
                 return (
                   <div className="space-y-4 max-w-5xl">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.channels}</h3>
-                      <button onClick={() => { setChannelsLoading(true); gwApi.channels().then(setChannelsSnap).catch((err: any) => { toast('error', err?.message || a.channelsFetchFailed); }).finally(() => setChannelsLoading(false)); }}
+                      <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.channels} &amp; {a.bindings || 'Bindings'}</h3>
+                      <button onClick={refreshChannels}
                         className="text-[10px] text-primary hover:underline">{a.refresh}</button>
                     </div>
                     {channelsLoading ? (
@@ -1146,14 +1527,158 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           const id = ch.id || ch.name || `ch-${i}`;
                           const label = ch.label || ch.name || id;
                           const isConn = ch.connected || ch.running || ch.status === 'connected';
+                          const isExpanded = expandedChannel === id;
+                          const accountIds = getChannelAccountIds(id, ch);
+                          const chBindings = getChannelBindings(id);
+                          const wildcardAgent = hasWildcardBinding(id);
+                          // Current agent's binding for this channel (C view highlight)
+                          const currentAgentBound = selectedId ? chBindings.some((b: any) =>
+                            b.agentId === selectedId && (b.match?.accountId === '*' || accountIds.some(aid => b.match?.accountId?.toLowerCase() === aid.toLowerCase()))
+                          ) : false;
+
                           return (
-                            <div key={id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
-                              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isConn ? 'bg-mac-green animate-pulse' : 'bg-slate-300 dark:bg-white/10'}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-semibold text-slate-700 dark:text-white/60">{label}</p>
-                                <p className="text-[11px] text-slate-400 dark:text-white/35 font-mono">{id}</p>
+                            <div key={id} className={`rounded-xl border transition-all ${isExpanded
+                              ? 'border-primary/30 dark:border-primary/20 bg-white dark:bg-white/[0.03] shadow-sm'
+                              : currentAgentBound
+                                ? 'border-primary/20 dark:border-primary/10 bg-primary/[0.02] dark:bg-primary/[0.02]'
+                                : 'border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.03]'
+                            }`}>
+                              {/* Collapsed header — always visible */}
+                              <div
+                                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none hover:bg-slate-50/50 dark:hover:bg-white/[0.02] rounded-xl transition-colors"
+                                onClick={() => setExpandedChannel(isExpanded ? null : id)}
+                              >
+                                <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                                  chevron_right
+                                </span>
+                                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isConn ? 'bg-mac-green animate-pulse' : 'bg-slate-300 dark:bg-white/10'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-[11px] font-semibold text-slate-700 dark:text-white/60">{label}</p>
+                                    {currentAgentBound && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">{a.bindingThisAgent || 'This agent'}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 dark:text-white/30 font-mono">
+                                    {id}
+                                    {accountIds.length > 1 && <span className="ms-1.5 text-slate-400/60">· {(a.multiAccount || '{count} accounts').replace('{count}', String(accountIds.length))}</span>}
+                                    {accountIds.length === 1 && <span className="ms-1.5 text-slate-400/60">· {a.singleAccount || 'Single account'}</span>}
+                                  </p>
+                                </div>
+                                <span className={`text-[10px] font-bold shrink-0 ${isConn ? 'text-mac-green' : 'text-slate-400'}`}>{isConn ? a.connected : a.disabled}</span>
                               </div>
-                              <span className={`text-[11px] font-bold ${isConn ? 'text-mac-green' : 'text-slate-400'}`}>{isConn ? a.connected : a.disabled}</span>
+
+                              {/* Expanded: account-level binding management */}
+                              {isExpanded && (
+                                <div className="px-3 pb-3 pt-1 border-t border-slate-200/40 dark:border-white/[0.04] space-y-1.5">
+                                  {/* Wildcard binding row */}
+                                  <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-slate-50/50 dark:bg-white/[0.02]">
+                                    <span className="material-symbols-outlined text-[13px] text-amber-500">asterisk</span>
+                                    <span className="text-[10px] font-bold text-slate-600 dark:text-white/50 flex-1">{a.bindingWildcard || 'All (*)'}</span>
+                                    <CustomSelect
+                                      value={wildcardAgent || ''}
+                                      disabled={bindingSaving}
+                                      onChange={v => setBinding(id, '*', v || null)}
+                                      placeholder={a.bindingNone || 'Unbound'}
+                                      options={[
+                                        { value: '', label: a.bindingNone || 'Unbound' },
+                                        ...agentOpts.map(aid => ({ value: aid, label: aid === selectedId ? `${aid} ◀` : aid }))
+                                      ]}
+                                      className="text-[10px] border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-600 dark:text-white/60 min-w-[120px] h-7"
+                                    />
+                                  </div>
+
+                                  {/* Per-account binding rows */}
+                                  {accountIds.length > 0 && accountIds.map(accountId => {
+                                    const boundAgent = getBoundAgent(id, accountId);
+                                    // Find exact binding (not wildcard)
+                                    const exactBinding = chBindings.find((b: any) => b.match?.accountId?.toLowerCase() === accountId.toLowerCase());
+                                    const exactAgent = exactBinding?.agentId || '';
+                                    const isCurrentAgent = exactAgent === selectedId || (!exactAgent && wildcardAgent === selectedId);
+                                    return (
+                                      <div key={accountId} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${
+                                        isCurrentAgent ? 'bg-primary/[0.04] dark:bg-primary/[0.04]' : 'hover:bg-slate-50/50 dark:hover:bg-white/[0.02]'
+                                      }`}>
+                                        <span className="material-symbols-outlined text-[13px] text-slate-400 dark:text-white/25">person</span>
+                                        <span className={`text-[10px] font-mono flex-1 truncate ${
+                                          isCurrentAgent ? 'font-bold text-primary' : 'text-slate-600 dark:text-white/50'
+                                        }`}>{accountId}</span>
+                                        <CustomSelect
+                                          value={exactAgent}
+                                          disabled={bindingSaving}
+                                          onChange={v => setBinding(id, accountId, v || null)}
+                                          placeholder={wildcardAgent ? `← ${wildcardAgent} (*)` : (a.bindingNone || 'Unbound')}
+                                          options={[
+                                            { value: '', label: wildcardAgent ? `← ${wildcardAgent} (*)` : (a.bindingNone || 'Unbound') },
+                                            ...agentOpts.map(aid => ({ value: aid, label: aid === selectedId ? `${aid} ◀` : aid }))
+                                          ]}
+                                          className="text-[10px] border border-slate-200 dark:border-white/10 rounded-lg px-2 py-1 text-slate-600 dark:text-white/60 min-w-[120px] h-7"
+                                        />
+                                        {boundAgent && (
+                                          <span className={`text-[9px] px-1 py-0.5 rounded ${
+                                            boundAgent === selectedId ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/40'
+                                          } font-bold`}>
+                                            → {boundAgent}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+
+                                  {accountIds.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 dark:text-white/20 py-2 text-center italic">{a.noAccounts || 'No accounts'}</p>
+                                  )}
+
+                                  {/* Peer-level bindings (read-only + delete) */}
+                                  {(() => {
+                                    const peerBindings = getChannelPeerBindings(id);
+                                    if (peerBindings.length === 0) return null;
+                                    return (
+                                      <>
+                                        <div className="border-t border-dashed border-slate-200/40 dark:border-white/[0.06] mt-2 pt-2">
+                                          <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase tracking-wider mb-1.5 px-1">
+                                            {a.bindingPeerRules || 'Peer Rules'}
+                                          </p>
+                                          {peerBindings.map((b: any, bi: number) => {
+                                            const pk = b.match?.peer?.kind || 'group';
+                                            const pid = b.match?.peer?.id || '';
+                                            const agent = b.agentId || '';
+                                            const isThisAgent = agent === selectedId;
+                                            return (
+                                              <div key={`peer-${bi}`} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${
+                                                isThisAgent ? 'bg-primary/[0.04]' : 'hover:bg-slate-50/50 dark:hover:bg-white/[0.02]'
+                                              }`}>
+                                                <span className="material-symbols-outlined text-[13px] text-violet-400 dark:text-violet-400/70">
+                                                  {pk === 'group' ? 'group' : pk === 'direct' ? 'person' : 'tag'}
+                                                </span>
+                                                <span className="text-[10px] font-mono text-slate-500 dark:text-white/40 truncate flex-1" title={pid}>{pid}</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                  isThisAgent ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-white/40'
+                                                }`}>{agent}</span>
+                                                <button
+                                                  onClick={() => removePeerBinding(id, pk, pid)}
+                                                  disabled={bindingSaving}
+                                                  className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-300 hover:text-red-500 dark:text-white/15 dark:hover:text-red-400 transition-colors"
+                                                  title={a.bindingRemove || 'Remove'}
+                                                >
+                                                  <span className="material-symbols-outlined text-[12px]">close</span>
+                                                </button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+
+                                  {bindingSaving && (
+                                    <div className="flex items-center justify-center gap-1.5 py-1">
+                                      <span className="material-symbols-outlined text-[12px] text-primary animate-spin">progress_activity</span>
+                                      <span className="text-[10px] text-slate-400">{a.saving}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
