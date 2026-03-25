@@ -115,8 +115,8 @@ const MISC_KEYS = [
   'cli.*',
   // Internal/meta keys — not user-facing, suppress from unmapped
   'meta.*', 'wizard.*', '$schema',
-  // MCP
-  'mcpServers.*',
+  // MCP (covers both camelCase and PascalCase schema variants)
+  'mcpServers.*', 'mcp.*', 'MCP.*',
   // Remaining top-level sections with wildcard coverage
   'secrets.*', 'acp.*', 'approvals.*', 'nodeHost.*',
 ];
