@@ -337,6 +337,14 @@ func (h *PluginInstallHandler) Install(w http.ResponseWriter, r *http.Request) {
 
 	logger.Log.Info().Str("spec", spec).Str("output", output).Msg("plugin installed successfully")
 
+	// Auto-add to plugins.allow so the gateway loads it without manual config
+	pluginId := extractPluginIdFromSpec(spec)
+	if pluginId != "" {
+		if err := h.ensurePluginAllowed(pluginId); err != nil {
+			logger.Log.Warn().Err(err).Str("pluginId", pluginId).Msg("failed to auto-add plugin to allow list")
+		}
+	}
+
 	web.OK(w, r, map[string]interface{}{
 		"success": true,
 		"spec":    spec,
@@ -711,6 +719,11 @@ func (h *PluginInstallHandler) Uninstall(w http.ResponseWriter, r *http.Request)
 	output := stdout.String()
 	logger.Log.Info().Str("id", pluginId).Str("output", output).Msg("plugin uninstalled successfully")
 
+	// Auto-remove from plugins.allow
+	if err := h.removePluginAllowed(pluginId); err != nil {
+		logger.Log.Warn().Err(err).Str("pluginId", pluginId).Msg("failed to auto-remove plugin from allow list")
+	}
+
 	web.OK(w, r, map[string]interface{}{
 		"success": true,
 		"id":      pluginId,
@@ -914,4 +927,134 @@ func isValidNpmSpec(spec string) bool {
 
 func isLetter(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// ensurePluginAllowed adds pluginId to plugins.allow in the gateway config
+// so the plugin is trusted and loaded without the WARN about empty allow list.
+func (h *PluginInstallHandler) ensurePluginAllowed(pluginId string) error {
+	if h.gwClient == nil {
+		return nil
+	}
+
+	data, err := h.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 5*time.Second)
+	if err != nil {
+		return err
+	}
+
+	var respMap map[string]interface{}
+	if err := json.Unmarshal(data, &respMap); err != nil {
+		return err
+	}
+
+	configObj := respMap
+	if cfg, ok := respMap["config"].(map[string]interface{}); ok {
+		configObj = cfg
+	}
+
+	// Ensure plugins map exists
+	pluginsObj, _ := configObj["plugins"].(map[string]interface{})
+	if pluginsObj == nil {
+		pluginsObj = map[string]interface{}{}
+		configObj["plugins"] = pluginsObj
+	}
+
+	// Read current allow list
+	var allowList []string
+	if rawAllow, ok := pluginsObj["allow"].([]interface{}); ok {
+		for _, item := range rawAllow {
+			if s, ok := item.(string); ok {
+				allowList = append(allowList, s)
+			}
+		}
+	}
+
+	// Check if already allowed (exact match or wildcard)
+	for _, a := range allowList {
+		if a == pluginId || a == "*" {
+			return nil // already allowed
+		}
+	}
+
+	// Append and write back
+	allowList = append(allowList, pluginId)
+	pluginsObj["allow"] = allowList
+
+	cfgJSON, err := json.Marshal(configObj)
+	if err != nil {
+		return err
+	}
+	_, err = h.gwClient.RequestWithTimeout("config.set", map[string]interface{}{
+		"raw": string(cfgJSON),
+	}, 10*time.Second)
+	if err != nil {
+		return err
+	}
+
+	logger.Log.Info().Str("pluginId", pluginId).Msg("auto-added plugin to plugins.allow")
+	return nil
+}
+
+// removePluginAllowed removes pluginId from plugins.allow in the gateway config.
+func (h *PluginInstallHandler) removePluginAllowed(pluginId string) error {
+	if h.gwClient == nil {
+		return nil
+	}
+
+	data, err := h.gwClient.RequestWithTimeout("config.get", map[string]interface{}{}, 5*time.Second)
+	if err != nil {
+		return err
+	}
+
+	var respMap map[string]interface{}
+	if err := json.Unmarshal(data, &respMap); err != nil {
+		return err
+	}
+
+	configObj := respMap
+	if cfg, ok := respMap["config"].(map[string]interface{}); ok {
+		configObj = cfg
+	}
+
+	pluginsObj, _ := configObj["plugins"].(map[string]interface{})
+	if pluginsObj == nil {
+		return nil
+	}
+
+	rawAllow, ok := pluginsObj["allow"].([]interface{})
+	if !ok || len(rawAllow) == 0 {
+		return nil
+	}
+
+	// Filter out the plugin
+	var newAllow []string
+	removed := false
+	for _, item := range rawAllow {
+		if s, ok := item.(string); ok {
+			if s == pluginId {
+				removed = true
+				continue
+			}
+			newAllow = append(newAllow, s)
+		}
+	}
+
+	if !removed {
+		return nil
+	}
+
+	pluginsObj["allow"] = newAllow
+
+	cfgJSON, err := json.Marshal(configObj)
+	if err != nil {
+		return err
+	}
+	_, err = h.gwClient.RequestWithTimeout("config.set", map[string]interface{}{
+		"raw": string(cfgJSON),
+	}, 10*time.Second)
+	if err != nil {
+		return err
+	}
+
+	logger.Log.Info().Str("pluginId", pluginId).Msg("auto-removed plugin from plugins.allow")
+	return nil
 }
