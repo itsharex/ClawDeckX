@@ -270,19 +270,20 @@ func (i *Installer) InstallClawHub(ctx context.Context, registry string) error {
 }
 
 func (i *Installer) verifyOpenClawInstalled() bool {
-	info := detectTool("openclaw", "--version")
+	// Invalidate cached discovery so we pick up newly installed binaries
+	openclaw.InvalidateDiscoveryCache()
+	info := detectOpenClawWithFallback()
 	return info.Installed
 }
 
 func (i *Installer) InstallOpenClawWithConfig(ctx context.Context, config InstallConfig) error {
 	i.emitter.EmitStep("install", "install-openclaw", i18n.T(i18n.MsgInstallerInstallingPackage, map[string]interface{}{"Package": "OpenClaw"}), 30)
 
-	cmdName := "openclaw"
-
 	if i.env.Tools["npm"].Installed || detectTool("npm", "--version").Installed {
 		i.emitter.EmitLog(i18n.T(i18n.MsgInstallerNpmGlobalInstalling))
 		if err := i.installViaNpmWithOptions(ctx, "openclaw", config.Registry); err == nil {
-			if detectTool(cmdName, "--version").Installed {
+			openclaw.InvalidateDiscoveryCache()
+			if detectOpenClawWithFallback().Installed {
 				i.emitter.EmitLog(i18n.T(i18n.MsgInstallerOpenclawNpmSuccess))
 				return nil
 			}
@@ -437,7 +438,10 @@ func registryDisplayName(url string) string {
 func (i *Installer) ConfigureOpenClaw(ctx context.Context, config InstallConfig) error {
 	i.emitter.EmitStep("configure", "configure-openclaw", i18n.T(i18n.MsgInstallerConfiguringOpenclaw), 60)
 
-	cmdName := resolveOpenClawFullPath("openclaw")
+	cmdName := openclaw.ResolveOpenClawCmd()
+	if cmdName == "" {
+		cmdName = resolveOpenClawFullPath("openclaw")
+	}
 	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerUsingCommand, map[string]interface{}{"Command": cmdName}))
 
 	args := []string{
@@ -519,7 +523,10 @@ func (i *Installer) ensureDefaultConfig() error {
 		return nil
 	}
 
-	cmdName := resolveOpenClawFullPath("openclaw")
+	cmdName := openclaw.ResolveOpenClawCmd()
+	if cmdName == "" {
+		cmdName = resolveOpenClawFullPath("openclaw")
+	}
 	i.emitter.EmitLog(i18n.T(i18n.MsgInstallerGeneratingDefaultConfig, map[string]interface{}{"Command": cmdName}))
 
 	args := []string{
@@ -885,6 +892,8 @@ func (i *Installer) UpdateOpenClaw(ctx context.Context) error {
 		return fmt.Errorf("npm update failed: %w", err)
 	}
 
+	// Invalidate cached path so subsequent calls pick up the new binary
+	openclaw.InvalidateDiscoveryCache()
 	i.emitter.EmitLog("✓ OpenClaw updated successfully")
 	return nil
 }

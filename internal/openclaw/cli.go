@@ -15,10 +15,24 @@ import (
 )
 
 func ResolveOpenClawCmd() string {
-	if _, err := exec.LookPath("openclaw"); err == nil {
-		return "openclaw"
+	// Fast path: check cache first
+	discoveryMu.RLock()
+	if discoveryDone {
+		p := discoveredPath
+		discoveryMu.RUnlock()
+		return p
 	}
-	return ""
+	discoveryMu.RUnlock()
+
+	// Full discovery scan
+	discoveryMu.Lock()
+	defer discoveryMu.Unlock()
+	if discoveryDone {
+		return discoveredPath
+	}
+	discoveredPath = discoverOpenClawBinary()
+	discoveryDone = true
+	return discoveredPath
 }
 
 func IsOpenClawInstalled() bool {

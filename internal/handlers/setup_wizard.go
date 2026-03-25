@@ -450,6 +450,9 @@ func (h *SetupWizardHandler) Uninstall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Invalidate discovery cache so subsequent checks reflect uninstall
+	openclaw.InvalidateDiscoveryCache()
+
 	// Also clean up .openclaw config directory
 	stateDir := openclaw.ResolveStateDir()
 	if stateDir != "" {
