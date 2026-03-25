@@ -147,13 +147,8 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
                 if (p.done) {
                   toast('success', isDockerRuntime ? (sRef.current.runtimeUpdateOk || sRef.current.selfUpdateDone) : sRef.current.selfUpdateDone);
                   if (isDockerRuntime) {
-                    await loadRuntimeStatus();
-                    selfUpdateApi.info().then(d => setSelfUpdateVersion(d)).catch(() => { });
-                    setSelfUpdateInfo(prev => prev ? {
-                      ...prev,
-                      available: false,
-                      currentVersion: prev.latestVersion || prev.currentVersion,
-                    } : prev);
+                    // Server restarts with new binary after ~2s; reload to pick up the new frontend bundle + version
+                    setTimeout(() => window.location.reload(), 5000);
                   } else {
                     setTimeout(() => window.location.reload(), 3000);
                   }
@@ -171,7 +166,7 @@ const UpdateTab: React.FC<UpdateTabProps> = ({ s, language, inputCls, rowCls }) 
       toast('error', isDockerRuntime ? (sRef.current.runtimeUpdateFailed || sRef.current.selfUpdateFailed) : sRef.current.selfUpdateFailed);
     }
     setSelfUpdating(false);
-  }, [selfUpdateInfo, toast, isDockerRuntime, loadRuntimeStatus]);
+  }, [selfUpdateInfo, toast, isDockerRuntime]);
 
   // Release notes translation — cached in SQLite via backend
   const handleTranslateNotes = useCallback(async (text: string, product?: string, ver?: string) => {
