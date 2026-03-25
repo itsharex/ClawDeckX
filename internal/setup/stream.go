@@ -254,6 +254,13 @@ func (sc *StreamCommand) RunShell(ctx context.Context, command string) error {
 	if isWindows() {
 		utf8Prefix := "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; "
 		cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", utf8Prefix+command)
+		cmd.Env = append(os.Environ(),
+			"LANG=en_US.UTF-8",
+			"PYTHONIOENCODING=utf-8",
+			// Prevent npm lifecycle scripts from failing when PowerShell is the
+			// default shell — cmd.exe is universally compatible with npm scripts.
+			"NPM_CONFIG_SCRIPT_SHELL=cmd.exe",
+		)
 	} else {
 		cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	}

@@ -496,6 +496,9 @@ function Invoke-Uninstall {
 
     Stop-ClawDeckXProcess
 
+    # Remove PATH registration
+    Unregister-Path
+
     if (Test-Path $script:INSTALLED_LOCATION) {
         Remove-Item -Path $script:INSTALLED_LOCATION -Force
         Write-C "✓ Removed ClawDeckX / 已删除 ClawDeckX" Green
@@ -515,6 +518,85 @@ function Invoke-Uninstall {
     Write-Host "=======================================================" -ForegroundColor Green
     Write-C "✅ Uninstall complete! / 卸载完成！" Green
     Write-Host "=======================================================" -ForegroundColor Green
+}
+
+# -- PATH Registration ---------------------------------------------------------
+function Register-Path {
+    param([string]$BinaryPath)
+    $installDir = Split-Path $BinaryPath -Parent
+    # Resolve to absolute path
+    if (-not [System.IO.Path]::IsPathRooted($installDir)) {
+        $installDir = (Resolve-Path $installDir).Path
+    }
+
+    # Check if already in User PATH
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $entries = $userPath -split ';' | Where-Object { $_ -ne '' }
+    foreach ($entry in $entries) {
+        try {
+            if ((Resolve-Path $entry -ErrorAction SilentlyContinue).Path -eq $installDir) {
+                Write-C "✓ $installDir is already in PATH" Green
+                return
+            }
+        } catch { $null = $_ }
+        if ($entry -eq $installDir) {
+            Write-C "✓ $installDir is already in PATH" Green
+            return
+        }
+    }
+
+    # Add to User PATH (persistent, no admin required)
+    $newPath = "$installDir;$userPath".TrimEnd(';')
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+
+    # Also update current session so it takes effect immediately
+    $env:Path = "$installDir;$env:Path"
+
+    Write-C "✓ Added $installDir to User PATH / 已添加到用户 PATH" Green
+    Write-C "  New terminal sessions will have clawdeckx available globally" Cyan
+    Write-C "  新终端窗口中可直接使用 clawdeckx 命令" Cyan
+}
+
+function Unregister-Path {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not $userPath) { return }
+
+    $installDir = ""
+    if ($script:INSTALLED_LOCATION) {
+        $installDir = Split-Path $script:INSTALLED_LOCATION -Parent
+    } elseif ($script:INSTALLED_BINARY) {
+        $installDir = Split-Path $script:INSTALLED_BINARY -Parent
+    }
+    if (-not $installDir) { return }
+
+    # Resolve to absolute
+    if (-not [System.IO.Path]::IsPathRooted($installDir)) {
+        try { $installDir = (Resolve-Path $installDir -ErrorAction SilentlyContinue).Path } catch { return }
+    }
+
+    $entries = $userPath -split ';' | Where-Object { $_ -ne '' }
+    $filtered = @()
+    $removed = $false
+    foreach ($entry in $entries) {
+        $match = $false
+        try {
+            $resolved = (Resolve-Path $entry -ErrorAction SilentlyContinue).Path
+            if ($resolved -eq $installDir) { $match = $true }
+        } catch { $null = $_ }
+        if ($entry -eq $installDir) { $match = $true }
+
+        if ($match) {
+            $removed = $true
+        } else {
+            $filtered += $entry
+        }
+    }
+
+    if ($removed) {
+        $newPath = ($filtered -join ';')
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        Write-C "✓ Removed $installDir from User PATH / 已从用户 PATH 移除" Green
+    }
 }
 
 # -- Helpers -------------------------------------------------------------------
@@ -1655,6 +1737,22 @@ Write-C "Config & Data directory / 配置和数据目录： $(Join-Path (Split-P
 Write-Host ""
 Write-C "✓ Installed in current directory / 已安装在当前目录" Green
 Write-Host ""
+
+# Register in PATH so `clawdeckx` is available globally
+$alreadyInPath = $false
+try {
+    $existing = Get-Command clawdeckx -ErrorAction SilentlyContinue
+    if ($existing -and $existing.Source -eq $script:INSTALLED_BINARY) { $alreadyInPath = $true }
+} catch { $null = $_ }
+
+if (-not $alreadyInPath) {
+    Write-C "Would you like to add clawdeckx to PATH for global access?" Yellow
+    Write-C "是否将 clawdeckx 添加到 PATH 以便全局使用？" Yellow
+    if (Read-YesNo "Register in PATH? / 注册到 PATH?" $true) {
+        Register-Path $script:INSTALLED_BINARY
+    }
+    Write-Host ""
+}
 
 # Smart port detection for binary install
 Write-C "Detecting available port... / 正在检测可用端口..." Cyan

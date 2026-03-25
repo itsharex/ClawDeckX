@@ -399,6 +399,12 @@ func (i *Installer) installViaNpmWithOptions(ctx context.Context, version string
 		}
 	}
 
+	// If npm install failed and git is not available, it's likely "spawn git ENOENT".
+	// Emit a targeted hint so the user knows to install Git first.
+	if lastErr != nil && !i.env.Tools["git"].Installed {
+		i.emitter.EmitLog("⚠ Git is not installed — npm may have failed with 'spawn git ENOENT'. Please install Git first.")
+	}
+
 	return lastErr
 }
 

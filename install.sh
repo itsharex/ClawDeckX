@@ -335,6 +335,97 @@ sed_inplace() {
     fi
 }
 
+# Register ClawDeckX binary in PATH via ~/.local/bin symlink (preferred)
+# or shell profile export as fallback.
+# Usage: register_path <absolute_binary_path>
+register_path() {
+    local binary_abs="$1"
+    # Resolve to absolute path if relative
+    if [[ "$binary_abs" != /* ]]; then
+        binary_abs="$(cd "$(dirname "$binary_abs")" && pwd)/$(basename "$binary_abs")"
+    fi
+    local install_dir
+    install_dir="$(dirname "$binary_abs")"
+    local link_dir="$HOME/.local/bin"
+
+    # Method 1: symlink in ~/.local/bin (XDG standard, cleanest)
+    if mkdir -p "$link_dir" 2>/dev/null; then
+        ln -sf "$binary_abs" "$link_dir/clawdeckx"
+        echo -e "${GREEN}✓ Created symlink: $link_dir/clawdeckx → $binary_abs${NC}"
+
+        # Ensure ~/.local/bin is in PATH for future shells
+        if ! echo "$PATH" | tr ':' '\n' | grep -qx "$link_dir"; then
+            local profile_file=""
+            if [ -f "$HOME/.zshrc" ]; then
+                profile_file="$HOME/.zshrc"
+            elif [ -f "$HOME/.bashrc" ]; then
+                profile_file="$HOME/.bashrc"
+            elif [ -f "$HOME/.profile" ]; then
+                profile_file="$HOME/.profile"
+            fi
+            if [ -n "$profile_file" ]; then
+                local marker='# ClawDeckX PATH'
+                if ! grep -qF "$marker" "$profile_file" 2>/dev/null; then
+                    printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$link_dir" >> "$profile_file"
+                    echo -e "${GREEN}✓ Added $link_dir to PATH in $(basename "$profile_file")${NC}"
+                fi
+            fi
+            echo -e "${YELLOW}  Run ${GREEN}source ~/${profile_file##*/}${YELLOW} or open a new terminal to use ${GREEN}clawdeckx${YELLOW} globally${NC}"
+        else
+            echo -e "${GREEN}✓ $link_dir is already in PATH${NC}"
+        fi
+        return 0
+    fi
+
+    # Method 2: direct PATH export in shell profile
+    local profile_file=""
+    if [ -f "$HOME/.zshrc" ]; then
+        profile_file="$HOME/.zshrc"
+    elif [ -f "$HOME/.bashrc" ]; then
+        profile_file="$HOME/.bashrc"
+    elif [ -f "$HOME/.profile" ]; then
+        profile_file="$HOME/.profile"
+    fi
+
+    if [ -n "$profile_file" ]; then
+        local marker='# ClawDeckX PATH'
+        if ! grep -qF "$marker" "$profile_file" 2>/dev/null; then
+            printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$install_dir" >> "$profile_file"
+            echo -e "${GREEN}✓ Added $install_dir to PATH in $(basename "$profile_file")${NC}"
+            echo -e "${YELLOW}  Run ${GREEN}source ~/${profile_file##*/}${YELLOW} or open a new terminal to use ${GREEN}clawdeckx${YELLOW} globally${NC}"
+        else
+            echo -e "${GREEN}✓ PATH entry already exists in $(basename "$profile_file")${NC}"
+        fi
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠ Could not auto-register PATH. Add manually:${NC}"
+    echo -e "  ${GREEN}export PATH=\"$install_dir:\$PATH\"${NC}"
+    return 1
+}
+
+# Remove ClawDeckX PATH registration (for uninstall)
+# Usage: unregister_path
+unregister_path() {
+    local link_dir="$HOME/.local/bin"
+
+    # Remove symlink
+    if [ -L "$link_dir/clawdeckx" ]; then
+        rm -f "$link_dir/clawdeckx"
+        echo -e "${GREEN}✓ Removed symlink: $link_dir/clawdeckx${NC}"
+    fi
+
+    # Remove PATH entries from shell profiles
+    local marker='# ClawDeckX PATH'
+    for profile_file in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
+        if [ -f "$profile_file" ] && grep -qF "$marker" "$profile_file" 2>/dev/null; then
+            # Remove the marker line and the export line following it
+            sed_inplace "/$marker/,+1d" "$profile_file"
+            echo -e "${GREEN}✓ Removed PATH entry from $(basename "$profile_file")${NC}"
+        fi
+    done
+}
+
 # Download a file with China proxy fallback
 # Usage: download_with_fallback <url> <cn_url> <output_file>
 download_with_fallback() {
@@ -1451,6 +1542,9 @@ perform_uninstall() {
         fi
     fi
     
+    # Remove PATH registration (symlink + shell profile entries)
+    unregister_path
+    
     # Remove binary (handle relative path)
     if [[ "$INSTALLED_LOCATION" == ./* ]]; then
         rm -f "$INSTALLED_LOCATION"
@@ -2263,6 +2357,19 @@ echo -e "${CYAN}Config & Data directory / 配置和数据目录：${NC} $(dirnam
 echo ""
 echo -e "${GREEN}✓ Installed in current directory / 已安装在当前目录${NC}"
 echo ""
+
+# Register in PATH so `clawdeckx` is available globally
+if ! command -v clawdeckx &>/dev/null || [ "$(command -v clawdeckx 2>/dev/null)" != "$INSTALLED_BINARY" ]; then
+    echo -e "${YELLOW}Would you like to add clawdeckx to PATH for global access?"
+    echo -e "是否将 clawdeckx 添加到 PATH 以便全局使用？${NC}"
+    echo -n "Register in PATH? / 注册到 PATH？ [Y/n] "
+    read -n 1 -r </dev/tty
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        register_path "$INSTALLED_BINARY"
+    fi
+    echo ""
+fi
 
 # Smart port detection for binary install
 echo -e "${CYAN}Detecting available port... / 正在检测可用端口...${NC}"
