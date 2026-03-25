@@ -344,8 +344,6 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [modelImageMap, setModelImageMap] = useState<Record<string, boolean>>({});
   // Live tool calls (real-time streaming from agent events)
   const [liveToolCalls, setLiveToolCalls] = useState<Map<string, LiveToolCall>>(new Map());
-  // Global tool expand/collapse toggle
-  const [toolsExpanded, setToolsExpanded] = useState(false);
   // Fun waiting phrase (picked once per waiting session, rotates)
   const [waitingPhrase, setWaitingPhrase] = useState('');
   const waitingPhraseRef = useRef('');
@@ -2301,11 +2299,6 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setToolbarMenuOpen(false)} />
                   <div className="absolute top-full end-0 mt-1 z-50 rounded-xl theme-panel sci-card shadow-xl py-1.5 min-w-[180px] animate-fade-in">
-                    <button onClick={() => { setToolsExpanded(v => !v); setToolbarMenuOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
-                      <span className={`material-symbols-outlined text-[16px] ${toolsExpanded ? 'text-purple-500' : ''}`}>{toolsExpanded ? 'unfold_less' : 'unfold_more'}</span>
-                      {toolsExpanded ? (c.toolsCollapse || 'Collapse tools') : (c.toolsExpand || 'Expand tools')}
-                    </button>
                     <button onClick={() => { exportChat('md'); setToolbarMenuOpen(false); }} disabled={messages.length === 0}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-[11px] theme-text-secondary hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 transition-colors">
                       <span className="material-symbols-outlined text-[16px]">description</span>
@@ -2856,13 +2849,6 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                           {tc.phase === 'done' ? (tc.isError ? c.toolError || 'Error' : c.toolDone || 'Done') : c.toolRunning || 'Running'}
                         </span>
                       </div>
-                      {toolsExpanded && tc.args && (
-                        <div className="px-3 pb-2">
-                          <pre className="text-[9px] font-mono text-slate-400 dark:text-white/30 bg-slate-100/50 dark:bg-black/10 rounded-lg p-1.5 overflow-auto max-h-20 whitespace-pre-wrap break-all">
-                            {typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args, null, 2)}
-                          </pre>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
