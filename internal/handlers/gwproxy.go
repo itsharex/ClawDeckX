@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -401,6 +404,68 @@ func (h *GWProxyHandler) SessionsHistory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	web.OKRaw(w, r, data)
+}
+
+// SessionsHistoryPaginated returns paginated session history via the gateway's
+// HTTP /sessions/{key}/history endpoint which supports cursor-based pagination.
+// Query params: key (required), limit (optional), cursor (optional).
+func (h *GWProxyHandler) SessionsHistoryPaginated(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		web.Fail(w, r, "INVALID_PARAMS", "key is required", http.StatusBadRequest)
+		return
+	}
+
+	cfg := h.client.GetConfig()
+	if cfg.Host == "" || cfg.Port == 0 {
+		web.Fail(w, r, "GW_NOT_CONFIGURED", "gateway address not configured", http.StatusBadGateway)
+		return
+	}
+
+	// Build upstream URL
+	gwURL := fmt.Sprintf("http://%s:%d/sessions/%s/history", cfg.Host, cfg.Port, url.PathEscape(key))
+	q := url.Values{}
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		q.Set("limit", limit)
+	}
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		q.Set("cursor", cursor)
+	}
+	if qs := q.Encode(); qs != "" {
+		gwURL += "?" + qs
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, gwURL, nil)
+	if err != nil {
+		web.Fail(w, r, "GW_REQUEST_BUILD_FAILED", err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if cfg.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		web.Fail(w, r, "GW_SESSIONS_HISTORY_PAGINATED_FAILED", err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		web.Fail(w, r, "GW_SESSIONS_HISTORY_PAGINATED_READ_FAILED", readErr.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// For non-200 upstream responses (e.g. 404 session not found), return empty history
+	if resp.StatusCode != http.StatusOK {
+		web.OKRaw(w, r, json.RawMessage(`{"sessionKey":"","messages":[],"items":[],"hasMore":false}`))
+		return
+	}
+
+	web.OKRaw(w, r, json.RawMessage(body))
 }
 
 // SkillsConfigure configures a skill (enable/disable/env vars etc.).

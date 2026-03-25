@@ -593,6 +593,7 @@ func RunServe(args []string) int {
 	router.POST("/api/v1/gw/config/reload", web.RequireAdmin(gwProxy.ConfigReload))
 	router.GET("/api/v1/gw/sessions/messages", gwProxy.SessionsPreviewMessages)
 	router.GET("/api/v1/gw/sessions/history", gwProxy.SessionsHistory)
+	router.GET("/api/v1/gw/sessions/history-paginated", gwProxy.SessionsHistoryPaginated)
 	router.POST("/api/v1/gw/proxy", web.RequireAdmin(gwProxy.GenericProxy))
 	router.POST("/api/v1/gw/skills/install-stream", web.RequireAdmin(gwProxy.DepInstallStreamSSE))
 	router.POST("/api/v1/gw/skills/install-async", web.RequireAdmin(gwProxy.DepInstallAsync))
