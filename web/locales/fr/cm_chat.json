@@ -87,6 +87,7 @@
     "sessionLabel": "Nom de la session",
     "sessionLabelPlaceholder": "Entrez un nouveau nom de session...",
     "sessionHistoryCleared": "L'historique de cette session a été effacé, les statistiques conservent les totaux historiques",
+    "allAgents": "Tous les agents",
     "searchSessions": "Rechercher des sessions...",
     "groupToday": "Aujourd'hui",
     "groupYesterday": "Hier",
@@ -165,6 +166,16 @@
     "span": "Période",
     "models": "Modèles",
     "context": "Contexte",
-    "session": "Session"
+    "session": "Session",
+    "loadingOlder": "Chargement des messages précédents…",
+    "noMoreHistory": "Début de la conversation",
+    "bindAgent": "Lier l'agent",
+    "bindAgentHint": "Acheminer les messages de ce pair vers un agent spécifique",
+    "bindDefault": "Par défaut (pas de remplacement)",
+    "bindSaving": "Enregistrement de la liaison…",
+    "bindSaved": "Liaison d'agent enregistrée",
+    "bindRemoved": "Liaison d'agent supprimée",
+    "bindFailed": "Échec de l'enregistrement de la liaison d'agent",
+    "saveSession": "Enregistrer"
   }
 }

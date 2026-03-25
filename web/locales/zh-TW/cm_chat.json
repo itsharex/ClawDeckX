@@ -87,6 +87,7 @@
     "sessionLabel": "會話名稱",
     "sessionLabelPlaceholder": "輸入新的會話名稱...",
     "sessionHistoryCleared": "該會話聊天記錄已清理，用量統計仍保留歷史資料",
+    "allAgents": "所有代理",
     "searchSessions": "搜尋會話...",
     "groupToday": "今天",
     "groupYesterday": "昨天",
@@ -165,6 +166,16 @@
     "span": "跨度",
     "models": "模型",
     "context": "上下文",
-    "session": "工作階段"
+    "session": "工作階段",
+    "loadingOlder": "正在載入更早的訊息…",
+    "noMoreHistory": "已到對話開頭",
+    "bindAgent": "綁定代理",
+    "bindAgentHint": "將此群組/對話的訊息路由到指定代理",
+    "bindDefault": "預設（不覆蓋）",
+    "bindSaving": "正在儲存綁定…",
+    "bindSaved": "代理綁定已儲存",
+    "bindRemoved": "代理綁定已移除",
+    "bindFailed": "儲存代理綁定失敗",
+    "saveSession": "儲存"
   }
 }

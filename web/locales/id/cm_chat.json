@@ -87,6 +87,7 @@
     "sessionLabel": "Nama Sesi",
     "sessionLabelPlaceholder": "Masukkan nama sesi baru...",
     "sessionHistoryCleared": "Riwayat sesi ini telah dihapus, sementara statistik penggunaan tetap menyimpan total historis",
+    "allAgents": "Semua Agen",
     "searchSessions": "Cari sesi...",
     "groupToday": "Hari Ini",
     "groupYesterday": "Kemarin",
@@ -165,6 +166,16 @@
     "span": "Rentang",
     "models": "Model",
     "context": "Konteks",
-    "session": "Sesi"
+    "session": "Sesi",
+    "loadingOlder": "Memuat pesan lama…",
+    "noMoreHistory": "Awal percakapan",
+    "bindAgent": "Bind Agent",
+    "bindAgentHint": "Rutekan pesan peer ini ke agen tertentu",
+    "bindDefault": "Default (tanpa override)",
+    "bindSaving": "Menyimpan binding…",
+    "bindSaved": "Binding agen disimpan",
+    "bindRemoved": "Binding agen dihapus",
+    "bindFailed": "Gagal menyimpan binding agen",
+    "saveSession": "Simpan"
   }
 }

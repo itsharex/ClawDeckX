@@ -86,6 +86,7 @@
     "sessionLabel": "セッション名",
     "sessionLabelPlaceholder": "新しいセッション名を入力...",
     "sessionHistoryCleared": "このセッション履歴はクリアされました。利用統計は累計データを保持しています",
+    "allAgents": "すべてのエージェント",
     "searchSessions": "セッションを検索...",
     "groupToday": "今日",
     "groupYesterday": "昨日",
@@ -165,6 +166,16 @@
     "span": "期間",
     "models": "モデル",
     "context": "コンテキスト",
-    "session": "セッション"
+    "session": "セッション",
+    "loadingOlder": "過去のメッセージを読み込み中…",
+    "noMoreHistory": "会話の始まり",
+    "bindAgent": "エージェントをバインド",
+    "bindAgentHint": "このピアのメッセージを特定のエージェントにルーティング",
+    "bindDefault": "デフォルト（上書きなし）",
+    "bindSaving": "バインドを保存中…",
+    "bindSaved": "エージェントバインドを保存しました",
+    "bindRemoved": "エージェントバインドを削除しました",
+    "bindFailed": "エージェントバインドの保存に失敗しました",
+    "saveSession": "保存"
   }
 }

@@ -87,6 +87,7 @@
     "sessionLabel": "Session Name",
     "sessionLabelPlaceholder": "Enter new session name...",
     "sessionHistoryCleared": "This session history was cleared, while usage stats still keep historical totals",
+    "allAgents": "All Agents",
     "searchSessions": "Search sessions...",
     "groupToday": "Today",
     "groupYesterday": "Yesterday",
@@ -165,6 +166,16 @@
     "span": "Span",
     "models": "Models",
     "context": "Context",
-    "session": "Session"
+    "session": "Session",
+    "loadingOlder": "Loading older messages…",
+    "noMoreHistory": "Beginning of conversation",
+    "bindAgent": "Bind Agent",
+    "bindAgentHint": "Route this peer's messages to a specific agent",
+    "bindDefault": "Default (no override)",
+    "bindSaving": "Saving binding…",
+    "bindSaved": "Agent binding saved",
+    "bindRemoved": "Agent binding removed",
+    "bindFailed": "Failed to save agent binding",
+    "saveSession": "Save"
   }
 }

@@ -87,6 +87,7 @@
     "sessionLabel": "सत्र नाम",
     "sessionLabelPlaceholder": "नया सत्र नाम दर्ज करें...",
     "sessionHistoryCleared": "इस सत्र का इतिहास साफ किया गया, जबकि उपयोग आंकड़े ऐतिहासिक कुल रखते हैं",
+    "allAgents": "All Agents",
     "searchSessions": "सत्र खोजें...",
     "groupToday": "आज",
     "groupYesterday": "कल",
@@ -165,6 +166,16 @@
     "span": "अवधि",
     "models": "मॉडल",
     "context": "संदर्भ",
-    "session": "सत्र"
+    "session": "सत्र",
+    "loadingOlder": "पुराने संदेश लोड हो रहे हैं…",
+    "noMoreHistory": "बातचीत की शुरुआत",
+    "bindAgent": "Bind Agent",
+    "bindAgentHint": "Route this peer's messages to a specific agent",
+    "bindDefault": "Default (no override)",
+    "bindSaving": "Saving binding…",
+    "bindSaved": "Agent binding saved",
+    "bindRemoved": "Agent binding removed",
+    "bindFailed": "Failed to save agent binding",
+    "saveSession": "Save"
   }
 }

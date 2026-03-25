@@ -87,6 +87,7 @@
     "sessionLabel": "Nome da Sessão",
     "sessionLabelPlaceholder": "Digite o novo nome da sessão...",
     "sessionHistoryCleared": "O histórico desta sessão foi limpo, enquanto as estatísticas de uso ainda mantêm os totais históricos",
+    "allAgents": "Todos os Agentes",
     "searchSessions": "Buscar sessões...",
     "groupToday": "Hoje",
     "groupYesterday": "Ontem",
@@ -165,6 +166,16 @@
     "span": "Período",
     "models": "Modelos",
     "context": "Contexto",
-    "session": "Sessão"
+    "session": "Sessão",
+    "loadingOlder": "Carregando mensagens anteriores…",
+    "noMoreHistory": "Início da conversa",
+    "bindAgent": "Vincular agente",
+    "bindAgentHint": "Direcionar mensagens deste par para um agente específico",
+    "bindDefault": "Padrão (sem substituição)",
+    "bindSaving": "Salvando vinculação…",
+    "bindSaved": "Vinculação de agente salva",
+    "bindRemoved": "Vinculação de agente removida",
+    "bindFailed": "Falha ao salvar vinculação de agente",
+    "saveSession": "Salvar"
   }
 }

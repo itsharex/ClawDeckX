@@ -86,6 +86,7 @@
     "sessionLabel": "세션 이름",
     "sessionLabelPlaceholder": "새 세션 이름 입력...",
     "sessionHistoryCleared": "이 세션 기록이 삭제되었습니다. 사용량 통계는 기존 누적값을 유지합니다",
+    "allAgents": "모든 에이전트",
     "searchSessions": "세션 검색...",
     "groupToday": "오늘",
     "groupYesterday": "어제",
@@ -165,6 +166,16 @@
     "span": "기간",
     "models": "모델",
     "context": "컨텍스트",
-    "session": "세션"
+    "session": "세션",
+    "loadingOlder": "이전 메시지 불러오는 중…",
+    "noMoreHistory": "대화의 시작",
+    "bindAgent": "에이전트 바인딩",
+    "bindAgentHint": "이 피어의 메시지를 특정 에이전트로 라우팅",
+    "bindDefault": "기본값 (재정의 없음)",
+    "bindSaving": "바인딩 저장 중…",
+    "bindSaved": "에이전트 바인딩이 저장되었습니다",
+    "bindRemoved": "에이전트 바인딩이 제거되었습니다",
+    "bindFailed": "에이전트 바인딩 저장 실패",
+    "saveSession": "저장"
   }
 }

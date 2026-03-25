@@ -87,6 +87,7 @@
     "sessionLabel": "Sitzungsname",
     "sessionLabelPlaceholder": "Neuen Sitzungsnamen eingeben...",
     "sessionHistoryCleared": "Dieser Sitzungsverlauf wurde gelöscht, Nutzungsstatistiken behalten jedoch die historischen Gesamtwerte",
+    "allAgents": "Alle Agenten",
     "searchSessions": "Sitzungen suchen...",
     "groupToday": "Heute",
     "groupYesterday": "Gestern",
@@ -165,6 +166,16 @@
     "span": "Zeitraum",
     "models": "Modelle",
     "context": "Kontext",
-    "session": "Sitzung"
+    "session": "Sitzung",
+    "loadingOlder": "Ältere Nachrichten werden geladen…",
+    "noMoreHistory": "Anfang der Unterhaltung",
+    "bindAgent": "Agent binden",
+    "bindAgentHint": "Nachrichten dieses Peers an einen bestimmten Agenten weiterleiten",
+    "bindDefault": "Standard (keine Überschreibung)",
+    "bindSaving": "Bindung wird gespeichert…",
+    "bindSaved": "Agentenbindung gespeichert",
+    "bindRemoved": "Agentenbindung entfernt",
+    "bindFailed": "Agentenbindung konnte nicht gespeichert werden",
+    "saveSession": "Speichern"
   }
 }
