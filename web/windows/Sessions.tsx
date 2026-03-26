@@ -1926,7 +1926,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // New session
   const handleNewSession = useCallback(() => {
-    const key = `web-${Date.now()}`;
+    const ts = Date.now();
+    // When an agent is selected in the filter, create session scoped to that agent
+    const key = agentFilter ? `agent:${agentFilter}:web:${ts}` : `web-${ts}`;
     ensureSessionPresent(key);
     setIsSwitchingSession(true);
     setSessionKey(key);
@@ -1939,7 +1941,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setHasMoreHistory(false);
     nextCursorRef.current = undefined;
     void loadSessions();
-  }, [clearStream, ensureSessionPresent, loadSessions]);
+  }, [agentFilter, clearStream, ensureSessionPresent, loadSessions]);
 
   // Rename session
   const openRenameDialog = useCallback((key: string, currentLabel: string) => {
