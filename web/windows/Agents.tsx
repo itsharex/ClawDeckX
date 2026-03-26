@@ -775,8 +775,12 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
             if (!a2aDraft) return;
             setA2aSaving(true);
             try {
+              // When enabled with empty allow → default to * (all); when disabled → clear allow list
+              const resolvedAllow = a2aDraft.enabled
+                ? (a2aDraft.allow.length > 0 ? a2aDraft.allow : ['*'])
+                : undefined;
               const fresh = await gwApi.configSafePatch({
-                tools: { agentToAgent: { enabled: a2aDraft.enabled, allow: a2aDraft.allow.length > 0 ? a2aDraft.allow : undefined } },
+                tools: { agentToAgent: { enabled: a2aDraft.enabled, allow: resolvedAllow } },
                 session: { agentToAgent: { maxPingPongTurns: a2aDraft.ppTurns } },
               });
               setConfig(fresh);
@@ -805,7 +809,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     <div className="flex items-center justify-between">
                       <span className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase">{a.a2aEnabled || 'Enabled'}</span>
                       <button
-                        onClick={() => { const d = initDraft(); setA2aDraft({ ...d, enabled: !d.enabled }); }}
+                        onClick={() => { const d = initDraft(); const next = !d.enabled; setA2aDraft({ ...d, enabled: next, allow: next ? (d.allow.length > 0 ? d.allow : ['*']) : [] }); }}
                         disabled={a2aSaving}
                         className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${a2aEnabled ? 'bg-violet-500' : 'bg-slate-300 dark:bg-white/15'} ${a2aSaving ? 'opacity-50' : 'cursor-pointer'}`}
                       >
