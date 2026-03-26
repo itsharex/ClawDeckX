@@ -385,5 +385,11 @@
   "swipeApprove": "Swipe right to approve",
   "swipeReject": "Swipe left to reject",
   "swipeRevoke": "Swipe left to revoke",
-  "swipeActions": "Swipe Actions"
+  "swipeActions": "Swipe Actions",
+
+  "removeDevice": "Remove Device",
+  "deviceRemoved": "Device removed",
+  "confirmRemoveTitle": "Remove Device",
+  "confirmRemoveDesc": "Remove device {name}? All tokens will be revoked and the device will need to re-pair.",
+  "operationDeviceRemoved": "Removed device {name}"
 }

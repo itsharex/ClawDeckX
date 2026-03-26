@@ -346,5 +346,11 @@
   "swipeApprove": "Deslize para direita para aprovar",
   "swipeReject": "Deslize para esquerda para rejeitar",
   "swipeRevoke": "Deslize para esquerda para revogar",
-  "swipeActions": "Ações de Deslize"
+  "swipeActions": "Ações de Deslize",
+
+  "removeDevice": "Remover Dispositivo",
+  "deviceRemoved": "Dispositivo removido",
+  "confirmRemoveTitle": "Remover Dispositivo",
+  "confirmRemoveDesc": "Remover dispositivo {name}? Todos os tokens serão revogados e o dispositivo precisará ser pareado novamente.",
+  "operationDeviceRemoved": "Dispositivo {name} removido"
 }

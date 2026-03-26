@@ -223,5 +223,12 @@
   "lifecycleReason": "사유",
   "lifecycleError": "오류",
   "lifecycleNotifyShutdown": "종료 알림",
-  "lifecycleNotifyShutdownHint": "게이트웨이 종료 시 알림 전송"
+  "lifecycleNotifyShutdownHint": "게이트웨이 종료 시 알림 전송",
+
+  "secretsTitle": "시크릿",
+  "secretsReloadTitle": "시크릿 다시 로드",
+  "secretsReloadDesc": "게이트웨이를 재시작하지 않고 .env 및 vault 시크릿을 다시 로드합니다",
+  "secretsReload": "다시 로드",
+  "secretsReloadOk": "시크릿이 다시 로드되었습니다",
+  "secretsReloadFailed": "시크릿 다시 로드 실패"
 }

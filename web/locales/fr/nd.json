@@ -346,5 +346,11 @@
   "swipeApprove": "Glisser à droite pour approuver",
   "swipeReject": "Glisser à gauche pour rejeter",
   "swipeRevoke": "Glisser à gauche pour révoquer",
-  "swipeActions": "Actions par glissement"
+  "swipeActions": "Actions par glissement",
+
+  "removeDevice": "Supprimer l'appareil",
+  "deviceRemoved": "Appareil supprimé",
+  "confirmRemoveTitle": "Supprimer l'appareil",
+  "confirmRemoveDesc": "Supprimer l'appareil {name} ? Tous les jetons seront révoqués et l'appareil devra être réappairé.",
+  "operationDeviceRemoved": "Appareil {name} supprimé"
 }

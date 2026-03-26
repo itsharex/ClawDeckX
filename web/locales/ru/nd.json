@@ -346,5 +346,11 @@
   "swipeApprove": "Свайп вправо для одобрения",
   "swipeReject": "Свайп влево для отклонения",
   "swipeRevoke": "Свайп влево для отзыва",
-  "swipeActions": "Действия свайпом"
+  "swipeActions": "Действия свайпом",
+
+  "removeDevice": "Удалить устройство",
+  "deviceRemoved": "Устройство удалено",
+  "confirmRemoveTitle": "Удалить устройство",
+  "confirmRemoveDesc": "Удалить устройство {name}? Все токены будут отозваны, устройство потребуется привязать заново.",
+  "operationDeviceRemoved": "Устройство {name} удалено"
 }

@@ -223,5 +223,12 @@
   "lifecycleReason": "Alasan",
   "lifecycleError": "Kesalahan",
   "lifecycleNotifyShutdown": "Notifikasi shutdown",
-  "lifecycleNotifyShutdownHint": "Kirim notifikasi saat gateway dimatikan"
+  "lifecycleNotifyShutdownHint": "Kirim notifikasi saat gateway dimatikan",
+
+  "secretsTitle": "Rahasia",
+  "secretsReloadTitle": "Muat Ulang Rahasia",
+  "secretsReloadDesc": "Muat ulang .env dan rahasia vault tanpa memulai ulang gateway",
+  "secretsReload": "Muat Ulang",
+  "secretsReloadOk": "Rahasia dimuat ulang",
+  "secretsReloadFailed": "Gagal memuat ulang rahasia"
 }

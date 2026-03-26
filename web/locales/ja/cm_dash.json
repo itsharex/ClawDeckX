@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}}件の重大",
         "secAuditFindings": "{{total}}件の検出",
         "secAuditViewDetail": "詳細を表示",
-        "detectingOnEnter": "システム状態を検出中..."
+        "detectingOnEnter": "システム状態を検出中...",
+        "secConfigTitle": "セキュリティ設定",
+        "secToolProfile": "ツールプロファイル",
+        "secSandbox": "サンドボックス",
+        "secExecSecurity": "実行セキュリティ",
+        "secDenyList": "拒否リスト",
+        "secAllowList": "許可リスト",
+        "secFsWsOnly": "ワークスペースFS"
     }
 }

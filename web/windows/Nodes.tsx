@@ -699,6 +699,21 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
     });
   }, [fetchDevices, toast]);
 
+  const handleRemoveDevice = useCallback((deviceId: string, displayName?: string) => {
+    setConfirmDialog({
+      title: ndRef.current?.confirmRemoveTitle || 'Remove Device',
+      desc: (ndRef.current?.confirmRemoveDesc || 'Remove device {name}? All tokens will be revoked and the device will need to re-pair.').replace('{name}', displayName || deviceId),
+      onOk: async () => {
+        try {
+          await gwApi.devicePairRemove(deviceId);
+          toast('success', ndRef.current?.deviceRemoved || 'Device removed');
+          fetchDevices();
+        } catch (e: any) { toast('error', String(e)); }
+        setConfirmDialog(null);
+      },
+    });
+  }, [fetchDevices, toast]);
+
   const clearEventLog = useCallback(() => setEventLog([]), []);
   const dismissAlert = useCallback((id: string) => setAlerts(a => a.filter(x => x.id !== id)), []);
   const dismissAllAlerts = useCallback(() => setAlerts([]), []);
@@ -1874,6 +1889,14 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
                                   })}
                                 </div>
                               )}
+
+                              {/* Remove device button */}
+                              <div className="pt-2 border-t border-slate-200/50 dark:border-white/5">
+                                <button onClick={() => handleRemoveDevice(device.deviceId, device.displayName?.trim())}
+                                  className="h-7 px-3 bg-mac-red/10 text-mac-red text-[10px] font-bold rounded-lg hover:bg-mac-red/20 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">person_remove</span>{nd.removeDevice || 'Remove Device'}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>

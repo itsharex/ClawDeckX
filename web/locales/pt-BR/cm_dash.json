@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} crítico(s)",
         "secAuditFindings": "{{total}} achado(s)",
         "secAuditViewDetail": "Ver detalhes",
-        "detectingOnEnter": "Detectando status do sistema..."
+        "detectingOnEnter": "Detectando status do sistema...",
+        "secConfigTitle": "Security Config",
+        "secToolProfile": "Tool Profile",
+        "secSandbox": "Sandbox",
+        "secExecSecurity": "Exec Security",
+        "secDenyList": "Deny List",
+        "secAllowList": "Allow List",
+        "secFsWsOnly": "Workspace FS"
     }
 }

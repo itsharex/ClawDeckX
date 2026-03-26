@@ -346,5 +346,11 @@
   "swipeApprove": "右にスワイプで承認",
   "swipeReject": "左にスワイプで拒否",
   "swipeRevoke": "左にスワイプで失効",
-  "swipeActions": "スワイプアクション"
+  "swipeActions": "スワイプアクション",
+
+  "removeDevice": "デバイスを削除",
+  "deviceRemoved": "デバイスが削除されました",
+  "confirmRemoveTitle": "デバイスを削除",
+  "confirmRemoveDesc": "デバイス {name} を削除しますか？すべてのトークンが無効化され、再ペアリングが必要になります。",
+  "operationDeviceRemoved": "デバイス {name} を削除しました"
 }

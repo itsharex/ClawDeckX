@@ -46,6 +46,7 @@ interface GwSession {
   activeRun?: boolean;
   isStreaming?: boolean;
   fastMode?: boolean;
+  lastTo?: string;
 }
 
 interface ChatMsg {
@@ -70,6 +71,20 @@ interface LiveToolCall {
   result?: unknown;
   isError?: boolean;
   phase: 'start' | 'running' | 'done';
+}
+
+/** Extract original-case peer ID from a session's lastTo field.
+ *  lastTo format is typically "channel:<peerId>" (e.g. "channel:wrG05CBgAAdaBosTJfzemv-S9FYE66yQ").
+ *  Returns the peerId portion preserving original casing, or null if not extractable.
+ */
+function extractPeerIdFromLastTo(lastTo: string | undefined): string | null {
+  if (!lastTo) return null;
+  // Format: "channel:<peerId>" or "room:<peerId>" — extract after first ":"
+  const idx = lastTo.indexOf(':');
+  if (idx >= 0 && idx < lastTo.length - 1) {
+    return lastTo.slice(idx + 1).trim() || null;
+  }
+  return lastTo.trim() || null;
 }
 
 /** Parse peer info from an agent session key. Format: agent:<agentId>:<rest> where rest can be:
@@ -478,6 +493,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [renaming, setRenaming] = useState(false);
   const [bindAgentId, setBindAgentId] = useState('');
   const [bindAgentOriginal, setBindAgentOriginal] = useState('');
+  const [bindPeerIdOriginal, setBindPeerIdOriginal] = useState('');
   const [agentsList, setAgentsList] = useState<Array<{ id: string; label?: string }>>([]);
   const [bindAgentsList, setBindAgentsList] = useState<Array<{ id: string; label?: string }>>([]);
   const [agentFilter, setAgentFilter] = useState('');
@@ -975,6 +991,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         maxContextTokens: s.maxContextTokens || s.contextWindow || s.maxTokens || 0,
         compacted: !!s.compacted,
         fastMode: s.fastMode ?? undefined,
+        lastTo: s.lastTo || s.deliveryContext?.to || '',
       }));
       // Clean up expired patch grace entries
       const nowMs = Date.now();
@@ -1954,11 +1971,16 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setRenameLabel(currentLabel || '');
     setBindAgentId('');
     setBindAgentOriginal('');
+    setBindPeerIdOriginal('');
     setRenameOpen(true);
     setSessionMenuKey(null);
     // For group/channel sessions, fetch agents + current binding
     const peer = parseSessionKeyPeer(key);
     if (peer && (peer.peerKind === 'group' || peer.peerKind === 'channel')) {
+      // Extract original-case peer ID from session's lastTo (preserves casing from channel plugin)
+      const sessionData = sessionsRef.current.find(s => s.key === key);
+      const originalPeerId = extractPeerIdFromLastTo(sessionData?.lastTo);
+      setBindPeerIdOriginal(originalPeerId || '');
       Promise.all([
         gwApi.agents().catch(() => null),
         gwApi.configGet().catch(() => null),
@@ -1966,7 +1988,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         const raw = Array.isArray(agentsData) ? agentsData : agentsData?.agents || [];
         const list = raw.map((a: any) => ({ id: a.id || '', label: a.name?.trim() || a.label || a.id || '' })).filter((a: { id: string }) => a.id);
         setBindAgentsList(list);
-        // Find existing peer binding
+        // Find existing peer binding (case-insensitive match to handle mixed sources)
         const parsed = (cfg as any)?.parsed || (cfg as any)?.config || cfg || {};
         const bindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
         const existing = bindings.find((b: any) =>
@@ -1997,17 +2019,20 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           const cfg = await gwApi.configGet() as any;
           const parsed = cfg?.parsed || cfg?.config || cfg || {};
           const allBindings: any[] = Array.isArray(parsed.bindings) ? parsed.bindings : [];
-          // Remove existing peer binding for this channel+peer
+          // Remove existing peer binding for this channel+peer (case-insensitive match)
           let updated = allBindings.filter((b: any) => !(
             b.match?.channel?.toLowerCase() === peer.channel &&
             b.match?.peer?.id?.toLowerCase() === peer.peerId &&
             ['group', 'channel'].includes(b.match?.peer?.kind?.toLowerCase() || '')
           ));
           // Add new binding if agent selected
+          // Use original-case peer ID from session's lastTo when available,
+          // because OpenClaw's route matching is case-sensitive.
           if (bindAgentId) {
+            const effectivePeerId = bindPeerIdOriginal || peer.peerId;
             updated.push({
               agentId: bindAgentId,
-              match: { channel: peer.channel, peer: { kind: peer.peerKind, id: peer.peerId } }
+              match: { channel: peer.channel, peer: { kind: peer.peerKind, id: effectivePeerId } }
             });
           }
           await gwApi.configSafePatch({ bindings: updated });
@@ -2021,13 +2046,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       setRenameLabel('');
       setBindAgentId('');
       setBindAgentOriginal('');
+      setBindPeerIdOriginal('');
     } catch (err: any) {
       console.error('Rename failed:', err);
     } finally {
       setRenaming(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renaming, renameKey, renameLabel, bindAgentId, bindAgentOriginal, c]);
+  }, [renaming, renameKey, renameLabel, bindAgentId, bindAgentOriginal, bindPeerIdOriginal, c]);
 
   // Delete session
   const handleDeleteSession = useCallback(async (key: string) => {
@@ -2187,6 +2213,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
 
   // Available models for session override dropdown
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
+  const [securityCfg, setSecurityCfg] = useState<any>(null);
   useEffect(() => {
     if (!settingsOpen || !gwReady) return;
     let cancelled = false;
@@ -2194,6 +2221,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
       try {
         const cfg = await gwApi.configGet() as any;
         if (cancelled) return;
+        setSecurityCfg(cfg);
         const providers = cfg?.models?.providers || cfg?.parsed?.models?.providers || cfg?.config?.models?.providers || {};
         const opts: { value: string; label: string }[] = [
           { value: '', label: cRef.current.inherit || 'Inherit' },
@@ -2686,6 +2714,40 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   )}
                 </label>
               </div>
+              {/* Security badges (P2b) */}
+              {securityCfg && (() => {
+                const parsed = securityCfg?.parsed || securityCfg?.config || securityCfg || {};
+                const globalTools = parsed?.tools || {};
+                const agentsCfg = parsed?.agents || {};
+                const agentId = sessionKey?.split(':')?.[1] || '';
+                const agentList: any[] = agentsCfg?.list || [];
+                const agentEntry = agentList.find((e: any) => e?.id === agentId) || {};
+                const agentTools = agentEntry.tools || {};
+                const toolProfile = agentTools.profile || globalTools.profile || 'full';
+                const sandboxCfg = agentEntry.sandbox || agentsCfg?.defaults?.sandbox || {};
+                const sandboxMode = sandboxCfg.mode || sandboxCfg.backend || 'Off';
+                const execSec = agentTools.exec?.security || globalTools.exec?.security || '—';
+                const profileColor = toolProfile === 'full' ? 'text-amber-500 bg-amber-500/10' : toolProfile === 'minimal' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10';
+                const sandboxColor = sandboxMode && sandboxMode !== 'Off' ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-400 bg-slate-100 dark:bg-white/5';
+                const execColor = execSec === 'sandbox' ? 'text-emerald-500 bg-emerald-500/10' : execSec === 'prompt' ? 'text-blue-500 bg-blue-500/10' : 'text-amber-500 bg-amber-500/10';
+                return (
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className="material-symbols-outlined text-[12px] text-slate-400 dark:text-white/25">security</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${profileColor}`}>
+                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">build</span>
+                      {toolProfile}
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${sandboxColor}`}>
+                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">shield</span>
+                      {sandboxMode}
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${execColor}`}>
+                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">terminal</span>
+                      {execSec}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

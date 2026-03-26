@@ -346,5 +346,11 @@
   "swipeApprove": "اسحب يميناً للموافقة",
   "swipeReject": "اسحب يساراً للرفض",
   "swipeRevoke": "اسحب يساراً للإلغاء",
-  "swipeActions": "إجراءات السحب"
+  "swipeActions": "إجراءات السحب",
+
+  "removeDevice": "إزالة الجهاز",
+  "deviceRemoved": "تمت إزالة الجهاز",
+  "confirmRemoveTitle": "إزالة الجهاز",
+  "confirmRemoveDesc": "إزالة الجهاز {name}؟ سيتم إلغاء جميع الرموز وسيحتاج الجهاز إلى إعادة الاقتران.",
+  "operationDeviceRemoved": "تمت إزالة الجهاز {name}"
 }

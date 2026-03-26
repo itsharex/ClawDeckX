@@ -224,5 +224,12 @@
   "lifecycleReason": "Reason",
   "lifecycleError": "Error",
   "lifecycleNotifyShutdown": "Notify shutdown",
-  "lifecycleNotifyShutdownHint": "Send notification when gateway shuts down"
+  "lifecycleNotifyShutdownHint": "Send notification when gateway shuts down",
+
+  "secretsTitle": "Secrets",
+  "secretsReloadTitle": "Reload Secrets",
+  "secretsReloadDesc": "Reload .env and vault secrets without restarting the gateway",
+  "secretsReload": "Reload",
+  "secretsReloadOk": "Secrets reloaded",
+  "secretsReloadFailed": "Failed to reload secrets"
 }

@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} गंभीर",
         "secAuditFindings": "{{total}} खोज(ें)",
         "secAuditViewDetail": "विवरण देखें",
-        "detectingOnEnter": "सिस्टम स्थिति पहचानी जा रही है..."
+        "detectingOnEnter": "सिस्टम स्थिति पहचानी जा रही है...",
+        "secConfigTitle": "Security Config",
+        "secToolProfile": "Tool Profile",
+        "secSandbox": "Sandbox",
+        "secExecSecurity": "Exec Security",
+        "secDenyList": "Deny List",
+        "secAllowList": "Allow List",
+        "secFsWsOnly": "Workspace FS"
     }
 }

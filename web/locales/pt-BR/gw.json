@@ -223,5 +223,12 @@
   "lifecycleReason": "Motivo",
   "lifecycleError": "Erro",
   "lifecycleNotifyShutdown": "Notificar desligamento",
-  "lifecycleNotifyShutdownHint": "Enviar notificação ao desligar o gateway"
+  "lifecycleNotifyShutdownHint": "Enviar notificação ao desligar o gateway",
+
+  "secretsTitle": "Segredos",
+  "secretsReloadTitle": "Recarregar Segredos",
+  "secretsReloadDesc": "Recarregar .env e segredos do vault sem reiniciar o gateway",
+  "secretsReload": "Recarregar",
+  "secretsReloadOk": "Segredos recarregados",
+  "secretsReloadFailed": "Falha ao recarregar segredos"
 }

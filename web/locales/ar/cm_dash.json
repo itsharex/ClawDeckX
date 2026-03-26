@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} حرج",
         "secAuditFindings": "{{total}} نتيجة",
         "secAuditViewDetail": "عرض التفاصيل",
-        "detectingOnEnter": "جاري اكتشاف حالة النظام..."
+        "detectingOnEnter": "جاري اكتشاف حالة النظام...",
+        "secConfigTitle": "Security Config",
+        "secToolProfile": "Tool Profile",
+        "secSandbox": "Sandbox",
+        "secExecSecurity": "Exec Security",
+        "secDenyList": "Deny List",
+        "secAllowList": "Allow List",
+        "secFsWsOnly": "Workspace FS"
     }
 }

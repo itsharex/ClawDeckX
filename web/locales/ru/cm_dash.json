@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} критических",
         "secAuditFindings": "{{total}} обнаружено",
         "secAuditViewDetail": "Подробнее",
-        "detectingOnEnter": "Определение состояния системы..."
+        "detectingOnEnter": "Определение состояния системы...",
+        "secConfigTitle": "Security Config",
+        "secToolProfile": "Tool Profile",
+        "secSandbox": "Sandbox",
+        "secExecSecurity": "Exec Security",
+        "secDenyList": "Deny List",
+        "secAllowList": "Allow List",
+        "secFsWsOnly": "Workspace FS"
     }
 }

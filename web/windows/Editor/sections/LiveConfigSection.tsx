@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Language } from '../../../types';
 import { getTranslation } from '../../../locales';
 import { gwApi } from '../../../services/api';
@@ -26,6 +26,26 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
   const [setVal, setSetVal] = useState('');
   const [setSending, setSetSending] = useState(false);
   const [setResult, setSetResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Schema lookup for config key hint
+  const [schemaHint, setSchemaHint] = useState<any>(null);
+  const [schemaHintLoading, setSchemaHintLoading] = useState(false);
+  const schemaLookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (schemaLookupTimer.current) clearTimeout(schemaLookupTimer.current);
+    const key = setKey.trim();
+    if (!key || key.length < 2) { setSchemaHint(null); return; }
+    schemaLookupTimer.current = setTimeout(async () => {
+      setSchemaHintLoading(true);
+      try {
+        const res = await gwApi.configSchemaLookup(key);
+        setSchemaHint(res);
+      } catch { setSchemaHint(null); }
+      setSchemaHintLoading(false);
+    }, 400);
+    return () => { if (schemaLookupTimer.current) clearTimeout(schemaLookupTimer.current); };
+  }, [setKey]);
 
 
 
@@ -403,6 +423,43 @@ export const LiveConfigSection: React.FC<LiveConfigSectionProps> = ({ language }
               {es.configSetBtn}
             </button>
           </div>
+          {/* Schema lookup hint */}
+          {schemaHintLoading && setKey.trim().length >= 2 && (
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-white/30">
+              <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+              {es.schemaLookupLoading || 'Looking up schema...'}
+            </div>
+          )}
+          {schemaHint && !schemaHintLoading && (() => {
+            const s = schemaHint?.schema || schemaHint;
+            const sType = s?.type;
+            const sDesc = s?.description;
+            const sEnum = s?.enum;
+            const sDef = s?.default;
+            if (!sType && !sDesc) return null;
+            return (
+              <div className="px-2.5 py-2 rounded-lg bg-sky-50 dark:bg-sky-500/[0.04] border border-sky-200/50 dark:border-sky-500/10 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="material-symbols-outlined text-[12px] text-sky-500">schema</span>
+                  <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400">{setKey.trim()}</span>
+                  {sType && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 font-bold">{Array.isArray(sType) ? sType.join(' | ') : sType}</span>}
+                  {sDef !== undefined && <span className="text-[9px] text-slate-400 dark:text-white/30">{es.schemaDefault || 'default'}: <span className="font-mono">{JSON.stringify(sDef)}</span></span>}
+                </div>
+                {sDesc && <p className="text-[10px] text-slate-500 dark:text-white/40">{sDesc}</p>}
+                {sEnum && sEnum.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[9px] text-slate-400 dark:text-white/30">{es.schemaEnum || 'options'}:</span>
+                    {sEnum.map((v: any, i: number) => (
+                      <button key={i} onClick={() => setSetVal(typeof v === 'string' ? v : JSON.stringify(v))}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-white/50 font-mono hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer">
+                        {String(v)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {setResult && (
             <div className={`px-2 py-1.5 rounded-lg text-[10px] font-bold ${setResult.ok ? 'bg-mac-green/10 text-mac-green' : 'bg-red-50 dark:bg-red-500/5 text-red-500'}`}>
               {setResult.text}

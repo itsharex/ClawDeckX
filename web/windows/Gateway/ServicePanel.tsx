@@ -427,6 +427,37 @@ const ServicePanel: React.FC<ServicePanelProps> = ({ status, healthCheckEnabled,
         )}
       </div>
 
+      {/* Secrets Reload */}
+      <div className="space-y-2">
+        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-white/40 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[14px]">key</span>
+          {gw.secretsTitle || 'Secrets'}
+        </h4>
+        <div className="px-3 py-3 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[20px] text-amber-500">vpn_key</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-bold text-slate-600 dark:text-white/70">{gw.secretsReloadTitle || 'Reload Secrets'}</p>
+            <p className="text-[10px] text-slate-400 dark:text-white/40 mt-0.5">{gw.secretsReloadDesc || 'Reload .env and vault secrets without restarting the gateway'}</p>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                await gwApi.secretsReload();
+                toast('success', gw.secretsReloadOk || 'Secrets reloaded');
+              } catch (err: any) {
+                toast('error', (gw.secretsReloadFailed || 'Failed to reload secrets') + ': ' + (err?.message || ''));
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold text-[10px] transition-all hover:bg-amber-500/25 shrink-0"
+          >
+            <span className="material-symbols-outlined text-[14px]">refresh</span>
+            {gw.secretsReload || 'Reload'}
+          </button>
+        </div>
+      </div>
+
       {/* Gateway Lifecycle Timeline */}
       <div className="space-y-2">
         <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-white/40 flex items-center gap-1.5">

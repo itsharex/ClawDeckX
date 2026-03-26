@@ -346,5 +346,11 @@
   "swipeApprove": "Nach rechts wischen zum Genehmigen",
   "swipeReject": "Nach links wischen zum Ablehnen",
   "swipeRevoke": "Nach links wischen zum Widerrufen",
-  "swipeActions": "Wischaktionen"
+  "swipeActions": "Wischaktionen",
+
+  "removeDevice": "Gerät entfernen",
+  "deviceRemoved": "Gerät entfernt",
+  "confirmRemoveTitle": "Gerät entfernen",
+  "confirmRemoveDesc": "Gerät {name} entfernen? Alle Token werden widerrufen und das Gerät muss erneut gekoppelt werden.",
+  "operationDeviceRemoved": "Gerät {name} entfernt"
 }

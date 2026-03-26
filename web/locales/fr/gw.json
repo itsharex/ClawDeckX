@@ -223,5 +223,12 @@
   "lifecycleReason": "Raison",
   "lifecycleError": "Erreur",
   "lifecycleNotifyShutdown": "Notifier l'arrêt",
-  "lifecycleNotifyShutdownHint": "Envoyer une notification lors de l'arrêt de la passerelle"
+  "lifecycleNotifyShutdownHint": "Envoyer une notification lors de l'arrêt de la passerelle",
+
+  "secretsTitle": "Secrets",
+  "secretsReloadTitle": "Recharger les secrets",
+  "secretsReloadDesc": "Recharger les secrets .env et vault sans redémarrer la passerelle",
+  "secretsReload": "Recharger",
+  "secretsReloadOk": "Secrets rechargés",
+  "secretsReloadFailed": "Échec du rechargement des secrets"
 }

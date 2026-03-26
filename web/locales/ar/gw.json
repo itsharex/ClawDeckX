@@ -223,5 +223,12 @@
   "lifecycleReason": "السبب",
   "lifecycleError": "خطأ",
   "lifecycleNotifyShutdown": "إشعار الإيقاف",
-  "lifecycleNotifyShutdownHint": "إرسال إشعار عند إيقاف البوابة"
+  "lifecycleNotifyShutdownHint": "إرسال إشعار عند إيقاف البوابة",
+
+  "secretsTitle": "المفاتيح السرية",
+  "secretsReloadTitle": "إعادة تحميل المفاتيح",
+  "secretsReloadDesc": "إعادة تحميل .env ومفاتيح vault بدون إعادة تشغيل البوابة",
+  "secretsReload": "إعادة تحميل",
+  "secretsReloadOk": "تم إعادة تحميل المفاتيح",
+  "secretsReloadFailed": "فشل إعادة تحميل المفاتيح"
 }

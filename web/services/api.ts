@@ -1069,6 +1069,8 @@ export const gwApi = {
     }
   },
   configSchema: () => rpc('config.schema'),
+  configSchemaLookup: (path: string) => rpc('config.schema.lookup', { path }),
+  secretsReload: () => rpc('secrets.reload'),
   // Agents
   agents: () => rpc<any[]>('agents.list'),
   agentIdentity: (agentId: string) =>
@@ -1139,6 +1141,8 @@ export const gwApi = {
     rpc('device.pair.approve', { requestId }),
   devicePairReject: (requestId: string) =>
     rpc('device.pair.reject', { requestId }),
+  devicePairRemove: (deviceId: string) =>
+    rpc('device.pair.remove', { deviceId }),
   deviceTokenRotate: (deviceId: string, role: string, scopes?: string[]) =>
     rpc('device.token.rotate', { deviceId, role, scopes }),
   deviceTokenRevoke: (deviceId: string, role: string) =>

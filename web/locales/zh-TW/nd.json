@@ -346,5 +346,11 @@
   "swipeApprove": "右滑核准",
   "swipeReject": "左滑拒絕",
   "swipeRevoke": "左滑撤銷",
-  "swipeActions": "滑動操作"
+  "swipeActions": "滑動操作",
+
+  "removeDevice": "移除裝置",
+  "deviceRemoved": "裝置已移除",
+  "confirmRemoveTitle": "移除裝置",
+  "confirmRemoveDesc": "移除裝置 {name}？所有 Token 將被撤銷，裝置需要重新配對。",
+  "operationDeviceRemoved": "已移除裝置 {name}"
 }

@@ -346,5 +346,11 @@
   "swipeApprove": "Geser kanan untuk menyetujui",
   "swipeReject": "Geser kiri untuk menolak",
   "swipeRevoke": "Geser kiri untuk mencabut",
-  "swipeActions": "Tindakan Geser"
+  "swipeActions": "Tindakan Geser",
+
+  "removeDevice": "Hapus Perangkat",
+  "deviceRemoved": "Perangkat dihapus",
+  "confirmRemoveTitle": "Hapus Perangkat",
+  "confirmRemoveDesc": "Hapus perangkat {name}? Semua token akan dicabut dan perangkat perlu dipasangkan ulang.",
+  "operationDeviceRemoved": "Perangkat {name} dihapus"
 }

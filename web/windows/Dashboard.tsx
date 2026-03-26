@@ -762,6 +762,64 @@ const Dashboard: React.FC<DashboardProps> = ({ language }) => {
           </button>
         )}
 
+        {/* Security Config Summary (P3) */}
+        {userConfig && (() => {
+          const parsed = userConfig?.parsed || userConfig?.config || userConfig || {};
+          const toolsCfg = parsed?.tools || {};
+          const agentsCfg = parsed?.agents || {};
+          const agentList: any[] = agentsCfg?.list || [];
+          const globalProfile = toolsCfg.profile || 'full';
+          const globalExecSec = toolsCfg.exec?.security || '—';
+          const globalSandbox = agentsCfg?.defaults?.sandbox?.mode || agentsCfg?.defaults?.sandbox?.backend || 'Off';
+          const denyCount = Array.isArray(toolsCfg.deny) ? toolsCfg.deny.length : 0;
+          const allowCount = Array.isArray(toolsCfg.allow) ? toolsCfg.allow.length : 0;
+          const fsWsOnly = toolsCfg.fs?.workspaceOnly ? true : false;
+          const agentsWithOverrides = agentList.filter((e: any) => e?.tools && Object.keys(e.tools).length > 0).length;
+          const agentsWithSandbox = agentList.filter((e: any) => e?.sandbox?.mode || e?.sandbox?.backend).length;
+          const openEditorSection = (section: string) => {
+            window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'editor', section } }));
+          };
+          const items = [
+            { icon: 'build', label: d.secToolProfile || 'Tool Profile', value: globalProfile, color: globalProfile === 'full' ? 'text-amber-500' : globalProfile === 'minimal' ? 'text-emerald-500' : 'text-blue-500', section: 'tools' },
+            { icon: 'shield', label: d.secSandbox || 'Sandbox', value: globalSandbox, color: globalSandbox !== 'Off' ? 'text-emerald-500' : 'text-slate-400', section: 'agents' },
+            { icon: 'terminal', label: d.secExecSecurity || 'Exec Security', value: globalExecSec, color: globalExecSec === 'sandbox' ? 'text-emerald-500' : globalExecSec === 'prompt' ? 'text-blue-500' : 'text-amber-500', section: 'tools' },
+            { icon: 'block', label: d.secDenyList || 'Deny List', value: denyCount > 0 ? `${denyCount} tools` : '—', color: denyCount > 0 ? 'text-blue-500' : 'text-slate-400', section: 'tools' },
+            { icon: 'check_circle', label: d.secAllowList || 'Allow List', value: allowCount > 0 ? `${allowCount} tools` : '—', color: allowCount > 0 ? 'text-blue-500' : 'text-slate-400', section: 'tools' },
+            { icon: 'folder_managed', label: d.secFsWsOnly || 'Workspace FS', value: fsWsOnly ? 'Yes' : 'No', color: fsWsOnly ? 'text-emerald-500' : 'text-slate-400', section: 'tools' },
+          ];
+          return (
+            <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4 sci-card">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="material-symbols-outlined text-[16px] text-primary">security</span>
+                <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/80">{d.secConfigTitle || 'Security Config'}</h3>
+                {agentsWithOverrides > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-500">
+                    {agentsWithOverrides} agent override{agentsWithOverrides > 1 ? 's' : ''}
+                  </span>
+                )}
+                {agentsWithSandbox > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-500">
+                    {agentsWithSandbox} sandboxed
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {items.map(item => (
+                  <button key={item.label} onClick={() => openEditorSection(item.section)}
+                    className="rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] p-2 text-start hover:border-primary/30 hover:bg-primary/[0.02] transition-all group cursor-pointer">
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className={`material-symbols-outlined text-[12px] ${item.color}`}>{item.icon}</span>
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase truncate">{item.label}</span>
+                      <span className="material-symbols-outlined text-[10px] text-slate-300 dark:text-white/10 opacity-0 group-hover:opacity-100 transition-opacity ms-auto">open_in_new</span>
+                    </div>
+                    <p className={`text-[10px] font-bold font-mono ${item.color}`}>{item.value}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Host Info Card - refactored with GaugeCard */}
         {(() => {
           if (!hostInfo) {

@@ -223,5 +223,12 @@
   "lifecycleReason": "Grund",
   "lifecycleError": "Fehler",
   "lifecycleNotifyShutdown": "Shutdown-Benachrichtigung",
-  "lifecycleNotifyShutdownHint": "Benachrichtigung senden, wenn das Gateway heruntergefahren wird"
+  "lifecycleNotifyShutdownHint": "Benachrichtigung senden, wenn das Gateway heruntergefahren wird",
+
+  "secretsTitle": "Geheimnisse",
+  "secretsReloadTitle": "Geheimnisse neu laden",
+  "secretsReloadDesc": ".env- und Vault-Geheimnisse ohne Gateway-Neustart neu laden",
+  "secretsReload": "Neu laden",
+  "secretsReloadOk": "Geheimnisse neu geladen",
+  "secretsReloadFailed": "Fehler beim Neuladen der Geheimnisse"
 }

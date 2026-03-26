@@ -223,5 +223,12 @@
   "lifecycleReason": "कारण",
   "lifecycleError": "त्रुटि",
   "lifecycleNotifyShutdown": "शटडाउन सूचना",
-  "lifecycleNotifyShutdownHint": "गेटवे बंद होने पर सूचना भेजें"
+  "lifecycleNotifyShutdownHint": "गेटवे बंद होने पर सूचना भेजें",
+
+  "secretsTitle": "सीक्रेट्स",
+  "secretsReloadTitle": "सीक्रेट्स पुनः लोड करें",
+  "secretsReloadDesc": "गेटवे को रीस्टार्ट किए बिना .env और vault सीक्रेट्स पुनः लोड करें",
+  "secretsReload": "पुनः लोड",
+  "secretsReloadOk": "सीक्रेट्स पुनः लोड हो गए",
+  "secretsReloadFailed": "सीक्रेट्स पुनः लोड करने में विफल"
 }

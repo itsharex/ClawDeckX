@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} kritis",
         "secAuditFindings": "{{total}} temuan",
         "secAuditViewDetail": "Lihat detail",
-        "detectingOnEnter": "Mendeteksi status sistem..."
+        "detectingOnEnter": "Mendeteksi status sistem...",
+        "secConfigTitle": "Security Config",
+        "secToolProfile": "Tool Profile",
+        "secSandbox": "Sandbox",
+        "secExecSecurity": "Exec Security",
+        "secDenyList": "Deny List",
+        "secAllowList": "Allow List",
+        "secFsWsOnly": "Workspace FS"
     }
 }

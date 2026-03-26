@@ -223,5 +223,12 @@
   "lifecycleReason": "Причина",
   "lifecycleError": "Ошибка",
   "lifecycleNotifyShutdown": "Уведомление об остановке",
-  "lifecycleNotifyShutdownHint": "Отправлять уведомление при остановке шлюза"
+  "lifecycleNotifyShutdownHint": "Отправлять уведомление при остановке шлюза",
+
+  "secretsTitle": "Секреты",
+  "secretsReloadTitle": "Перезагрузить секреты",
+  "secretsReloadDesc": "Перезагрузить .env и секреты vault без перезапуска шлюза",
+  "secretsReload": "Перезагрузить",
+  "secretsReloadOk": "Секреты перезагружены",
+  "secretsReloadFailed": "Не удалось перезагрузить секреты"
 }

@@ -224,5 +224,12 @@
   "lifecycleReason": "原因",
   "lifecycleError": "错误",
   "lifecycleNotifyShutdown": "关停通知",
-  "lifecycleNotifyShutdownHint": "网关关闭时发送通知"
+  "lifecycleNotifyShutdownHint": "网关关闭时发送通知",
+
+  "secretsTitle": "密钥管理",
+  "secretsReloadTitle": "重新加载密钥",
+  "secretsReloadDesc": "无需重启网关即可重新加载 .env 和 vault 密钥",
+  "secretsReload": "重新加载",
+  "secretsReloadOk": "密钥已重新加载",
+  "secretsReloadFailed": "重新加载密钥失败"
 }

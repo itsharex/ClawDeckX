@@ -223,5 +223,12 @@
   "lifecycleReason": "原因",
   "lifecycleError": "錯誤",
   "lifecycleNotifyShutdown": "關停通知",
-  "lifecycleNotifyShutdownHint": "閘道器關閉時傳送通知"
+  "lifecycleNotifyShutdownHint": "閘道器關閉時傳送通知",
+
+  "secretsTitle": "金鑰管理",
+  "secretsReloadTitle": "重新載入金鑰",
+  "secretsReloadDesc": "無需重啟閘道器即可重新載入 .env 和 vault 金鑰",
+  "secretsReload": "重新載入",
+  "secretsReloadOk": "金鑰已重新載入",
+  "secretsReloadFailed": "重新載入金鑰失敗"
 }

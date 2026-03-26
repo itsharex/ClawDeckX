@@ -346,5 +346,11 @@
   "swipeApprove": "स्वीकृत करने के लिए दाएं स्वाइप करें",
   "swipeReject": "अस्वीकृत करने के लिए बाएं स्वाइप करें",
   "swipeRevoke": "रद्द करने के लिए बाएं स्वाइप करें",
-  "swipeActions": "स्वाइप कार्य"
+  "swipeActions": "स्वाइप कार्य",
+
+  "removeDevice": "डिवाइस हटाएं",
+  "deviceRemoved": "डिवाइस हटाया गया",
+  "confirmRemoveTitle": "डिवाइस हटाएं",
+  "confirmRemoveDesc": "डिवाइस {name} हटाएं? सभी टोकन रद्द हो जाएंगे और डिवाइस को फिर से पेयर करना होगा।",
+  "operationDeviceRemoved": "डिवाइस {name} हटाया गया"
 }

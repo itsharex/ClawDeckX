@@ -223,5 +223,12 @@
   "lifecycleReason": "理由",
   "lifecycleError": "エラー",
   "lifecycleNotifyShutdown": "停止通知",
-  "lifecycleNotifyShutdownHint": "ゲートウェイ停止時に通知を送信"
+  "lifecycleNotifyShutdownHint": "ゲートウェイ停止時に通知を送信",
+
+  "secretsTitle": "シークレット",
+  "secretsReloadTitle": "シークレットを再読み込み",
+  "secretsReloadDesc": "ゲートウェイを再起動せずに .env と vault シークレットを再読み込みします",
+  "secretsReload": "再読み込み",
+  "secretsReloadOk": "シークレットを再読み込みしました",
+  "secretsReloadFailed": "シークレットの再読み込みに失敗しました"
 }

@@ -162,6 +162,13 @@
         "secAuditCriticalCount": "{{count}} 項嚴重",
         "secAuditFindings": "共 {{total}} 項發現",
         "secAuditViewDetail": "檢視詳情",
-        "detectingOnEnter": "正在偵測系統狀態..."
+        "detectingOnEnter": "正在偵測系統狀態...",
+        "secConfigTitle": "安全配置",
+        "secToolProfile": "工具配置",
+        "secSandbox": "沙箱",
+        "secExecSecurity": "執行安全",
+        "secDenyList": "拒絕列表",
+        "secAllowList": "允許列表",
+        "secFsWsOnly": "工作區檔案系統"
     }
 }
