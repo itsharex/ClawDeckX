@@ -822,24 +822,17 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         {a.a2aAllowTitle || 'Allowed Agents'}
                       </p>
 
-                      {a2aAllow.length > 0 && (
+                      {a2aAllow.filter(id => id !== '*' && !id.includes('*')).length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
-                          {a2aAllow.map(id => {
-                            const isWildcard = id === '*' || id.includes('*');
-                            return (
-                              <div key={id} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
-                                isWildcard
-                                  ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/20'
-                                  : 'bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20'
-                              }`}>
+                          {a2aAllow.filter(id => id !== '*' && !id.includes('*')).map(id => (
+                              <div key={id} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20">
                                 {resolveAgentLabel(id)}
                                 <button onClick={() => { const d = initDraft(); setA2aDraft({ ...d, allow: d.allow.filter(x => x !== id) }); }} disabled={a2aSaving}
                                   className="p-0 opacity-40 hover:opacity-100 transition-opacity">
                                   <span className="material-symbols-outlined text-[9px]">close</span>
                                 </button>
                               </div>
-                            );
-                          })}
+                          ))}
                         </div>
                       )}
 
@@ -1073,22 +1066,17 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                               : (a.subAllowEmpty || 'No subagent delegation configured — this agent cannot spawn other agents')}
                           </p>
 
-                          {hasSubagents && (
+                          {allowAgents.filter(id => id !== '*').length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mb-3">
-                              {allowAgents.map(id => {
-                                const isWildcard = id === '*';
+                              {allowAgents.filter(id => id !== '*').map(id => {
                                 const ag = agents.find((x: any) => x.id === id);
                                 return (
                                   <div key={id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
-                                    isWildcard
-                                      ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200/60 dark:border-amber-500/20'
-                                      : ag
-                                        ? 'bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200/60 dark:border-cyan-500/20'
-                                        : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40 border border-slate-200/60 dark:border-white/10'
+                                    ag
+                                      ? 'bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200/60 dark:border-cyan-500/20'
+                                      : 'bg-slate-50 dark:bg-white/5 text-slate-500 dark:text-white/40 border border-slate-200/60 dark:border-white/10'
                                   }`}>
-                                    <span className="material-symbols-outlined text-[11px]">
-                                      {isWildcard ? 'select_all' : 'smart_toy'}
-                                    </span>
+                                    <span className="material-symbols-outlined text-[11px]">smart_toy</span>
                                     {resolveAgentLabel(id)}
                                     <button
                                       onClick={() => setSubDraft((subDraft ?? [...serverAllow]).filter(x => x !== id))}
