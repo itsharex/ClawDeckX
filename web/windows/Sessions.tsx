@@ -2353,6 +2353,18 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                       </div>
                       <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
+                      {/* Agent name badge (before kind badge) */}
+                      {(() => {
+                        const kp = (s.key || '').split(':');
+                        if (kp[0] !== 'agent' || !kp[1]) return null;
+                        const aId = kp[1];
+                        const aLabel = agentsList.find(a => a.id === aId)?.label || aId;
+                        return (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 truncate max-w-[80px] me-1" title={aId}>
+                            {aLabel}
+                          </span>
+                        );
+                      })()}
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${s.kind === 'direct' ? 'bg-blue-500/10 text-blue-500' :
                         s.kind === 'group' ? 'bg-purple-500/10 text-purple-500' :
                           'bg-slate-200 dark:bg-white/5 text-slate-400 dark:text-white/40'
