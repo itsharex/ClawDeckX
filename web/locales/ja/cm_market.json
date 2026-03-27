@@ -19,24 +19,6 @@
     "enabled": "スキルを有効化しました",
     "disabled": "スキルを無効化しました",
     "toggleFailed": "切替に失敗しました",
-    "noDescription": "説明なし",
-    "toolsCatalog": "ツールカタログ",
-    "toolsCatalogTitle": "ツールカタログ",
-    "toolsCatalogLoading": "読み込み中...",
-    "toolsCatalogLoadFail": "読み込み失敗",
-    "toolsCatalogRetry": "再試行",
-    "toolsCatalogTotal": "個のツール",
-    "toolsCatalogCore": "コア",
-    "toolsCatalogPlugin": "プラグイン",
-    "toolsCatalogSearch": "ツールを検索...",
-    "toolsCatalogFilterAll": "すべて",
-    "toolsCatalogProfile": "プロファイル",
-    "toolsCatalogProfiles": "ツールプロファイル",
-    "toolsCatalogProfileMinimal": "ミニマル",
-    "toolsCatalogProfileCoding": "コーディング",
-    "toolsCatalogProfileMessaging": "メッセージ",
-    "toolsCatalogProfileFull": "フル",
-    "toolsCatalogOptional": "オプション",
-    "toolsCatalogNoResults": "結果なし"
+    "noDescription": "説明なし"
   }
 }

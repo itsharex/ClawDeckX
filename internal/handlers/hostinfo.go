@@ -42,24 +42,25 @@ const (
 
 // HostInfoResponse is the host hardware info response.
 type HostInfoResponse struct {
-	Hostname        string     `json:"hostname"`
-	OS              string     `json:"os"`
-	Arch            string     `json:"arch"`
-	Platform        string     `json:"platform"`
-	NumCPU          int        `json:"numCpu"`
-	GoVersion       string     `json:"goVersion"`
-	Uptime          int64      `json:"uptimeMs"`
-	ServerUptimeMs  int64      `json:"serverUptimeMs"`
-	MemStats        MemInfo    `json:"memStats"`
-	SysMem          SysMemInfo `json:"sysMem"`
-	CpuUsage        float64    `json:"cpuUsage"`
-	DiskUsage       []DiskInfo `json:"diskUsage,omitempty"`
-	EnvInfo         EnvInfo    `json:"env"`
-	NumGoroutine    int        `json:"numGoroutine"`
-	NodeVersion     string     `json:"nodeVersion,omitempty"`
-	OpenClawVersion string     `json:"openclawVersion,omitempty"`
-	DbPath          string     `json:"dbPath,omitempty"`
-	ConfigPath      string     `json:"configPath,omitempty"`
+	Hostname             string     `json:"hostname"`
+	OS                   string     `json:"os"`
+	Arch                 string     `json:"arch"`
+	Platform             string     `json:"platform"`
+	NumCPU               int        `json:"numCpu"`
+	GoVersion            string     `json:"goVersion"`
+	Uptime               int64      `json:"uptimeMs"`
+	ServerUptimeMs       int64      `json:"serverUptimeMs"`
+	MemStats             MemInfo    `json:"memStats"`
+	SysMem               SysMemInfo `json:"sysMem"`
+	CpuUsage             float64    `json:"cpuUsage"`
+	DiskUsage            []DiskInfo `json:"diskUsage,omitempty"`
+	EnvInfo              EnvInfo    `json:"env"`
+	NumGoroutine         int        `json:"numGoroutine"`
+	NodeVersion          string     `json:"nodeVersion,omitempty"`
+	OpenClawVersion      string     `json:"openclawVersion,omitempty"`
+	DbPath               string     `json:"dbPath,omitempty"`
+	ConfigPath           string     `json:"configPath,omitempty"`
+	AvailablePkgManagers []string   `json:"availablePkgManagers,omitempty"`
 }
 
 // SysMemInfo is system-level memory info.
@@ -419,6 +420,17 @@ func (h *HostInfoHandler) getStaticInfo() HostInfoResponse {
 	// OpenClaw version rarely changes during runtime.
 	if _, ver, ok := openclaw.DetectOpenClawBinary(); ok {
 		resp.OpenClawVersion = ver
+	}
+
+	// Detect available package managers (for recipe install filtering).
+	for _, pm := range []string{"brew", "npm", "winget", "scoop", "choco", "apt-get", "pip3"} {
+		if _, err := exec.LookPath(pm); err == nil {
+			name := pm
+			if pm == "apt-get" {
+				name = "apt"
+			}
+			resp.AvailablePkgManagers = append(resp.AvailablePkgManagers, name)
+		}
 	}
 
 	// Paths are static enough for dashboard display.

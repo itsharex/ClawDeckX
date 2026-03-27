@@ -259,6 +259,16 @@ function areSessionsEquivalent(a: GwSession[], b: GwSession[]): boolean {
   });
 }
 
+/* ── In-memory config cache (avoids re-fetch on re-mount) ── */
+let _cfgCache: { data: any; ts: number } | null = null;
+const CFG_CACHE_TTL = 60_000;
+async function getCachedConfig() {
+  if (_cfgCache && Date.now() - _cfgCache.ts < CFG_CACHE_TTL) return _cfgCache.data;
+  const data = await gwApi.configGet();
+  _cfgCache = { data, ts: Date.now() };
+  return data;
+}
+
 const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSessionKeyConsumed }) => {
   const t = useMemo(() => getTranslation(language), [language]);
   const c = t.chat as any;
@@ -1188,11 +1198,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     if (!hasStartedInitialDetectingRef.current) {
       hasStartedInitialDetectingRef.current = true;
       setInitialDetecting(true);
-      // Priority: show chat history ASAP, then refresh sidebar sessions
-      loadHistory().then(() => {
-        setInitialDetecting(false);
-        return loadSessions({ silent: true });
-      }).then(() => {
+      // Load history + sessions in parallel for faster first paint
+      const historyP = loadHistory().then(() => setInitialDetecting(false));
+      const sessionsP = loadSessions({ silent: true });
+      Promise.all([historyP, sessionsP]).then(() => {
         // Auto-select first session if current session has no messages
         if (!hasAutoSelectedRef.current) {
           hasAutoSelectedRef.current = true;
@@ -2214,14 +2223,27 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   // Available models for session override dropdown
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
   const [securityCfg, setSecurityCfg] = useState<any>(null);
+  // Load securityCfg eagerly on gwReady so the right-panel Tool Policy shows immediately
+  useEffect(() => {
+    if (!gwReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cfg = await getCachedConfig() as any;
+        if (!cancelled) setSecurityCfg(cfg);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [gwReady]);
+  // Load model options only when override panel is opened
   useEffect(() => {
     if (!settingsOpen || !gwReady) return;
     let cancelled = false;
     (async () => {
       try {
-        const cfg = await gwApi.configGet() as any;
+        const cfg = securityCfg || await getCachedConfig() as any;
         if (cancelled) return;
-        setSecurityCfg(cfg);
+        if (!securityCfg) setSecurityCfg(cfg);
         const providers = cfg?.models?.providers || cfg?.parsed?.models?.providers || cfg?.config?.models?.providers || {};
         const opts: { value: string; label: string }[] = [
           { value: '', label: cRef.current.inherit || 'Inherit' },
@@ -2714,40 +2736,6 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                   )}
                 </label>
               </div>
-              {/* Security badges (P2b) */}
-              {securityCfg && (() => {
-                const parsed = securityCfg?.parsed || securityCfg?.config || securityCfg || {};
-                const globalTools = parsed?.tools || {};
-                const agentsCfg = parsed?.agents || {};
-                const agentId = sessionKey?.split(':')?.[1] || '';
-                const agentList: any[] = agentsCfg?.list || [];
-                const agentEntry = agentList.find((e: any) => e?.id === agentId) || {};
-                const agentTools = agentEntry.tools || {};
-                const toolProfile = agentTools.profile || globalTools.profile || 'full';
-                const sandboxCfg = agentEntry.sandbox || agentsCfg?.defaults?.sandbox || {};
-                const sandboxMode = sandboxCfg.mode || sandboxCfg.backend || 'Off';
-                const execSec = agentTools.exec?.security || globalTools.exec?.security || '—';
-                const profileColor = toolProfile === 'full' ? 'text-amber-500 bg-amber-500/10' : toolProfile === 'minimal' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10';
-                const sandboxColor = sandboxMode && sandboxMode !== 'Off' ? 'text-emerald-500 bg-emerald-500/10' : 'text-slate-400 bg-slate-100 dark:bg-white/5';
-                const execColor = execSec === 'sandbox' ? 'text-emerald-500 bg-emerald-500/10' : execSec === 'prompt' ? 'text-blue-500 bg-blue-500/10' : 'text-amber-500 bg-amber-500/10';
-                return (
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className="material-symbols-outlined text-[12px] text-slate-400 dark:text-white/25">security</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${profileColor}`}>
-                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">build</span>
-                      {toolProfile}
-                    </span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${sandboxColor}`}>
-                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">shield</span>
-                      {sandboxMode}
-                    </span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${execColor}`}>
-                      <span className="material-symbols-outlined text-[10px] align-text-bottom me-0.5">terminal</span>
-                      {execSec}
-                    </span>
-                  </div>
-                );
-              })()}
             </div>
           </div>
         )}
@@ -3407,6 +3395,22 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
           return await gwApi.sessionsUsageTimeseries(key) as any;
         }}
         labels={c}
+        securityInfo={(() => {
+          if (!securityCfg) return undefined;
+          const parsed = securityCfg?.parsed || securityCfg?.config || securityCfg || {};
+          const globalTools = parsed?.tools || {};
+          const agentsCfg = parsed?.agents || {};
+          const agentId = sessionKey?.split(':')?.[1] || '';
+          const agentList: any[] = agentsCfg?.list || [];
+          const agentEntry = agentList.find((e: any) => e?.id === agentId) || {};
+          const agentTools = agentEntry.tools || {};
+          const sandboxCfg = agentEntry.sandbox || agentsCfg?.defaults?.sandbox || {};
+          return {
+            toolProfile: agentTools.profile || globalTools.profile || 'full',
+            sandboxMode: sandboxCfg.mode || sandboxCfg.backend || 'Off',
+            execSecurity: agentTools.exec?.security || globalTools.exec?.security || '—',
+          };
+        })()}
         session={(() => {
           const agentMatch = sessionKey.match(/^agent:([^:]+):/);
           const agentId = agentMatch?.[1];
@@ -3431,6 +3435,14 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
             runPhase: runPhase,
             agentId,
             agentLabel: agentObj?.label || agentObj?.id,
+          };
+        })()}
+        onNavigateAgent={(() => {
+          const agentMatch = sessionKey.match(/^agent:([^:]+):/);
+          const agentId = agentMatch?.[1];
+          if (!agentId) return undefined;
+          return () => {
+            window.dispatchEvent(new CustomEvent('clawdeck:open-window', { detail: { id: 'agents', agentId, panel: 'tools' } }));
           };
         })()}
         onModelChange={async (model) => {

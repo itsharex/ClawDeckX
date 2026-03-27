@@ -192,6 +192,14 @@
     "sessionType": "النوع",
     "childSessions": "جلسات فرعية",
     "elapsed": "الوقت المنقضي",
-    "lastLatency": "التأخير"
+    "lastLatency": "التأخير",
+    "secToolPolicy": "سياسة الأدوات",
+    "secSandbox": "صندوق الرمل",
+    "secExec": "التنفيذ",
+    "secProfile_minimal": "Minimal",
+    "secProfile_coding": "Coding",
+    "secProfile_messaging": "Messaging",
+    "secProfile_full": "Full",
+    "secGoAgent": "الانتقال إلى إعدادات الوكيل"
   }
 }

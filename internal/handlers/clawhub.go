@@ -834,6 +834,194 @@ func (h *ClawHubHandler) CLIStatus(w http.ResponseWriter, r *http.Request) {
 	web.OK(w, r, resp)
 }
 
+// InstallRecipe executes an install recipe directly (brew, npm, winget, etc.).
+// POST /api/v1/clawhub/install-recipe
+func (h *ClawHubHandler) InstallRecipe(w http.ResponseWriter, r *http.Request) {
+	var params struct {
+		RecipeID string `json:"recipeId"`
+		Kind     string `json:"kind"`
+		Package  string `json:"package"`  // npm package name
+		Formula  string `json:"formula"`  // brew formula / winget/scoop/choco/apt package
+		Bins     []string `json:"bins"`   // expected binaries after install
+		Label    string `json:"label"`
+		SkillKey string `json:"skillKey"` // for logging
+	}
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		web.Fail(w, r, "INVALID_PARAMS", "invalid request", http.StatusBadRequest)
+		return
+	}
+	if params.Kind == "" {
+		web.Fail(w, r, "INVALID_PARAMS", "kind is required", http.StatusBadRequest)
+		return
+	}
+
+	// remote gateway: recipe install is local-only (packages install on the host running ClawDeckX)
+	if h.isRemoteGateway() {
+		web.Fail(w, r, "RECIPE_LOCAL_ONLY", "recipe install is only available on local gateway", http.StatusNotImplemented)
+		return
+	}
+
+	var cmdName string
+	var cmdArgs []string
+
+	switch strings.ToLower(params.Kind) {
+	case "brew":
+		formula := params.Formula
+		if formula == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "formula is required for brew recipe", http.StatusBadRequest)
+			return
+		}
+		// Sanitize: formula must be alphanumeric, hyphens, underscores, slashes (tap/formula)
+		for _, ch := range formula {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '/') {
+				web.Fail(w, r, "INVALID_PARAMS", "invalid formula name", http.StatusBadRequest)
+				return
+			}
+		}
+		cmdName = "brew"
+		cmdArgs = []string{"install", formula}
+
+	case "node", "npm":
+		pkg := params.Package
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "package is required for node recipe", http.StatusBadRequest)
+			return
+		}
+		// Sanitize: npm package names can contain @, /, alphanumeric, hyphens, dots
+		for _, ch := range pkg {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '/' || ch == '@') {
+				web.Fail(w, r, "INVALID_PARAMS", "invalid package name", http.StatusBadRequest)
+				return
+			}
+		}
+		cmdName = "npm"
+		cmdArgs = []string{"install", "-g", pkg}
+
+	case "winget":
+		pkg := params.Formula
+		if pkg == "" {
+			pkg = params.Package
+		}
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "formula/package is required for winget recipe", http.StatusBadRequest)
+			return
+		}
+		cmdName = "winget"
+		cmdArgs = []string{"install", "--id", pkg, "--accept-package-agreements", "--accept-source-agreements"}
+
+	case "scoop":
+		pkg := params.Formula
+		if pkg == "" {
+			pkg = params.Package
+		}
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "formula/package is required for scoop recipe", http.StatusBadRequest)
+			return
+		}
+		cmdName = "scoop"
+		cmdArgs = []string{"install", pkg}
+
+	case "choco":
+		pkg := params.Formula
+		if pkg == "" {
+			pkg = params.Package
+		}
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "formula/package is required for choco recipe", http.StatusBadRequest)
+			return
+		}
+		cmdName = "choco"
+		cmdArgs = []string{"install", pkg, "-y"}
+
+	case "apt":
+		pkg := params.Formula
+		if pkg == "" {
+			pkg = params.Package
+		}
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "formula/package is required for apt recipe", http.StatusBadRequest)
+			return
+		}
+		// Sanitize
+		for _, ch := range pkg {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '+') {
+				web.Fail(w, r, "INVALID_PARAMS", "invalid package name", http.StatusBadRequest)
+				return
+			}
+		}
+		cmdName = "sudo"
+		cmdArgs = []string{"apt-get", "install", "-y", pkg}
+
+	case "pip":
+		pkg := params.Package
+		if pkg == "" {
+			pkg = params.Formula
+		}
+		if pkg == "" {
+			web.Fail(w, r, "INVALID_PARAMS", "package is required for pip recipe", http.StatusBadRequest)
+			return
+		}
+		cmdName = "pip3"
+		cmdArgs = []string{"install", pkg}
+
+	default:
+		web.Fail(w, r, "UNSUPPORTED_RECIPE", fmt.Sprintf("unsupported recipe kind: %s", params.Kind), http.StatusBadRequest)
+		return
+	}
+
+	// Check if the package manager itself is available
+	if _, err := exec.LookPath(cmdName); err != nil {
+		web.Fail(w, r, "PKG_MANAGER_NOT_FOUND", fmt.Sprintf("%s not found in PATH", cmdName), http.StatusUnprocessableEntity)
+		return
+	}
+
+	logger.Log.Info().
+		Str("kind", params.Kind).
+		Str("cmd", cmdName).
+		Strs("args", cmdArgs).
+		Str("skillKey", params.SkillKey).
+		Str("recipeId", params.RecipeID).
+		Msg("executing install recipe")
+
+	cmd := exec.Command(cmdName, cmdArgs...)
+	executil.HideWindow(cmd)
+	cmd.Env = os.Environ()
+
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	if err != nil {
+		logger.Log.Error().Err(err).
+			Str("kind", params.Kind).
+			Str("output", outputStr).
+			Msg("install recipe failed")
+		web.Fail(w, r, "RECIPE_INSTALL_FAILED", fmt.Sprintf("install failed: %s\n%s", err.Error(), outputStr), http.StatusInternalServerError)
+		return
+	}
+
+	// Verify installed bins (best-effort check)
+	verifiedBins := map[string]bool{}
+	for _, bin := range params.Bins {
+		if _, lookErr := exec.LookPath(bin); lookErr == nil {
+			verifiedBins[bin] = true
+		}
+	}
+
+	logger.Log.Info().
+		Str("kind", params.Kind).
+		Str("recipeId", params.RecipeID).
+		Interface("verifiedBins", verifiedBins).
+		Msg("install recipe completed")
+
+	web.OK(w, r, map[string]interface{}{
+		"success":      true,
+		"recipeId":     params.RecipeID,
+		"kind":         params.Kind,
+		"output":       outputStr,
+		"verifiedBins": verifiedBins,
+	})
+}
+
 // UpgradeCLI upgrades ClawHub CLI to latest version.
 // POST /api/v1/clawhub/upgrade-cli
 func (h *ClawHubHandler) UpgradeCLI(w http.ResponseWriter, r *http.Request) {

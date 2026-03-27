@@ -19,24 +19,6 @@
     "enabled": "技能已啟用",
     "disabled": "技能已禁用",
     "toggleFailed": "切換失敗",
-    "noDescription": "暫無描述",
-    "toolsCatalog": "工具目錄",
-    "toolsCatalogTitle": "工具目錄",
-    "toolsCatalogLoading": "載入中...",
-    "toolsCatalogLoadFail": "載入失敗",
-    "toolsCatalogRetry": "重試",
-    "toolsCatalogTotal": "個工具",
-    "toolsCatalogCore": "核心",
-    "toolsCatalogPlugin": "外掛",
-    "toolsCatalogSearch": "搜尋工具...",
-    "toolsCatalogFilterAll": "全部",
-    "toolsCatalogProfile": "設定",
-    "toolsCatalogProfiles": "工具設定",
-    "toolsCatalogProfileMinimal": "精簡",
-    "toolsCatalogProfileCoding": "程式設計",
-    "toolsCatalogProfileMessaging": "訊息",
-    "toolsCatalogProfileFull": "完整",
-    "toolsCatalogOptional": "可選",
-    "toolsCatalogNoResults": "無結果"
+    "noDescription": "暫無描述"
   }
 }

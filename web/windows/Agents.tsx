@@ -111,6 +111,13 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [a2aExpanded, setA2aExpanded] = useState(false);
   const [toolDraft, setToolDraft] = useState<Record<string, any> | null>(null);
   const [toolSaving, setToolSaving] = useState(false);
+  const [customToolInput, setCustomToolInput] = useState('');
+  const [toolSearch, setToolSearch] = useState('');
+  const [toolSourceFilter, setToolSourceFilter] = useState<'all' | 'core' | 'plugin'>('all');
+  const [toolProfileFilter, setToolProfileFilter] = useState('all');
+  const [toolsCatalog, setToolsCatalog] = useState<any>(null);
+  const [toolsCatalogLoading, setToolsCatalogLoading] = useState(false);
+  const [toolsExpanded, setToolsExpanded] = useState<Set<string>>(new Set());
   const [a2aDraft, setA2aDraft] = useState<{ enabled: boolean; allow: string[]; ppTurns: number } | null>(null);
   const [subSaving, setSubSaving] = useState(false);
   const [subDraft, setSubDraft] = useState<string[] | null>(null);
@@ -246,6 +253,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
   useEffect(() => { loadAgents(); loadConfig(); }, []);
 
+  // Listen for cross-window navigation: { id: 'agents', agentId: 'xxx', panel: 'tools' }
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id !== 'agents') return;
+      if (detail.agentId) setSelectedId(detail.agentId);
+      if (detail.panel) setPanel(detail.panel as Panel);
+    };
+    window.addEventListener('clawdeck:open-window', handler);
+    return () => window.removeEventListener('clawdeck:open-window', handler);
+  }, []);
+
   const selectAgent = useCallback(async (id: string) => {
     if (hasUnsavedDraft()) {
       const discard = await confirm({
@@ -278,6 +297,13 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     if (p === 'files' && selectedId) {
       gwApi.agentFilesList(selectedId).then(setFilesList).catch((err: any) => { toast('error', err?.message || a.fetchFailed); });
       workspaceMemoryApi.list(selectedId).then(r => setMemoryFiles(r?.files || [])).catch(() => setMemoryFiles([]));
+    }
+    if (p === 'tools' && !toolsCatalog && !toolsCatalogLoading) {
+      setToolsCatalogLoading(true);
+      gwApi.toolsCatalog({ includePlugins: true }).then((r: any) => {
+        setToolsCatalog(r);
+        setToolsExpanded(new Set((r?.groups || []).map((g: any) => g.id)));
+      }).catch(() => {}).finally(() => setToolsCatalogLoading(false));
     }
     if (p === 'skills' && selectedId) {
       setSkillsLoaded(false);
@@ -1013,7 +1039,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       ))}
                     </div>
 
-                    {/* Security Summary Cards (P1) */}
+                    {/* Editable Security & Tool Config */}
                     {(() => {
                       const parsed = config?.parsed || config?.config || config || {};
                       const globalTools = parsed?.tools || {};
@@ -1021,36 +1047,134 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       const agentList: any[] = agentsCfg?.list || [];
                       const agentEntry = agentList.find((e: any) => e?.id === selected.id) || {};
                       const agentTools = agentEntry.tools || {};
-                      const toolProfile = agentTools.profile || globalTools.profile || 'full';
-                      const sandboxCfg = agentEntry.sandbox || agentsCfg?.defaults?.sandbox || {};
-                      const sandboxMode = sandboxCfg.mode || sandboxCfg.backend || (a.secSandboxOff || 'Off');
-                      const execSec = agentTools.exec?.security || globalTools.exec?.security || '—';
-                      const execAskVal = agentTools.exec?.ask ?? globalTools.exec?.ask ?? false;
-                      const fsWs = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
-                      const secCards = [
-                        { label: a.secToolProfile || 'Tool Profile', value: toolProfile, icon: 'build', color: toolProfile === 'full' ? 'text-amber-500' : toolProfile === 'minimal' ? 'text-emerald-500' : 'text-blue-500' },
-                        { label: a.secSandbox || 'Sandbox', value: String(sandboxMode), icon: 'shield', color: sandboxMode && sandboxMode !== (a.secSandboxOff || 'Off') ? 'text-emerald-500' : 'text-slate-400' },
-                        { label: a.secExecSecurity || 'Exec Security', value: execSec, icon: 'terminal', color: execSec === 'sandbox' ? 'text-emerald-500' : execSec === 'prompt' ? 'text-blue-500' : 'text-amber-500' },
-                        { label: a.toolExecAsk || 'Ask Before Exec', value: execAskVal ? a.yes : a.no, icon: 'help', color: execAskVal ? 'text-emerald-500' : 'text-slate-400' },
-                        { label: a.toolFsWorkspaceOnly || 'Workspace Only FS', value: fsWs ? a.yes : a.no, icon: 'folder_managed', color: fsWs ? 'text-emerald-500' : 'text-slate-400' },
-                      ];
+                      const draft = toolDraft || {};
+                      const liveProfile = agentTools.profile || globalTools.profile || 'full';
+                      const liveExec = { host: agentTools.exec?.host ?? globalTools.exec?.host ?? '', security: agentTools.exec?.security ?? globalTools.exec?.security ?? '', ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false };
+                      const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
+                      const liveAllow: string[] = Array.isArray(agentTools.allow) ? agentTools.allow : (Array.isArray(globalTools.allow) ? globalTools.allow : []);
+                      const liveDeny: string[] = Array.isArray(agentTools.deny) ? agentTools.deny : (Array.isArray(globalTools.deny) ? globalTools.deny : []);
+                      const liveAlsoAllow: string[] = Array.isArray(agentTools.alsoAllow) ? agentTools.alsoAllow : (Array.isArray(globalTools.alsoAllow) ? globalTools.alsoAllow : []);
+                      const profile = draft.profile ?? liveProfile;
+                      const execHost = draft.execHost ?? liveExec.host;
+                      const execSecurity = draft.execSecurity ?? liveExec.security;
+                      const execAsk = draft.execAsk ?? liveExec.ask;
+                      const fsWsOnly = draft.fsWsOnly ?? liveFsWsOnly;
+                      const PROFILES = ['minimal', 'coding', 'messaging', 'full'];
+                      const PROFILE_LABELS: Record<string, string> = { minimal: a.toolProfileMinimal || 'Minimal', coding: a.toolProfileCoding || 'Coding', messaging: a.toolProfileMessaging || 'Messaging', full: a.toolProfileFull || 'Full' };
+                      const toolDirty = toolDraft !== null;
+                      const initDraft = () => toolDraft || { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly };
+
+                      const saveSecConfig = async () => {
+                        if (!toolDraft) return;
+                        setToolSaving(true);
+                        try {
+                          const list2: any[] = agentsCfg?.list || [];
+                          const updatedList = list2.map((e: any) => {
+                            if (e?.id !== selected.id) return e;
+                            const toolsPatch: Record<string, any> = { profile: toolDraft.profile };
+                            toolsPatch.allow = toolDraft.allow?.length > 0 ? toolDraft.allow : [];
+                            toolsPatch.deny = toolDraft.deny?.length > 0 ? toolDraft.deny : [];
+                            toolsPatch.alsoAllow = toolDraft.alsoAllow?.length > 0 ? toolDraft.alsoAllow : [];
+                            toolsPatch.exec = { host: toolDraft.execHost || undefined, security: toolDraft.execSecurity || undefined, ask: toolDraft.execAsk || undefined };
+                            toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
+                            return { ...e, tools: toolsPatch };
+                          });
+                          const fresh = await gwApi.configSafePatch({ agents: { ...agentsCfg, list: updatedList } });
+                          setConfig(fresh);
+                          setToolDraft(null);
+                          toast('success', a.toolSaved || 'Saved');
+                        } catch (err: any) {
+                          toast('error', err?.message || a.toolSaveFailed || 'Failed to save');
+                        }
+                        setToolSaving(false);
+                      };
+
                       return (
-                        <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] p-3">
-                          <div className="flex items-center gap-1.5 mb-3">
-                            <span className="material-symbols-outlined text-[14px] text-primary">security</span>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.secExecSecurity || 'Security'}</span>
+                        <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] p-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="material-symbols-outlined text-[18px] text-primary">security</span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-[11px] font-bold text-slate-700 dark:text-white/70 uppercase">{a.secExecSecurity || 'Security'}</h4>
+                              <p className="text-[10px] text-slate-400 dark:text-white/30">{a.toolProfileDesc || 'Controls which tool categories are available'}</p>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                            {secCards.map(sc => (
-                              <div key={sc.label} className="rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04] p-2">
-                                <div className="flex items-center gap-1 mb-1">
-                                  <span className={`material-symbols-outlined text-[12px] ${sc.color}`}>{sc.icon}</span>
-                                  <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase truncate">{sc.label}</span>
-                                </div>
-                                <p className={`text-[10px] font-bold font-mono truncate ${sc.color}`}>{sc.value}</p>
+
+                          {/* Tool Profile */}
+                          <div className="mb-4">
+                            <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase mb-2">{a.toolProfile || 'Tool Profile'}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {PROFILES.map(p => (
+                                <button key={p} onClick={() => { const d = initDraft(); setToolDraft({ ...d, profile: p }); }}
+                                  disabled={toolSaving}
+                                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
+                                    profile === p
+                                      ? 'bg-primary/10 text-primary border-primary/20'
+                                      : 'bg-slate-50 dark:bg-white/[0.02] text-slate-500 dark:text-white/40 border-slate-200/60 dark:border-white/[0.06] hover:border-primary/30 hover:text-primary'
+                                  }`}>
+                                  {PROFILE_LABELS[p] || p}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Exec & FS settings */}
+                          <div className="mb-1">
+                            <p className="text-[9px] font-bold text-slate-400 dark:text-white/25 uppercase mb-2">{a.secExecSecurity || 'Exec Security'}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                              <div>
+                                <label className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase block mb-1">{a.toolExecHost || 'Host'}</label>
+                                <input value={execHost} onChange={e => { const d = initDraft(); setToolDraft({ ...d, execHost: e.target.value }); }}
+                                  placeholder="e.g. local"
+                                  className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] font-mono text-slate-600 dark:text-white/60 outline-none" />
                               </div>
-                            ))}
+                              <div>
+                                <label className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase block mb-1">{a.toolExecSecurity || 'Security'}</label>
+                                <CustomSelect value={execSecurity}
+                                  onChange={v => { const d = initDraft(); setToolDraft({ ...d, execSecurity: v }); }}
+                                  options={[
+                                    { value: '', label: a.execSecDefault || 'Default' },
+                                    { value: 'prompt', label: a.execSecPrompt || 'Prompt' },
+                                    { value: 'sandbox', label: a.execSecSandbox || 'Sandbox' },
+                                    { value: 'none', label: a.execSecNone || 'None' },
+                                  ]}
+                                  className="w-full max-w-[140px] h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60" />
+                              </div>
+                              <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                                <button type="button" role="switch" aria-checked={execAsk} disabled={toolSaving}
+                                  onClick={() => { const d = initDraft(); setToolDraft({ ...d, execAsk: !execAsk }); }}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${execAsk ? 'bg-primary' : 'bg-slate-300 dark:bg-white/15'}`}>
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition duration-200 ease-in-out ${execAsk ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{a.toolExecAsk || 'Ask'}</span>
+                              </label>
+                              <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                                <button type="button" role="switch" aria-checked={fsWsOnly} disabled={toolSaving}
+                                  onClick={() => { const d = initDraft(); setToolDraft({ ...d, fsWsOnly: !fsWsOnly }); }}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${fsWsOnly ? 'bg-primary' : 'bg-slate-300 dark:bg-white/15'}`}>
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition duration-200 ease-in-out ${fsWsOnly ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{a.toolFsWorkspaceOnly || 'WS Only'}</span>
+                              </label>
+                            </div>
                           </div>
+
+                          {/* Save / Reset */}
+                          {(toolDirty || toolSaving) && (
+                            <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-200/40 dark:border-white/[0.06]">
+                              <button onClick={saveSecConfig} disabled={toolSaving || !toolDirty}
+                                className="h-6 px-3 rounded-md text-[10px] font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1">
+                                {toolSaving
+                                  ? <><span className="material-symbols-outlined text-[11px] animate-spin">progress_activity</span>{a.saving}</>
+                                  : <><span className="material-symbols-outlined text-[11px]">save</span>{a.save}</>}
+                              </button>
+                              {toolDirty && !toolSaving && (
+                                <button onClick={() => setToolDraft(null)}
+                                  className="h-6 px-2 rounded-md text-[10px] font-bold text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/60 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                                >{a.reset}</button>
+                              )}
+                              {toolDirty && <span className="text-[9px] text-amber-500 font-bold">{a.unsaved}</span>}
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -1329,27 +1453,22 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                 const globalTools = config?.parsed?.tools || config?.config?.tools || config?.tools || {};
                 const agentEntry = cfg._entry || {};
                 const agentTools = agentEntry.tools || {};
-                const hasAgentOverride = Object.keys(agentTools).length > 0;
-                // Draft or live values
+                // Draft or live values (allow/deny/alsoAllow only — profile & exec are in Overview)
                 const draft = toolDraft || {};
-                const liveProfile = agentTools.profile || globalTools.profile || 'full';
                 const liveAllow: string[] = Array.isArray(agentTools.allow) ? agentTools.allow : (Array.isArray(globalTools.allow) ? globalTools.allow : []);
                 const liveDeny: string[] = Array.isArray(agentTools.deny) ? agentTools.deny : (Array.isArray(globalTools.deny) ? globalTools.deny : []);
                 const liveAlsoAllow: string[] = Array.isArray(agentTools.alsoAllow) ? agentTools.alsoAllow : (Array.isArray(globalTools.alsoAllow) ? globalTools.alsoAllow : []);
-                const liveExec = { host: agentTools.exec?.host ?? globalTools.exec?.host ?? '', security: agentTools.exec?.security ?? globalTools.exec?.security ?? '', ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false };
-                const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
-                const profile = draft.profile ?? liveProfile;
                 const allowList: string[] = draft.allow ?? liveAllow;
                 const denyList: string[] = draft.deny ?? liveDeny;
                 const alsoAllowList: string[] = draft.alsoAllow ?? liveAlsoAllow;
-                const execHost = draft.execHost ?? liveExec.host;
-                const execSecurity = draft.execSecurity ?? liveExec.security;
-                const execAsk = draft.execAsk ?? liveExec.ask;
-                const fsWsOnly = draft.fsWsOnly ?? liveFsWsOnly;
-                const PROFILES = ['minimal', 'coding', 'messaging', 'full'];
-                const PROFILE_LABELS: Record<string, string> = { minimal: a.toolProfileMinimal || 'Minimal', coding: a.toolProfileCoding || 'Coding', messaging: a.toolProfileMessaging || 'Messaging', full: a.toolProfileFull || 'Full' };
                 const toolDirty = toolDraft !== null;
-                const initToolDraft = () => toolDraft || { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly };
+                const initToolDraft = () => {
+                  if (toolDraft) return toolDraft;
+                  const liveProfile = agentTools.profile || globalTools.profile || 'full';
+                  const liveExec = { host: agentTools.exec?.host ?? globalTools.exec?.host ?? '', security: agentTools.exec?.security ?? globalTools.exec?.security ?? '', ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false };
+                  const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
+                  return { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly };
+                };
 
                 const saveToolConfig = async () => {
                   if (!toolDraft) return;
@@ -1361,9 +1480,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                     const updatedList = list.map((e: any) => {
                       if (e?.id !== selected.id) return e;
                       const toolsPatch: Record<string, any> = { profile: toolDraft.profile };
-                      if (toolDraft.allow?.length > 0) toolsPatch.allow = toolDraft.allow;
-                      if (toolDraft.deny?.length > 0) toolsPatch.deny = toolDraft.deny;
-                      if (toolDraft.alsoAllow?.length > 0) toolsPatch.alsoAllow = toolDraft.alsoAllow;
+                      toolsPatch.allow = toolDraft.allow?.length > 0 ? toolDraft.allow : [];
+                      toolsPatch.deny = toolDraft.deny?.length > 0 ? toolDraft.deny : [];
+                      toolsPatch.alsoAllow = toolDraft.alsoAllow?.length > 0 ? toolDraft.alsoAllow : [];
                       toolsPatch.exec = { host: toolDraft.execHost || undefined, security: toolDraft.execSecurity || undefined, ask: toolDraft.execAsk || undefined };
                       toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
                       return { ...e, tools: toolsPatch };
@@ -1380,112 +1499,175 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
                 const ALL_KNOWN_TOOLS = TOOL_SECTIONS.flatMap(s => s.tools);
 
-                const ToolPicker = ({ items, onChange, label, desc, color }: { items: string[]; onChange: (v: string[]) => void; label: string; desc: string; color: string }) => {
-                  const [open, setOpen] = React.useState(false);
-                  const [customInput, setCustomInput] = React.useState('');
-                  const customItems = items.filter(t => !ALL_KNOWN_TOOLS.includes(t));
-                  const toggle = (tool: string) => {
-                    onChange(items.includes(tool) ? items.filter(x => x !== tool) : [...items, tool]);
-                  };
-                  const toggleSection = (tools: string[]) => {
-                    const allIn = tools.every(t => items.includes(t));
-                    onChange(allIn ? items.filter(x => !tools.includes(x)) : [...new Set([...items, ...tools])]);
-                  };
-                  return (
-                    <div>
-                      {/* Collapsible header */}
-                      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 py-1 group cursor-pointer select-none">
-                        <span className={`material-symbols-outlined text-[12px] text-slate-400 dark:text-white/25 transition-transform ${open ? 'rotate-90' : ''}`}>chevron_right</span>
-                        <p className="text-[10px] font-bold text-slate-400 dark:text-white/25 uppercase">{label}</p>
-                        {items.length > 0 && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${color}`}>{items.length}</span>}
-                        <span className="flex-1" />
-                        {!open && items.length > 0 && (
-                          <span className="text-[9px] text-slate-300 dark:text-white/15 font-mono truncate max-w-[200px]">{items.slice(0, 5).join(', ')}{items.length > 5 ? ` +${items.length - 5}` : ''}</span>
-                        )}
-                      </button>
-                      {/* Expandable body */}
-                      {open && (
-                        <div className="mt-1.5 ps-5">
-                          <p className="text-[9px] text-slate-400 dark:text-white/20 mb-3">{desc}</p>
-                          <div className="space-y-2">
-                            {TOOL_SECTIONS.map(section => {
-                              const sectionSelected = section.tools.filter(t => items.includes(t)).length;
-                              const allIn = sectionSelected === section.tools.length;
-                              return (
-                                <div key={section.label}>
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <button onClick={() => toggleSection(section.tools)} disabled={toolSaving}
-                                      className="text-[9px] font-bold text-slate-400 dark:text-white/30 uppercase hover:text-primary transition-colors flex items-center gap-0.5">
-                                      <span className={`material-symbols-outlined text-[10px] ${allIn ? 'text-primary' : ''}`}>{allIn ? 'check_box' : sectionSelected > 0 ? 'indeterminate_check_box' : 'check_box_outline_blank'}</span>
-                                      {section.label}
-                                    </button>
-                                    {sectionSelected > 0 && <span className="text-[8px] text-slate-300 dark:text-white/15">{sectionSelected}/{section.tools.length}</span>}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {section.tools.map(tool => {
-                                      const active = items.includes(tool);
-                                      return (
-                                        <button key={tool} onClick={() => toggle(tool)} disabled={toolSaving}
-                                          className={`px-2 py-1 rounded-md text-[9px] font-mono font-bold transition-all border ${
-                                            active
-                                              ? `${color} border-current/20`
-                                              : 'bg-slate-50 dark:bg-white/[0.02] text-slate-400 dark:text-white/20 border-slate-200/40 dark:border-white/[0.04] hover:border-slate-300 dark:hover:border-white/10'
-                                          }`}>
-                                          {tool}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {customItems.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
-                              <p className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase mb-1">{a.toolCustom || 'Custom'}</p>
-                              <div className="flex flex-wrap gap-1">
-                                {customItems.map(item => (
-                                  <span key={item} className={`inline-flex items-center gap-0.5 px-2 py-1 rounded-md text-[9px] font-mono font-bold ${color} border border-current/20`}>
-                                    {item}
-                                    <button onClick={() => onChange(items.filter(x => x !== item))} className="p-0 opacity-40 hover:opacity-100 transition-opacity">
-                                      <span className="material-symbols-outlined text-[9px]">close</span>
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex gap-1 mt-2">
-                            <input value={customInput} onChange={e => setCustomInput(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter' && customInput.trim() && !items.includes(customInput.trim())) { onChange([...items, customInput.trim()]); setCustomInput(''); } }}
-                              placeholder={a.toolAddCustom || 'Custom tool name…'}
-                              className="flex-1 h-6 px-2 bg-white dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.06] rounded-md text-[9px] font-mono text-slate-500 dark:text-white/40 outline-none focus:border-primary/30" />
-                            <button onClick={() => { if (customInput.trim() && !items.includes(customInput.trim())) { onChange([...items, customInput.trim()]); setCustomInput(''); } }}
-                              className="h-6 px-1.5 bg-slate-50 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.06] rounded-md text-[9px] text-slate-400 dark:text-white/20 hover:text-primary transition-colors">
-                              <span className="material-symbols-outlined text-[10px]">add</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
+                // Tri-state per tool: 'default' | 'allow' | 'deny' | 'extra'
+                type ToolState = 'default' | 'allow' | 'deny' | 'extra';
+                const getToolState = (tool: string): ToolState => {
+                  if (allowList.includes(tool)) return 'allow';
+                  if (denyList.includes(tool)) return 'deny';
+                  if (alsoAllowList.includes(tool)) return 'extra';
+                  return 'default';
+                };
+                const TOOL_STATE_CYCLE: ToolState[] = ['default', 'allow', 'extra', 'deny'];
+                const cycleToolState = (tool: string) => {
+                  const current = getToolState(tool);
+                  const nextIdx = (TOOL_STATE_CYCLE.indexOf(current) + 1) % TOOL_STATE_CYCLE.length;
+                  const next = TOOL_STATE_CYCLE[nextIdx];
+                  const d = initToolDraft();
+                  const newAllow = (d.allow || []).filter((t: string) => t !== tool);
+                  const newDeny = (d.deny || []).filter((t: string) => t !== tool);
+                  const newAlsoAllow = (d.alsoAllow || []).filter((t: string) => t !== tool);
+                  if (next === 'allow') newAllow.push(tool);
+                  else if (next === 'deny') newDeny.push(tool);
+                  else if (next === 'extra') newAlsoAllow.push(tool);
+                  setToolDraft({ ...d, allow: newAllow, deny: newDeny, alsoAllow: newAlsoAllow });
+                };
+                const TOOL_STATE_STYLE: Record<ToolState, { icon: string; color: string; label: string }> = {
+                  default: { icon: 'radio_button_unchecked', color: 'text-slate-400 dark:text-white/25', label: a.toolStateDefault || 'Default' },
+                  allow:   { icon: 'check_circle', color: 'text-emerald-500', label: a.toolStateAllow || 'Allow' },
+                  extra:   { icon: 'add_circle', color: 'text-blue-500', label: a.toolStateExtra || 'Extra' },
+                  deny:    { icon: 'block', color: 'text-red-500', label: a.toolStateDeny || 'Deny' },
                 };
 
+                // Collect custom tools across all three lists
+                const customTools = [...new Set([...allowList, ...denyList, ...alsoAllowList])].filter(t => !ALL_KNOWN_TOOLS.includes(t));
+
+                // Build tool info map from catalog data
+                const catalogGroups: Array<{ id: string; label: string; source: string; tools: Array<{ id: string; label: string; description: string; defaultProfiles: string[] }> }> = toolsCatalog?.groups || [];
+                const toolInfoMap: Record<string, { label: string; description: string; defaultProfiles: string[] }> = {};
+                catalogGroups.forEach(g => g.tools.forEach(t => { toolInfoMap[t.id] = t; }));
+                const profileColorFn = (pid: string) => {
+                  if (pid === 'full') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+                  if (pid === 'coding') return 'bg-blue-500/15 text-blue-700 dark:text-blue-300';
+                  if (pid === 'messaging') return 'bg-violet-500/15 text-violet-700 dark:text-violet-300';
+                  if (pid === 'minimal') return 'bg-slate-500/15 text-slate-700 dark:text-slate-300';
+                  return 'bg-primary/15 text-primary';
+                };
+
+                // i18n group label mapping
+                const groupLabelI18n: Record<string, string> = {
+                  Files: a.toolGrpFiles || 'Files',
+                  Runtime: a.toolGrpRuntime || 'Runtime',
+                  Web: a.toolGrpWeb || 'Web',
+                  Memory: a.toolGrpMemory || 'Memory',
+                  Sessions: a.toolGrpSessions || 'Sessions',
+                  UI: a.toolGrpUI || 'UI',
+                  Messaging: a.toolGrpMessaging || 'Messaging',
+                  Automation: a.toolGrpAutomation || 'Automation',
+                  Agents: a.toolGrpAgents || 'Agents',
+                  Media: a.toolGrpMedia || 'Media',
+                };
+                const getGroupLabel = (raw: string) => groupLabelI18n[raw] || raw;
+
+                // i18n profile label mapping
+                const getProfileLabel = (pid: string) => {
+                  if (pid === 'minimal') return a.toolProfileMinimal || 'Minimal';
+                  if (pid === 'coding') return a.toolProfileCoding || 'Coding';
+                  if (pid === 'messaging') return a.toolProfileMessaging || 'Messaging';
+                  if (pid === 'full') return a.toolProfileFull || 'Full';
+                  return pid;
+                };
+
+                // Use catalog groups if available, fall back to static TOOL_SECTIONS
+                const useCatalog = catalogGroups.length > 0;
+                const sourceGroups = useCatalog
+                  ? catalogGroups.map(g => ({ id: g.id, label: g.label, source: g.source as string, tools: g.tools.map(t => t.id) }))
+                  : TOOL_SECTIONS.map(s => ({ id: s.label, label: s.label, source: 'core', tools: s.tools }));
+
+                const allToolIds = sourceGroups.flatMap(g => g.tools);
+                const totalTools = allToolIds.length;
+                const overrideTotal = allToolIds.filter(t => getToolState(t) !== 'default').length;
+                const coreCount = sourceGroups.filter(g => g.source === 'core').reduce((s, g) => s + g.tools.length, 0);
+                const pluginCount = sourceGroups.filter(g => g.source === 'plugin').reduce((s, g) => s + g.tools.length, 0);
+
+                // Profile hierarchy: tools in a lower profile are also in all higher profiles
+                const PROFILE_HIERARCHY = ['minimal', 'coding', 'messaging', 'full'];
+                const profileIncludes = (toolProfiles: string[], filterProfile: string) => {
+                  const filterIdx = PROFILE_HIERARCHY.indexOf(filterProfile.toLowerCase());
+                  if (filterIdx < 0) return toolProfiles.some(p => p.toLowerCase() === filterProfile.toLowerCase());
+                  // Tool is included if any of its profiles is at or below the filter level
+                  return toolProfiles.some(p => {
+                    const pIdx = PROFILE_HIERARCHY.indexOf(p.toLowerCase());
+                    return pIdx >= 0 && pIdx <= filterIdx;
+                  });
+                };
+
+                const q = toolSearch.toLowerCase();
+                const filteredGroups = sourceGroups
+                  .filter(g => toolSourceFilter === 'all' || g.source === toolSourceFilter)
+                  .map(g => ({
+                    ...g,
+                    tools: g.tools.filter(t => {
+                      const info = toolInfoMap[t];
+                      // Profile filter — skip if no catalog info available
+                      if (toolProfileFilter !== 'all' && info?.defaultProfiles?.length) {
+                        if (!profileIncludes(info.defaultProfiles, toolProfileFilter)) return false;
+                      }
+                      // Search filter
+                      if (q && !(t.toLowerCase().includes(q) || info?.label?.toLowerCase().includes(q) || info?.description?.toLowerCase().includes(q))) return false;
+                      return true;
+                    }),
+                  }))
+                  .filter(g => g.tools.length > 0);
+
+                const toggleGroup = (id: string) => {
+                  setToolsExpanded(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                };
+
+                const loadCatalog = () => {
+                  setToolsCatalogLoading(true);
+                  gwApi.toolsCatalog({ includePlugins: true }).then((r: any) => {
+                    setToolsCatalog(r);
+                    setToolsExpanded(new Set((r?.groups || []).map((g: any) => g.id)));
+                  }).catch(() => {}).finally(() => setToolsCatalogLoading(false));
+                };
+
+                const stateCardBorder = (st: ToolState) =>
+                  st === 'allow' ? 'border-emerald-500/25 hover:border-emerald-500/50'
+                  : st === 'extra' ? 'border-blue-500/25 hover:border-blue-500/50'
+                  : st === 'deny' ? 'border-red-500/25 hover:border-red-500/50'
+                  : 'border-slate-200/60 dark:border-white/[0.06] hover:border-primary/30';
+
+                const stateCardBg = (st: ToolState) =>
+                  st === 'allow' ? 'bg-emerald-500/[0.04]'
+                  : st === 'extra' ? 'bg-blue-500/[0.04]'
+                  : st === 'deny' ? 'bg-red-500/[0.04]'
+                  : 'bg-slate-50 dark:bg-white/[0.02]';
+
                 return (
-                  <div className="space-y-4 max-w-5xl">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-[11px] font-bold theme-text-secondary uppercase">{a.toolAccess}</h3>
-                        <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">
-                          {a.profile}: <span className="font-mono text-primary">{profile}</span>
-                          {hasAgentOverride
-                            ? <span className="ms-2 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 font-bold">{a.toolOverridden || 'Overridden'}</span>
-                            : <span className="ms-2 text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-400 font-bold">{a.toolInherited || 'Inherited'}</span>
-                          }
-                        </p>
+                  <div className="space-y-3">
+                    {/* Header stats */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-primary/70">build</span>
+                        <span className="text-[13px] font-bold text-slate-700 dark:text-white/80">{a.toolAccess}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-white/50 font-bold">
+                          {totalTools} {a.toolTotal || 'tools'}
+                        </span>
+                        {useCatalog && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold">
+                            {coreCount} {a.toolSourceCore || 'core'}
+                          </span>
+                        )}
+                        {pluginCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 font-bold">
+                            {pluginCount} {a.toolSourcePlugin || 'plugin'}
+                          </span>
+                        )}
+                        {overrideTotal > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-bold">
+                            {overrideTotal} {a.toolOverrideCount || 'overrides'}
+                          </span>
+                        )}
                       </div>
                       {(toolDirty || toolSaving) && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 ms-auto">
                           <button onClick={saveToolConfig} disabled={toolSaving || !toolDirty}
                             className="h-7 px-3 rounded-lg text-[10px] font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1">
                             {toolSaving
@@ -1499,97 +1681,223 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           {toolDirty && <span className="text-[9px] text-amber-500 font-bold">{a.unsaved}</span>}
                         </div>
                       )}
+                      {!toolDirty && !toolSaving && (
+                        <button onClick={loadCatalog} disabled={toolsCatalogLoading} className="ms-auto p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors disabled:opacity-40">
+                          <span className={`material-symbols-outlined text-[14px] text-slate-500 dark:text-white/40 ${toolsCatalogLoading ? 'animate-spin' : ''}`}>
+                            {toolsCatalogLoading ? 'progress_activity' : 'refresh'}
+                          </span>
+                        </button>
+                      )}
                     </div>
 
-                    {/* Profile selector */}
-                    <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                      <p className="text-[10px] font-bold text-slate-400 dark:text-white/25 uppercase mb-2">{a.toolProfile || 'Tool Profile'}</p>
-                      <p className="text-[9px] text-slate-400 dark:text-white/20 mb-3">{a.toolProfileDesc || 'Controls which tool categories are available'}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {PROFILES.map(p => (
-                          <button key={p} onClick={() => { const d = initToolDraft(); setToolDraft({ ...d, profile: p }); }}
-                            disabled={toolSaving}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${
-                              profile === p
-                                ? 'bg-primary/10 text-primary border-primary/20'
-                                : 'bg-slate-50 dark:bg-white/[0.02] text-slate-500 dark:text-white/40 border-slate-200/60 dark:border-white/[0.06] hover:border-primary/30 hover:text-primary'
-                            }`}>
-                            {PROFILE_LABELS[p] || p}
+                    {/* Search + Filters */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[180px] max-w-xs">
+                        <span className="material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 absolute start-2.5 top-1/2 -translate-y-1/2">search</span>
+                        <input type="text" value={toolSearch} onChange={e => setToolSearch(e.target.value)}
+                          placeholder={a.toolSearchPlaceholder || 'Search tools...'}
+                          className="w-full h-8 ps-8 pe-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[11px] text-slate-700 dark:text-white/80 placeholder:text-slate-400 dark:placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-primary/40" />
+                      </div>
+                      {/* Source filter pills */}
+                      <div className="flex items-center gap-1">
+                        {(['all', ...(useCatalog ? ['core', 'plugin'] as const : [])] as const).map(f => (
+                          <button key={f} onClick={() => setToolSourceFilter(f as 'all' | 'core' | 'plugin')}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${toolSourceFilter === f ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : 'bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-white/40 hover:bg-slate-200 dark:hover:bg-white/[0.06]'}`}>
+                            {f === 'all' ? (a.toolFilterAll || 'All') : f === 'core' ? (a.toolSourceCore || 'Core') : (a.toolSourcePlugin || 'Plugin')}
                           </button>
                         ))}
                       </div>
+                      {/* Profile filter (from catalog) */}
+                      {toolsCatalog?.profiles?.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 dark:text-white/30">{a.secToolProfile || 'Profile'}:</span>
+                          <button onClick={() => setToolProfileFilter('all')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${toolProfileFilter === 'all' ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : 'text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}>
+                            {a.toolFilterAll || 'All'}
+                          </button>
+                          {toolsCatalog.profiles.map((p: any) => (
+                            <button key={p.id} onClick={() => setToolProfileFilter(toolProfileFilter === p.id ? 'all' : p.id)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${toolProfileFilter === p.id ? `${profileColorFn(p.id)} ring-1 ring-current/20` : 'text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/[0.04]'}`}>
+                              {getProfileLabel(p.id)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Allow / Deny / AlsoAllow lists — clickable tool picker */}
-                    <div className="space-y-3">
-                      <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                        <ToolPicker items={allowList} onChange={v => { const d = initToolDraft(); setToolDraft({ ...d, allow: v }); }}
-                          label={a.toolAllow || 'Allow List'} desc={a.toolAllowDesc || 'Only these tools are allowed'}
-                          color="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-                      </div>
-                      <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                        <ToolPicker items={denyList} onChange={v => { const d = initToolDraft(); setToolDraft({ ...d, deny: v }); }}
-                          label={a.toolDeny || 'Deny List'} desc={a.toolDenyDesc || 'These tools are explicitly denied'}
-                          color="bg-red-500/10 text-red-600 dark:text-red-400" />
-                      </div>
-                      <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                        <ToolPicker items={alsoAllowList} onChange={v => { const d = initToolDraft(); setToolDraft({ ...d, alsoAllow: v }); }}
-                          label={a.toolAlsoAllow || 'Also Allow'} desc={a.toolAlsoAllowDesc || 'Additional tools beyond the profile'}
-                          color="bg-blue-500/10 text-blue-600 dark:text-blue-400" />
-                      </div>
+                    {/* Tri-state legend + cycle hint */}
+                    <div className="flex flex-wrap items-center gap-3 px-1">
+                      {TOOL_STATE_CYCLE.map(st => (
+                        <span key={st} className="flex items-center gap-1">
+                          <span className={`material-symbols-outlined text-[12px] ${TOOL_STATE_STYLE[st].color}`}>{TOOL_STATE_STYLE[st].icon}</span>
+                          <span className="text-[9px] font-bold text-slate-400 dark:text-white/25">{TOOL_STATE_STYLE[st].label}</span>
+                        </span>
+                      ))}
+                      <span className="ms-auto flex items-center gap-1 text-[9px] text-slate-400 dark:text-white/25 italic">
+                        <span className="material-symbols-outlined text-[11px]">touch_app</span>
+                        {a.toolClickToToggle || 'Click card to cycle state'}
+                      </span>
                     </div>
 
-                    {/* Exec & FS settings */}
-                    <div className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                      <p className="text-[10px] font-bold text-slate-400 dark:text-white/25 uppercase mb-3">{a.secExecSecurity || 'Exec Security'}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase block mb-1">{a.toolExecHost || 'Host'}</label>
-                          <input value={execHost} onChange={e => { const d = initToolDraft(); setToolDraft({ ...d, execHost: e.target.value }); }}
-                            placeholder="e.g. local"
-                            className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] font-mono text-slate-600 dark:text-white/60 outline-none" />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase block mb-1">{a.toolExecSecurity || 'Security'}</label>
-                          <CustomSelect value={execSecurity}
-                            onChange={v => { const d = initToolDraft(); setToolDraft({ ...d, execSecurity: v }); }}
-                            options={[{ value: '', label: '—' }, { value: 'prompt', label: 'prompt' }, { value: 'sandbox', label: 'sandbox' }, { value: 'none', label: 'none' }]}
-                            className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] font-mono text-slate-600 dark:text-white/60" />
-                        </div>
-                        <div className="flex items-end gap-3">
-                          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-                            <input type="checkbox" checked={execAsk} onChange={e => { const d = initToolDraft(); setToolDraft({ ...d, execAsk: e.target.checked }); }}
-                              className="accent-primary w-3.5 h-3.5" disabled={toolSaving} />
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{a.toolExecAsk || 'Ask'}</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-                            <input type="checkbox" checked={fsWsOnly} onChange={e => { const d = initToolDraft(); setToolDraft({ ...d, fsWsOnly: e.target.checked }); }}
-                              className="accent-primary w-3.5 h-3.5" disabled={toolSaving} />
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-white/40">{a.toolFsWorkspaceOnly || 'WS Only'}</span>
-                          </label>
-                        </div>
+                    {/* Tool groups */}
+                    {toolsCatalogLoading && !toolsCatalog ? (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <span className="material-symbols-outlined text-[28px] text-primary/60 animate-spin">progress_activity</span>
+                        <p className="text-[11px] text-slate-400 dark:text-white/40">{a.loading || 'Loading...'}</p>
                       </div>
-                    </div>
-
-                    {/* Existing tool sections grid (read-only view) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {TOOL_SECTIONS.map(section => (
-                        <div key={section.label} className="rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] p-3">
-                          <p className="text-[10px] font-bold theme-text-muted uppercase mb-2">{section.label}</p>
-                          <div className="space-y-1">
-                            {section.tools.map(tool => {
-                              const denied = denyList.includes(tool);
-                              const allowed = !denied;
-                              return (
-                                <div key={tool} className="flex items-center justify-between py-1">
-                                  <span className="text-[10px] font-mono text-slate-600 dark:text-white/50">{tool}</span>
-                                  <div className={`w-2 h-2 rounded-full ${allowed ? 'bg-mac-green' : 'bg-slate-300 dark:bg-white/10'}`} />
+                    ) : filteredGroups.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 gap-2">
+                        <span className="material-symbols-outlined text-[24px] text-slate-300 dark:text-white/20">search_off</span>
+                        <p className="text-[11px] text-slate-400 dark:text-white/35">{a.toolNoResults || 'No tools match your search'}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredGroups.map(group => {
+                          const overrideCount = group.tools.filter(t => getToolState(t) !== 'default').length;
+                          const expanded = toolsExpanded.has(group.id);
+                          return (
+                            <div key={group.id} className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
+                              {/* Group header — collapsible */}
+                              <button onClick={() => toggleGroup(group.id)}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors text-start">
+                                <span className={`material-symbols-outlined text-[14px] transition-transform ${expanded ? 'rotate-90' : ''}`}>
+                                  chevron_right
+                                </span>
+                                <span className={`material-symbols-outlined text-[14px] ${group.source === 'core' ? 'text-emerald-500' : 'text-violet-500'}`}>
+                                  {group.source === 'core' ? 'verified' : 'extension'}
+                                </span>
+                                <span className="text-[12px] font-bold text-slate-700 dark:text-white/80 flex-1">{getGroupLabel(group.label)}</span>
+                                {overrideCount > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-500">{overrideCount} {a.toolOverrideCount || 'overrides'}</span>
+                                )}
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${group.source === 'core' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400'}`}>
+                                  {group.source === 'core' ? (a.toolSourceCore || 'core') : (a.toolSourcePlugin || 'plugin')}
+                                </span>
+                                <span className="text-[10px] text-slate-400 dark:text-white/30">{group.tools.length}</span>
+                              </button>
+                              {/* Tool cards — collapsible */}
+                              {expanded && (
+                                <div className="border-t border-slate-100 dark:border-white/[0.04] p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                  {group.tools.map(toolId => {
+                                    const st = getToolState(toolId);
+                                    const style = TOOL_STATE_STYLE[st];
+                                    const info = toolInfoMap[toolId];
+                                    return (
+                                      <button key={toolId} onClick={() => cycleToolState(toolId)} disabled={toolSaving}
+                                        className={`rounded-xl ${stateCardBg(st)} border ${stateCardBorder(st)} p-3 transition-all cursor-pointer select-none text-start hover:shadow-sm flex flex-col`}>
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                          <span className="material-symbols-outlined text-[14px] text-primary/60 shrink-0">handyman</span>
+                                          <span className="text-[11px] font-bold text-slate-700 dark:text-white/80 truncate">{info?.label || toolId}</span>
+                                          {info?.label && info.label !== toolId && (
+                                            <code className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 font-mono shrink-0">{toolId}</code>
+                                          )}
+                                          <span className={`material-symbols-outlined text-[16px] ${style.color} transition-colors shrink-0 ms-auto`}>{style.icon}</span>
+                                        </div>
+                                        {info?.description && (
+                                          <p className="text-[10px] text-slate-500 dark:text-white/40 leading-relaxed line-clamp-2 mb-2">{info.description}</p>
+                                        )}
+                                        <div className="flex items-center gap-1 mt-auto flex-wrap">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            st === 'allow' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                            : st === 'extra' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                                            : st === 'deny' ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                            : 'bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40'
+                                          }`}>{style.label}</span>
+                                          {info?.defaultProfiles?.map(p => (
+                                            <span key={p} className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${profileColorFn(p)}`}>{p}</span>
+                                          ))}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Custom tools */}
+                    <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
+                      <button onClick={() => toggleGroup('__custom__')}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors text-start">
+                        <span className={`material-symbols-outlined text-[14px] transition-transform ${toolsExpanded.has('__custom__') ? 'rotate-90' : ''}`}>
+                          chevron_right
+                        </span>
+                        <span className="material-symbols-outlined text-[14px] text-violet-500">extension</span>
+                        <span className="text-[12px] font-bold text-slate-700 dark:text-white/80 flex-1">{a.toolCustom || 'Custom Tools'}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-white/30">{customTools.length}</span>
+                      </button>
+                      {toolsExpanded.has('__custom__') && (
+                        <div className="border-t border-slate-100 dark:border-white/[0.04] p-3">
+                          {customTools.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+                              {customTools.map(tool => {
+                                const st = getToolState(tool);
+                                const style = TOOL_STATE_STYLE[st];
+                                return (
+                                  <div key={tool} className={`rounded-xl ${stateCardBg(st)} border ${stateCardBorder(st)} p-3 transition-all flex flex-col`}>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      <span className="material-symbols-outlined text-[14px] text-violet-500/60 shrink-0">extension</span>
+                                      <button onClick={() => cycleToolState(tool)} disabled={toolSaving}
+                                        className="text-[11px] font-bold text-slate-700 dark:text-white/80 truncate flex-1 text-start cursor-pointer">{tool}</button>
+                                      <button onClick={() => {
+                                        const d = initToolDraft();
+                                        setToolDraft({ ...d, allow: (d.allow || []).filter((t: string) => t !== tool), deny: (d.deny || []).filter((t: string) => t !== tool), alsoAllow: (d.alsoAllow || []).filter((t: string) => t !== tool) });
+                                      }} className="p-0.5 opacity-30 hover:opacity-100 transition-opacity shrink-0">
+                                        <span className="material-symbols-outlined text-[12px]">close</span>
+                                      </button>
+                                    </div>
+                                    <button onClick={() => cycleToolState(tool)} disabled={toolSaving} className="cursor-pointer mt-auto">
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                        st === 'allow' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                        : st === 'extra' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                                        : st === 'deny' ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                        : 'bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-white/40'
+                                      }`}>{style.label}</span>
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <span className="material-symbols-outlined text-[14px] text-slate-400 dark:text-white/25 absolute start-2.5 top-1/2 -translate-y-1/2">add</span>
+                              <input
+                                value={customToolInput}
+                                onChange={e => setCustomToolInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && customToolInput.trim()) {
+                                    const tool = customToolInput.trim();
+                                    const d = initToolDraft();
+                                    if (![...(d.allow || []), ...(d.deny || []), ...(d.alsoAllow || [])].includes(tool)) {
+                                      setToolDraft({ ...d, alsoAllow: [...(d.alsoAllow || []), tool] });
+                                    }
+                                    setCustomToolInput('');
+                                  }
+                                }}
+                                placeholder={a.toolAddCustom || 'Custom tool name…'}
+                                className="w-full h-8 ps-8 pe-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[11px] font-mono text-slate-600 dark:text-white/60 placeholder:text-slate-400 dark:placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-primary/40" />
+                            </div>
+                            <button onClick={() => {
+                              if (customToolInput.trim()) {
+                                const tool = customToolInput.trim();
+                                const d = initToolDraft();
+                                if (![...(d.allow || []), ...(d.deny || []), ...(d.alsoAllow || [])].includes(tool)) {
+                                  setToolDraft({ ...d, alsoAllow: [...(d.alsoAllow || []), tool] });
+                                }
+                                setCustomToolInput('');
+                              }
+                            }}
+                              className="h-8 px-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-[10px] font-bold transition-colors flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[14px]">add</span>
+                              {a.toolAddItem || 'Add'}
+                            </button>
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 );

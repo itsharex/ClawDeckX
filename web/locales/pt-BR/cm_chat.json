@@ -192,6 +192,14 @@
     "sessionType": "Tipo",
     "childSessions": "Subsessões",
     "elapsed": "Tempo decorrido",
-    "lastLatency": "Latência"
+    "lastLatency": "Latência",
+    "secToolPolicy": "Política de ferramentas",
+    "secSandbox": "Sandbox",
+    "secExec": "Execução",
+    "secProfile_minimal": "Minimal",
+    "secProfile_coding": "Coding",
+    "secProfile_messaging": "Messaging",
+    "secProfile_full": "Full",
+    "secGoAgent": "Configurar no Agente"
   }
 }

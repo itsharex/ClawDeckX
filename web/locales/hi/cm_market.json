@@ -19,24 +19,6 @@
     "enabled": "स्किल सक्षम",
     "disabled": "स्किल अक्षम",
     "toggleFailed": "टॉगल करने में विफल",
-    "noDescription": "कोई विवरण उपलब्ध नहीं",
-    "toolsCatalog": "Tools",
-    "toolsCatalogTitle": "Tools Catalog",
-    "toolsCatalogLoading": "Loading tools catalog...",
-    "toolsCatalogLoadFail": "Failed to load tools catalog",
-    "toolsCatalogRetry": "Retry",
-    "toolsCatalogTotal": "tools",
-    "toolsCatalogCore": "core",
-    "toolsCatalogPlugin": "plugin",
-    "toolsCatalogSearch": "Search tools...",
-    "toolsCatalogFilterAll": "All",
-    "toolsCatalogProfile": "Profile",
-    "toolsCatalogProfiles": "Profiles",
-    "toolsCatalogProfileMinimal": "Minimal",
-    "toolsCatalogProfileCoding": "Coding",
-    "toolsCatalogProfileMessaging": "Messaging",
-    "toolsCatalogProfileFull": "Full",
-    "toolsCatalogOptional": "optional",
-    "toolsCatalogNoResults": "No tools match your filters"
+    "noDescription": "कोई विवरण उपलब्ध नहीं"
   }
 }

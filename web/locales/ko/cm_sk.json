@@ -14,7 +14,7 @@
     "featured": "추천 스킬",
     "popular": "인기 서버",
     "eligible": "사용 가능",
-    "notEligible": "사용 불가",
+    "notEligible": "설정 필요",
     "bundled": "번들",
     "managed": "관리됨",
     "disabled": "비활성",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex 기본 URL. API 경로가 자동으로 추가됩니다. 변경 후 재시작 필요.",
     "sourceConfigSkillHubHint": "SkillHub 업스트림 데이터 URL. 변경 후 재시작 필요.",
     "sourceConfigRestart": "저장 후 재시작 필요",
-    "sourceConfigSaved": "저장됨. 변경 사항을 적용하려면 재시작하세요."
+    "sourceConfigSaved": "저장됨. 변경 사항을 적용하려면 재시작하세요.",
+    "recipeInstallOk": "설치 성공",
+    "recipeInstallPartial": "설치됨 (새 터미널에서 확인하세요)",
+    "recipeInstallFailed": "설치 실패",
+    "recipePkgNotFound": "PATH에서 찾을 수 없음",
+    "recipeLocalOnly": "원클릭 설치는 로컬 게이트웨이에서만 사용 가능합니다",
+    "recipeUnsupported": "지원되지 않는 설치 방법"
   }
 }

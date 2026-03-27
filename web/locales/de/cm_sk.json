@@ -14,7 +14,7 @@
     "featured": "Empfohlene Skills",
     "popular": "Beliebte Server",
     "eligible": "Verfügbar",
-    "notEligible": "Nicht verfügbar",
+    "notEligible": "Einrichtung nötig",
     "bundled": "Mitgeliefert",
     "managed": "Verwaltet",
     "disabled": "Deaktiviert",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex Basis-URL. API-Pfade werden automatisch angehängt. Neustart nach Änderung erforderlich.",
     "sourceConfigSkillHubHint": "SkillHub-Upstream-Daten-URL. Neustart nach Änderung erforderlich.",
     "sourceConfigRestart": "Neustart nach Speichern erforderlich",
-    "sourceConfigSaved": "Gespeichert. Neustart zum Übernehmen erforderlich."
+    "sourceConfigSaved": "Gespeichert. Neustart zum Übernehmen erforderlich.",
+    "recipeInstallOk": "erfolgreich installiert",
+    "recipeInstallPartial": "installiert (in neuem Terminal überprüfen)",
+    "recipeInstallFailed": "Installation fehlgeschlagen",
+    "recipePkgNotFound": "nicht im PATH gefunden",
+    "recipeLocalOnly": "Ein-Klick-Installation ist nur auf lokalem Gateway verfügbar",
+    "recipeUnsupported": "Nicht unterstützte Installationsmethode"
   }
 }

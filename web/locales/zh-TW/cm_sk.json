@@ -14,7 +14,7 @@
     "featured": "精選技能",
     "popular": "熱門服務",
     "eligible": "可用",
-    "notEligible": "不可用",
+    "notEligible": "需設定",
     "bundled": "內建",
     "managed": "託管",
     "disabled": "已禁用",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex 基礎網址，API 路徑自動附加。修改後需重新啟動。",
     "sourceConfigSkillHubHint": "SkillHub 上游資料 URL，修改後需重新啟動。",
     "sourceConfigRestart": "儲存後需重新啟動才會生效",
-    "sourceConfigSaved": "已儲存，重新啟動後生效。"
+    "sourceConfigSaved": "已儲存，重新啟動後生效。",
+    "recipeInstallOk": "安裝成功",
+    "recipeInstallPartial": "已安裝（請在新終端中驗證）",
+    "recipeInstallFailed": "安裝失敗",
+    "recipePkgNotFound": "未在 PATH 中找到",
+    "recipeLocalOnly": "一鍵安裝僅支援本地閘道",
+    "recipeUnsupported": "不支援的安裝方式"
   }
 }

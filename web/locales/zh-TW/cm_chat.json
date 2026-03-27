@@ -192,6 +192,14 @@
     "sessionType": "類型",
     "childSessions": "子工作階段",
     "elapsed": "已用時間",
-    "lastLatency": "延遲"
+    "lastLatency": "延遲",
+    "secToolPolicy": "工具策略",
+    "secSandbox": "沙箱",
+    "secExec": "執行",
+    "secProfile_minimal": "精簡",
+    "secProfile_coding": "程式設計",
+    "secProfile_messaging": "訊息",
+    "secProfile_full": "完整",
+    "secGoAgent": "前往代理配置"
   }
 }

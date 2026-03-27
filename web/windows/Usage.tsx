@@ -29,6 +29,8 @@ interface UsageTotals {
 interface SessionEntry {
   key: string;
   label?: string;
+  channel?: string;
+  agentId?: string;
   lastActiveAt?: number;
   updatedAt?: number;
   totals?: UsageTotals;
@@ -354,7 +356,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
   const [error, setError] = useState<string | null>(null);
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [costData, setCostData] = useState<CostData | null>(null);
-  const [tab, setTab] = useState<'overview' | 'models' | 'sessions' | 'timeseries' | 'logs'>('overview');
+  const [tab, setTab] = useState<'overview' | 'models' | 'sessions'>('overview');
 
   // Budget settings (persisted in localStorage)
   const [budget, setBudget] = useState<BudgetSettings>(() => {
@@ -374,8 +376,10 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     setShowBudgetModal(false);
   }, [editBudget]);
 
-  // Session detail (timeseries + logs)
+  // Session detail — inline expandable (no separate tabs)
   const [selectedSessionKey, setSelectedSessionKey] = useState('');
+  const [expandedSessionKey, setExpandedSessionKey] = useState<string | null>(null);
+  const [detailView, setDetailView] = useState<'timeseries' | 'logs'>('timeseries');
 
   // Timeseries
   const [tsData, setTsData] = useState<any[] | null>(null);
@@ -393,6 +397,12 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
   // Model filter (click on donut to filter)
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
+  // Model card expansion
+  const [expandedModelIdx, setExpandedModelIdx] = useState<number | null>(null);
+
+  // Donut view: token vs cost (#6)
+  const [donutMetric, setDonutMetric] = useState<'tokens' | 'cost'>('tokens');
+
   // Cost trend view
   const [trendView, setTrendView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const fetchSeqRef = useRef(0);
@@ -400,6 +410,10 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
   // Session sorting & search
   const [sessionSort, setSessionSort] = useState<SessionSort>('tokens');
   const [sessionSearch, setSessionSearch] = useState('');
+
+  // Channel / Agent filter for sessions
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   // Donut hover state
   const [donutHover, setDonutHover] = useState<number | null>(null);
@@ -460,18 +474,21 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     setLogsLoading(false);
   }, [selectedSessionKey]);
 
-  // Open session detail (timeseries or logs)
-  const openSessionDetail = useCallback((key: string, view: 'timeseries' | 'logs') => {
+  // Toggle inline session detail expansion
+  const toggleSessionExpand = useCallback((key: string) => {
+    if (expandedSessionKey === key) {
+      setExpandedSessionKey(null);
+      return;
+    }
+    setExpandedSessionKey(key);
     setSelectedSessionKey(key);
+    setDetailView('timeseries');
     setTsData(null);
     setLogsData(null);
-    setTab(view);
-    if (view === 'timeseries') fetchTimeseries(key);
-    else fetchLogs(key);
-  }, [fetchTimeseries, fetchLogs]);
-
-  useEffect(() => { if (tab === 'timeseries' && tsData === null && selectedSessionKey) fetchTimeseries(); }, [tab, tsData, selectedSessionKey, fetchTimeseries]);
-  useEffect(() => { if (tab === 'logs' && logsData === null && selectedSessionKey) fetchLogs(); }, [tab, logsData, selectedSessionKey, fetchLogs]);
+    setLogsPage(1);
+    fetchTimeseries(key);
+    fetchLogs(key);
+  }, [expandedSessionKey, fetchTimeseries, fetchLogs]);
 
   const totals = usageData?.totals || costData?.totals || { totalTokens: 0, totalCost: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, inputCost: 0, outputCost: 0, cacheReadCost: 0, cacheWriteCost: 0 };
   const daily = usageData?.aggregates?.daily || costData?.daily?.map(d => ({ date: d.date, tokens: d.totalTokens, cost: d.totalCost })) || [];
@@ -501,6 +518,26 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     }
     return slices;
   }, [models, u?.unknown, u?.other]);
+
+  // #6 Cost-based segments for donut toggle
+  const costSegments = useMemo(() => {
+    const MAX_SLICES = 6;
+    const slices = models.slice(0, MAX_SLICES).map((m, i) => ({
+      value: m.totals?.totalCost || 0,
+      color: MODEL_COLORS[i % MODEL_COLORS.length],
+      label: m.model || m.provider || u?.unknown,
+    }));
+    if (models.length > MAX_SLICES) {
+      const otherCost = models.slice(MAX_SLICES).reduce((s, m) => s + (m.totals?.totalCost || 0), 0);
+      if (otherCost > 0) {
+        slices.push({ value: otherCost, color: '#94a3b8', label: u?.other || 'Other' });
+      }
+    }
+    return slices;
+  }, [models, u?.unknown, u?.other]);
+
+  // Active donut segments based on metric toggle
+  const activeDonutSegments = donutMetric === 'tokens' ? tokenSegments : costSegments;
 
   const channelSegments = useMemo(() => {
     const channels = agg?.byChannel || [];
@@ -574,22 +611,74 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     return (totalCostInPeriod / daysInPeriod) * 30;
   }, [daily]);
 
-  // CSV export
+  // #1 Avg cost per million tokens
+  const avgCostPerMToken = useMemo(() => {
+    if (!totals.totalTokens || !totals.totalCost) return 0;
+    return (totals.totalCost / totals.totalTokens) * 1_000_000;
+  }, [totals.totalTokens, totals.totalCost]);
+
+  // #2 Output/Input ratio
+  const ioRatioValue = useMemo(() => {
+    if (!totals.input) return 0;
+    return totals.output / totals.input;
+  }, [totals.input, totals.output]);
+
+  // #3 Daily averages
+  const dailyAvg = useMemo(() => {
+    if (daily.length === 0) return { tokens: 0, cost: 0 };
+    const sumT = daily.reduce((s, d) => s + d.tokens, 0);
+    const sumC = daily.reduce((s, d) => s + d.cost, 0);
+    return { tokens: sumT / daily.length, cost: sumC / daily.length };
+  }, [daily]);
+
+  // #4 Peak day
+  const peakDay = useMemo(() => {
+    if (daily.length === 0) return null;
+    let max = daily[0];
+    for (const d of daily) { if (d.tokens > max.tokens) max = d; }
+    return max;
+  }, [daily]);
+
+  // CSV export (includes daily, models, sessions)
   const exportCSV = useCallback(() => {
     if (!usageData) return;
-    const rows: string[] = ['Date,Tokens,Cost,Messages,ToolCalls,Errors'];
+    const lines: string[] = [];
+    // Daily section
+    lines.push('# Daily');
+    lines.push('Date,Tokens,Cost,Messages,ToolCalls,Errors');
     daily.forEach(d => {
       const entry = d as DailyEntry;
-      rows.push(`${entry.date},${entry.tokens},${entry.cost},${entry.messages ?? 0},${entry.toolCalls ?? 0},${entry.errors ?? 0}`);
+      lines.push(`${entry.date},${entry.tokens},${entry.cost},${entry.messages ?? 0},${entry.toolCalls ?? 0},${entry.errors ?? 0}`);
     });
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    // Models section
+    if (models.length > 0) {
+      lines.push('');
+      lines.push('# Models');
+      lines.push('Provider,Model,Count,Tokens,Cost,Input,Output,CacheRead,CacheWrite');
+      models.forEach(m => {
+        const t = m.totals || {} as any;
+        lines.push(`${m.provider || ''},${m.model || ''},${m.count},${t.totalTokens || 0},${t.totalCost || 0},${t.input || 0},${t.output || 0},${t.cacheRead || 0},${t.cacheWrite || 0}`);
+      });
+    }
+    // Sessions section
+    if (sessions.length > 0) {
+      lines.push('');
+      lines.push('# Sessions');
+      lines.push('Key,Label,Tokens,Cost,Messages,ToolCalls,Errors,LastActive');
+      sessions.forEach(s => {
+        const st = s.totals || s.usage as any || {};
+        const msgs = s.messages || s.usage?.messageCounts || {} as any;
+        lines.push(`"${s.key}","${s.label || ''}",${st.totalTokens || 0},${st.totalCost || 0},${msgs.total || 0},${msgs.toolCalls || 0},${msgs.errors || 0},${s.lastActiveAt || s.updatedAt || ''}`);
+      });
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `usage-${range}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [usageData, daily, range]);
+  }, [usageData, daily, models, sessions, range]);
 
   // Aggregate daily data by week/month for trend view
   const trendData = useMemo(() => {
@@ -626,9 +715,27 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
     return s.lastActiveAt || s.updatedAt;
   }, []);
 
-  // Filter sessions by selected model + search + sort
+  // Unique channels & agents for filter dropdowns
+  const uniqueChannels = useMemo(() => {
+    const set = new Set<string>();
+    sessions.forEach(s => { if (s.channel) set.add(s.channel); });
+    return Array.from(set).sort();
+  }, [sessions]);
+  const uniqueAgents = useMemo(() => {
+    const set = new Set<string>();
+    sessions.forEach(s => { if (s.agentId) set.add(s.agentId); });
+    return Array.from(set).sort();
+  }, [sessions]);
+
+  // Filter sessions by selected model + channel + agent + search + sort
   const filteredSessions = useMemo(() => {
     let list = sessions.filter(s => getSessionTokens(s) > 0);
+    if (selectedChannel) {
+      list = list.filter(s => s.channel === selectedChannel);
+    }
+    if (selectedAgent) {
+      list = list.filter(s => s.agentId === selectedAgent);
+    }
     if (sessionSearch) {
       const q = sessionSearch.toLowerCase();
       list = list.filter(s => (s.label || s.key || '').toLowerCase().includes(q));
@@ -641,7 +748,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
       recent: (a, b) => (getSessionLastActive(b) || 0) - (getSessionLastActive(a) || 0),
     };
     return list.sort(sortFns[sessionSort] || sortFns.tokens);
-  }, [sessions, selectedModel, getSessionTokens, getSessionCost, getSessionMessages, getSessionLastActive, sessionSort, sessionSearch]);
+  }, [sessions, selectedModel, selectedChannel, selectedAgent, getSessionTokens, getSessionCost, getSessionMessages, getSessionLastActive, sessionSort, sessionSearch]);
 
   // Paginated sessions
   const paginatedSessions = useMemo(() => {
@@ -700,18 +807,21 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               title={lastUpdated ? `${u?.lastUpdate || 'Updated'}: ${lastUpdated}` : ''}>
               <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
             </button>
+            {lastUpdated && (
+              <span className="text-[9px] text-slate-400 dark:text-white/25 font-mono tabular-nums">{lastUpdated}</span>
+            )}
           </div>
         </div>
         {/* Sub-tabs */}
         <div className="px-5 flex gap-0.5 neon-divider">
-          {(['overview', 'models', 'sessions', 'timeseries', 'logs'] as const).map(tb => (
+          {(['overview', 'models', 'sessions'] as const).map(tb => (
             <button key={tb} onClick={() => setTab(tb)}
               className={`px-4 py-2 text-[11px] font-bold border-b-2 transition-all ${
                 tab === tb
                   ? 'border-primary text-primary'
                   : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-white/50'
               }`}>
-              {tb === 'overview' ? u.title : tb === 'models' ? u.byModel : tb === 'sessions' ? u.bySession : tb === 'timeseries' ? u.timeseries : u.usageLogs}
+              {tb === 'overview' ? u.title : tb === 'models' ? u.byModel : u.bySession}
             </button>
           ))}
         </div>
@@ -857,28 +967,35 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               </div>
             </div>
 
-            {/* Cache Hit Rate + I/O Ratio mini bar */}
+            {/* #1 #3 Secondary metrics: Avg $/M, Daily Avg */}
             {totals.totalTokens > 0 && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-4 py-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/50 uppercase tracking-wider">{u?.cacheHitRate || 'Cache Hit Rate'}</span>
-                    <span className="text-[11px] font-black tabular-nums text-emerald-500">{fmtPct(cacheHitRate)}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min(cacheHitRate, 100)}%` }} />
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3 py-2.5 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-cyan-500">speed</span>
+                  <div>
+                    <p className="text-[9px] text-slate-400 dark:text-white/35 uppercase">Avg $/M</p>
+                    <p className="text-[12px] font-black tabular-nums text-cyan-600 dark:text-cyan-400">{avgCostPerMToken > 0 ? `$${avgCostPerMToken.toFixed(2)}` : '—'}</p>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-4 py-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-white/50 uppercase tracking-wider">{u?.ioRatio || 'I/O Ratio'}</span>
-                    <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-white/50">
-                      {fmtTokens(totals.input)} / {fmtTokens(totals.output)}
-                    </span>
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3 py-2.5 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-indigo-500">avg_pace</span>
+                  <div>
+                    <p className="text-[9px] text-slate-400 dark:text-white/35 uppercase">{u?.avg || 'Avg'}/Day</p>
+                    <p className="text-[12px] font-black tabular-nums text-indigo-500">{fmtTokens(dailyAvg.tokens)}</p>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden flex">
-                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(totals.input / totals.totalTokens) * 100}%` }} />
-                    <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${(totals.output / totals.totalTokens) * 100}%` }} />
+                </div>
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3 py-2.5 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-amber-500">avg_pace</span>
+                  <div>
+                    <p className="text-[9px] text-slate-400 dark:text-white/35 uppercase">{u?.avg || 'Avg'} $/Day</p>
+                    <p className="text-[12px] font-black tabular-nums text-amber-500">{fmtCost(dailyAvg.cost)}</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-3 py-2.5 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] text-emerald-500">database</span>
+                  <div>
+                    <p className="text-[9px] text-slate-400 dark:text-white/35 uppercase">{u?.cacheHitRate || 'Cache Hit'}</p>
+                    <p className="text-[12px] font-black tabular-nums text-emerald-500">{fmtPct(cacheHitRate)}</p>
                   </div>
                 </div>
               </div>
@@ -920,21 +1037,31 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   
                   {hasBudget ? (
                     <div className="grid grid-cols-2 gap-4">
-                      {/* Daily Budget */}
-                      {budget.dailyLimit > 0 && (
+                      {/* Daily Budget with #9 pace indicator */}
+                      {budget.dailyLimit > 0 && (() => {
+                        const hourOfDay = new Date().getHours();
+                        const dayProgressPct = (hourOfDay / 24) * 100;
+                        const isPacingOver = dailyPct > dayProgressPct + 10;
+                        return (
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-slate-400 dark:text-white/40">{es.dailyBudget}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-slate-400 dark:text-white/40">{es.dailyBudget}</span>
+                              {isPacingOver && !isOverDaily && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold">⚡ Pace</span>
+                              )}
+                            </div>
                             <span className={`text-[10px] font-bold ${isOverDaily ? 'text-red-500' : isNearDaily ? 'text-amber-500' : 'text-slate-600 dark:text-white/60'}`}>
                               {fmtCost(todayCost)} / {fmtCost(budget.dailyLimit)}
                             </span>
                           </div>
-                          <div className="h-2 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                          <div className="relative h-2 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
                             <div className={`h-full rounded-full transition-all duration-500 ${isOverDaily ? 'bg-red-500' : isNearDaily ? 'bg-amber-500' : 'bg-emerald-500'}`}
                               style={{ width: `${dailyPct}%` }} />
+                            <div className="absolute top-0 h-full w-px bg-slate-400/40 dark:bg-white/20" style={{ left: `${dayProgressPct}%` }} title={`${hourOfDay}h / 24h`} />
                           </div>
                         </div>
-                      )}
+                      );})()}
                       {/* Monthly Budget */}
                       {budget.monthlyLimit > 0 && (
                         <div>
@@ -950,11 +1077,15 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                           </div>
                         </div>
                       )}
-                      {/* Projected monthly cost */}
+                      {/* #10 Projected monthly cost with basis note */}
                       {projectedMonthlyCost > 0 && (
                         <div className="col-span-2 mt-1 flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-white/40">
                           <span className="material-symbols-outlined text-[12px]">trending_up</span>
                           <span>{u?.projected || 'Projected'}: <b className="theme-text-secondary">{fmtCost(projectedMonthlyCost)}/{u?.month || 'mo'}</b></span>
+                          <span className="text-[9px] text-slate-400/60 dark:text-white/20">({daily.length}d avg)</span>
+                          {dailyAvg.cost > 0 && projectedMonthlyCost > (budget.monthlyLimit || Infinity) && (
+                            <span className="text-[9px] text-red-400 font-bold">⚠</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -989,59 +1120,81 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                   </div>
                 </div>
                 <TrendChart data={trendData} height={160} />
-                {/* Daily summary below chart */}
+                {/* Daily summary below chart + #4 peak day */}
                 {daily.length > 0 && (
-                  <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
-                    {daily.slice(-5).map(d => (
-                      <div key={d.date} className="text-center">
-                        <p className="text-[11px] text-slate-400 dark:text-white/35">{fmtDate(d.date)}</p>
-                        <p className="text-[11px] font-bold tabular-nums dark:text-white/70 text-slate-600">{fmtTokens(d.tokens)}</p>
-                        <p className="text-[11px] font-mono text-amber-500">{fmtCost(d.cost)}</p>
+                  <div className="mt-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {daily.slice(-5).map(d => (
+                        <div key={d.date} className={`text-center rounded-lg px-1 py-1 ${peakDay && d.date === peakDay.date ? 'ring-1 ring-red-400/40 bg-red-50/40 dark:bg-red-500/5' : ''}`}>
+                          <p className="text-[11px] text-slate-400 dark:text-white/35">{fmtDate(d.date)}</p>
+                          <p className="text-[11px] font-bold tabular-nums dark:text-white/70 text-slate-600">{fmtTokens(d.tokens)}</p>
+                          <p className="text-[11px] font-mono text-amber-500">{fmtCost(d.cost)}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {peakDay && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[9px] text-slate-400 dark:text-white/30">
+                        <span className="material-symbols-outlined text-[11px] text-red-400">local_fire_department</span>
+                        <span>{u?.peak || 'Peak'}: <b className="text-red-400">{fmtDate(peakDay.date)}</b> — {fmtTokens(peakDay.tokens)} / {fmtCost(peakDay.cost)}</span>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Token Distribution Donut — by Model */}
+              {/* Token Distribution Donut — by Model with #6 Token/Cost toggle */}
               <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider">{u.byModel}</h3>
-                  {selectedModel && (
-                    <button onClick={() => setSelectedModel(null)}
-                      className="text-[10px] px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                      ✕ {u.clearFilter}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex bg-slate-100 dark:bg-white/[0.06] p-0.5 rounded-md">
+                      <button onClick={() => setDonutMetric('tokens')} className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${donutMetric === 'tokens' ? 'bg-white dark:bg-primary shadow-sm text-slate-700 dark:text-white' : 'text-slate-400'}`}>{u.tokens}</button>
+                      <button onClick={() => setDonutMetric('cost')} className={`px-2 py-0.5 rounded text-[9px] font-bold transition-all ${donutMetric === 'cost' ? 'bg-white dark:bg-primary shadow-sm text-slate-700 dark:text-white' : 'text-slate-400'}`}>{u.cost}</button>
+                    </div>
+                    {selectedModel && (
+                      <button onClick={() => setSelectedModel(null)}
+                        className="text-[9px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-center mb-3">
                   <div className="relative cursor-pointer" onClick={() => setSelectedModel(null)}>
-                    <DonutChart segments={tokenSegments} size={110} hoveredIndex={donutHover} onHover={setDonutHover} />
+                    <DonutChart segments={activeDonutSegments} size={110} hoveredIndex={donutHover} onHover={setDonutHover} />
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      {donutHover !== null && tokenSegments[donutHover] ? (
+                      {donutHover !== null && activeDonutSegments[donutHover] ? (
                         <>
-                          <span className="text-[10px] text-slate-400 dark:text-white/40 truncate max-w-[64px]">{tokenSegments[donutHover].label}</span>
-                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(tokenSegments[donutHover].value)}</span>
-                          <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtPct((tokenSegments[donutHover].value / (totals.totalTokens || 1)) * 100)}</span>
+                          <span className="text-[10px] text-slate-400 dark:text-white/40 truncate max-w-[64px]">{activeDonutSegments[donutHover].label}</span>
+                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">
+                            {donutMetric === 'tokens' ? fmtTokens(activeDonutSegments[donutHover].value) : fmtCost(activeDonutSegments[donutHover].value)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 dark:text-white/35">
+                            {fmtPct((activeDonutSegments[donutHover].value / (donutMetric === 'tokens' ? totals.totalTokens || 1 : totals.totalCost || 1)) * 100)}
+                          </span>
                         </>
                       ) : (
                         <>
                           <span className="text-[10px] text-slate-400 dark:text-white/40">{u.total}</span>
-                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(totals.totalTokens)}</span>
+                          <span className="text-sm font-black tabular-nums dark:text-white text-slate-700">
+                            {donutMetric === 'tokens' ? fmtTokens(totals.totalTokens) : fmtCost(totals.totalCost)}
+                          </span>
                         </>
                       )}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  {tokenSegments.map((seg, i) => (
+                  {activeDonutSegments.map((seg, i) => (
                     <button key={i} onClick={() => setSelectedModel(selectedModel === seg.label ? null : seg.label)}
                       className={`w-full flex items-center gap-2 text-[10px] px-2 py-1 rounded-lg transition-all ${
                         selectedModel === seg.label ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
                       }`}>
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
                       <span className="truncate flex-1 text-start text-slate-600 dark:text-white/50">{seg.label}</span>
-                      <span className="font-mono font-bold tabular-nums theme-text-muted">{fmtTokens(seg.value)}</span>
+                      <span className="font-mono font-bold tabular-nums theme-text-muted">
+                        {donutMetric === 'tokens' ? fmtTokens(seg.value) : fmtCost(seg.value)}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -1051,10 +1204,15 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
             {/* By Channel + By Agent Donut Charts */}
             {(channelSegments.length > 0 || agentSegments.length > 0) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* By Channel */}
+                {/* By Channel — clickable to filter sessions */}
                 {channelSegments.length > 0 && (
                   <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
-                    <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-3">{u?.byChannel || 'By Channel'}</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider">{u?.byChannel || 'By Channel'}</h3>
+                      {selectedChannel && (
+                        <button onClick={() => setSelectedChannel(null)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">✕ {selectedChannel}</button>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4">
                       <div className="relative shrink-0">
                         <DonutChart segments={channelSegments} size={100} hoveredIndex={channelDonutHover} onHover={setChannelDonutHover} />
@@ -1075,21 +1233,29 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       </div>
                       <div className="flex-1 space-y-1 min-w-0">
                         {channelSegments.map((seg, i) => (
-                          <div key={i} className="flex items-center gap-2 text-[10px] px-1.5 py-0.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all"
+                          <button key={i} onClick={() => { setSelectedChannel(selectedChannel === seg.label ? null : seg.label); setTab('sessions'); setSessionsPage(1); }}
+                            className={`w-full flex items-center gap-2 text-[10px] px-1.5 py-0.5 rounded-lg transition-all cursor-pointer ${
+                              selectedChannel === seg.label ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                            }`}
                             onMouseEnter={() => setChannelDonutHover(i)} onMouseLeave={() => setChannelDonutHover(null)}>
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-                            <span className="truncate flex-1 text-slate-600 dark:text-white/50">{seg.label}</span>
+                            <span className="truncate flex-1 text-start text-slate-600 dark:text-white/50">{seg.label}</span>
                             <span className="font-mono font-bold tabular-nums theme-text-muted">{fmtTokens(seg.value)}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
                   </div>
                 )}
-                {/* By Agent */}
+                {/* By Agent — clickable to filter sessions */}
                 {agentSegments.length > 0 && (
                   <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
-                    <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-3">{u?.byAgent || 'By Agent'}</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider">{u?.byAgent || 'By Agent'}</h3>
+                      {selectedAgent && (
+                        <button onClick={() => setSelectedAgent(null)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">✕ {selectedAgent}</button>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4">
                       <div className="relative shrink-0">
                         <DonutChart segments={agentSegments} size={100} hoveredIndex={agentDonutHover} onHover={setAgentDonutHover} />
@@ -1110,12 +1276,15 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                       </div>
                       <div className="flex-1 space-y-1 min-w-0">
                         {agentSegments.map((seg, i) => (
-                          <div key={i} className="flex items-center gap-2 text-[10px] px-1.5 py-0.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all"
+                          <button key={i} onClick={() => { setSelectedAgent(selectedAgent === seg.label ? null : seg.label); setTab('sessions'); setSessionsPage(1); }}
+                            className={`w-full flex items-center gap-2 text-[10px] px-1.5 py-0.5 rounded-lg transition-all cursor-pointer ${
+                              selectedAgent === seg.label ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                            }`}
                             onMouseEnter={() => setAgentDonutHover(i)} onMouseLeave={() => setAgentDonutHover(null)}>
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-                            <span className="truncate flex-1 text-slate-600 dark:text-white/50">{seg.label}</span>
+                            <span className="truncate flex-1 text-start text-slate-600 dark:text-white/50">{seg.label}</span>
                             <span className="font-mono font-bold tabular-nums theme-text-muted shrink-0">{fmtTokens(seg.value)}</span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -1124,40 +1293,55 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
               </div>
             )}
 
-            {/* Token I/O Breakdown */}
+            {/* #13 Token I/O Breakdown — stacked horizontal bars */}
             <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
-              <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-3">Token I/O</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider">{u?.ioRatio || 'I/O Ratio'}</h3>
+                {ioRatioValue > 3 && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold">Output-heavy ({ioRatioValue.toFixed(1)}:1)</span>
+                )}
+              </div>
+              <div className="space-y-2.5">
                 {[
-                  { label: u.inputTokens, value: totals.input, cost: totals.inputCost, color: '#6366f1' },
-                  { label: u.outputTokens, value: totals.output, cost: totals.outputCost, color: '#f59e0b' },
-                  { label: u.cacheRead, value: totals.cacheRead, cost: totals.cacheReadCost, color: '#10b981' },
-                  { label: u.cacheWrite, value: totals.cacheWrite, cost: totals.cacheWriteCost, color: '#8b5cf6' },
-                ].map(item => (
-                  <div key={item.label} className="text-center">
-                    <div className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center mb-2" style={{ background: `${item.color}15` }}>
-                      <span className="text-lg font-black tabular-nums" style={{ color: item.color }}>{fmtTokens(item.value)}</span>
+                  { label: u.inputTokens, value: totals.input, cost: totals.inputCost, color: '#6366f1', pct: totals.totalTokens ? (totals.input / totals.totalTokens) * 100 : 0 },
+                  { label: u.outputTokens, value: totals.output, cost: totals.outputCost, color: '#f59e0b', pct: totals.totalTokens ? (totals.output / totals.totalTokens) * 100 : 0 },
+                  { label: u.cacheRead, value: totals.cacheRead, cost: totals.cacheReadCost, color: '#10b981', pct: totals.totalTokens ? (totals.cacheRead / totals.totalTokens) * 100 : 0 },
+                  { label: u.cacheWrite, value: totals.cacheWrite, cost: totals.cacheWriteCost, color: '#8b5cf6', pct: totals.totalTokens ? (totals.cacheWrite / totals.totalTokens) * 100 : 0 },
+                ].filter(item => item.value > 0).map(item => (
+                  <div key={item.label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
+                        <span className="text-[10px] font-semibold text-slate-600 dark:text-white/60">{item.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-mono tabular-nums">
+                        <span className="font-bold" style={{ color: item.color }}>{fmtTokens(item.value)}</span>
+                        <span className="text-slate-400 dark:text-white/30">{fmtCost(item.cost)}</span>
+                        <span className="text-slate-400 dark:text-white/30">{fmtPct(item.pct)}</span>
+                      </div>
                     </div>
-                    <p className="text-[10px] font-medium text-slate-500 dark:text-white/40">{item.label}</p>
-                    <p className="text-[10px] font-mono text-slate-400 dark:text-white/35">{fmtCost(item.cost)}</p>
+                    <div className="h-2 rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(item.pct, 0.5)}%`, background: item.color }} />
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Top Tools */}
+            {/* #14 Top Tools — with token consumption if available */}
             {agg?.tools && agg.tools.tools.length > 0 && (
               <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
                 <h3 className="text-[11px] font-bold theme-text-secondary uppercase tracking-wider mb-3">{u.toolCalls} ({agg.tools.uniqueTools})</h3>
                 <div className="space-y-2">
-                  {agg.tools.tools.slice(0, 8).map((tool, i) => (
+                  {agg.tools.tools.slice(0, 8).map((tool: any, i: number) => (
                     <AnimatedBar
                       key={tool.name}
                       value={tool.count}
                       max={agg.tools.tools[0]?.count || 1}
                       color={MODEL_COLORS[i % MODEL_COLORS.length]}
                       label={tool.name}
-                      rightLabel={String(tool.count)}
+                      sublabel={tool.tokens ? fmtTokens(tool.tokens) + ' tok' : undefined}
+                      rightLabel={`${tool.count}×${tool.tokens ? ' · ' + fmtCost(tool.cost || 0) : ''}`}
                     />
                   ))}
                 </div>
@@ -1166,7 +1350,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
           </div>
         )}
 
-        {/* Models Tab */}
+        {/* Models Tab — expandable cards */}
         {totals && tab === 'models' && (() => {
           const filteredModels = models.filter(m => (m.totals?.totalTokens || 0) > 0);
           return (
@@ -1174,27 +1358,130 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
             {filteredModels.length === 0 ? (
               <div className="text-center py-12 text-slate-400 dark:text-white/40 text-[11px]">{u.noData}</div>
             ) : (
-              filteredModels.map((m, i) => (
-                <div key={i} className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-3 h-3 rounded-full" style={{ background: MODEL_COLORS[i % MODEL_COLORS.length] }} />
+              filteredModels.map((m, i) => {
+                const isModelExpanded = expandedModelIdx === i;
+                const mt = m.totals || {} as UsageTotals;
+                const mTokens = mt.totalTokens || 0;
+                const mCost = mt.totalCost || 0;
+                const mInput = mt.input || 0;
+                const mOutput = mt.output || 0;
+                const mCacheRead = mt.cacheRead || 0;
+                const mCacheWrite = mt.cacheWrite || 0;
+                const mCacheHit = mTokens > 0 ? (mCacheRead / mTokens) * 100 : 0;
+                const mIoRatio = mInput > 0 ? mOutput / mInput : 0;
+                const mAvgCostPerReq = m.count > 0 ? mCost / m.count : 0;
+                // Sessions using this model
+                const modelSessions = sessions.filter(s => {
+                  const sModels: string[] = (s as any).models || (s as any).modelNames || [];
+                  return sModels.some(sm => sm === m.model) || (s as any).model === m.model;
+                }).sort((a, b) => getSessionTokens(b) - getSessionTokens(a)).slice(0, 5);
+                return (
+                <div key={i} className={`rounded-2xl border bg-white dark:bg-white/[0.02] transition-colors ${isModelExpanded ? 'border-primary/30 ring-1 ring-primary/10' : 'border-slate-200/60 dark:border-white/[0.06] hover:border-primary/20'}`}>
+                  {/* Clickable model header */}
+                  <div className="flex items-center gap-3 px-4 pt-4 pb-2 cursor-pointer select-none" onClick={() => setExpandedModelIdx(isModelExpanded ? null : i)}>
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: MODEL_COLORS[i % MODEL_COLORS.length] }} />
                     <div className="flex-1 min-w-0">
                       <h4 className="text-[12px] font-bold dark:text-white/90 text-slate-700 truncate">{m.model || u.unknown}</h4>
                       <p className="text-[10px] text-slate-400 dark:text-white/40">{m.provider || ''} · {m.count} {u.count}</p>
                     </div>
-                    <div className="text-end">
-                      <p className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(m.totals?.totalTokens || 0)}</p>
-                      <p className="text-[10px] font-mono text-amber-500">{fmtCost((m.totals?.totalCost || 0))}</p>
-                      {(m.totals?.totalCost || 0) > 0 && (
-                        <p className="text-[10px] font-mono text-slate-400 dark:text-white/30">{fmtCostPerMToken(m.totals?.totalCost || 0, m.totals?.totalTokens || 0)}</p>
+                    <div className="text-end me-1">
+                      <p className="text-sm font-black tabular-nums dark:text-white text-slate-700">{fmtTokens(mTokens)}</p>
+                      <p className="text-[10px] font-mono text-amber-500">{fmtCost(mCost)}</p>
+                      {mCost > 0 && (
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-white/30">{fmtCostPerMToken(mCost, mTokens)}</p>
                       )}
                     </div>
+                    <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 transition-transform ${isModelExpanded ? 'rotate-180' : ''}`}>expand_more</span>
                   </div>
-                  <AnimatedBar value={m.totals?.totalTokens || 0} max={maxModelTokens} color={MODEL_COLORS[i % MODEL_COLORS.length]}
-                    label={`${u.input}: ${fmtTokens((m.totals?.input || 0))}`} sublabel={`${u.output}: ${fmtTokens((m.totals?.output || 0))}`}
-                    rightLabel={`${(((m.totals?.totalTokens || 0) / (totals?.totalTokens || 1)) * 100).toFixed(1)}%`} />
+                  {/* Progress bar */}
+                  <div className="px-4 pb-3">
+                    <AnimatedBar value={mTokens} max={maxModelTokens} color={MODEL_COLORS[i % MODEL_COLORS.length]}
+                      label={`${u.input}: ${fmtTokens(mInput)}`} sublabel={`${u.output}: ${fmtTokens(mOutput)}`}
+                      rightLabel={`${((mTokens / (totals?.totalTokens || 1)) * 100).toFixed(1)}%`} />
+                  </div>
+                  {/* Expandable detail */}
+                  <div className={`grid transition-all duration-300 ease-in-out ${isModelExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                    {isModelExpanded && (
+                      <div className="border-t border-slate-200/60 dark:border-white/[0.06] px-4 py-3 space-y-3">
+                        {/* Token I/O stacked bars */}
+                        <div className="space-y-2">
+                          {[
+                            { label: u.inputTokens || 'Input', value: mInput, cost: mt.inputCost || 0, color: '#6366f1', pct: mTokens ? (mInput / mTokens) * 100 : 0 },
+                            { label: u.outputTokens || 'Output', value: mOutput, cost: mt.outputCost || 0, color: '#f59e0b', pct: mTokens ? (mOutput / mTokens) * 100 : 0 },
+                            { label: u.cacheRead || 'Cache Read', value: mCacheRead, cost: mt.cacheReadCost || 0, color: '#10b981', pct: mTokens ? (mCacheRead / mTokens) * 100 : 0 },
+                            { label: u.cacheWrite || 'Cache Write', value: mCacheWrite, cost: mt.cacheWriteCost || 0, color: '#8b5cf6', pct: mTokens ? (mCacheWrite / mTokens) * 100 : 0 },
+                          ].filter(item => item.value > 0).map(item => (
+                            <div key={item.label}>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: item.color }} />
+                                  <span className="text-[10px] text-slate-500 dark:text-white/50">{item.label}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] font-mono tabular-nums">
+                                  <span className="font-bold" style={{ color: item.color }}>{fmtTokens(item.value)}</span>
+                                  <span className="text-slate-400 dark:text-white/30">{fmtCost(item.cost)}</span>
+                                  <span className="text-slate-400 dark:text-white/30">{fmtPct(item.pct)}</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(item.pct, 0.5)}%`, background: item.color }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Efficiency metrics row */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div className="px-2.5 py-2 rounded-lg bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
+                            <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase">$/M Token</p>
+                            <p className="text-[12px] font-black tabular-nums text-cyan-600 dark:text-cyan-400">{mCost > 0 ? fmtCostPerMToken(mCost, mTokens) : '—'}</p>
+                          </div>
+                          <div className="px-2.5 py-2 rounded-lg bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
+                            <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase">Avg $/Req</p>
+                            <p className="text-[12px] font-black tabular-nums text-amber-500">{mAvgCostPerReq > 0 ? fmtCost(mAvgCostPerReq) : '—'}</p>
+                          </div>
+                          <div className="px-2.5 py-2 rounded-lg bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
+                            <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase">{u?.cacheHitRate || 'Cache Hit'}</p>
+                            <p className="text-[12px] font-black tabular-nums text-emerald-500">{fmtPct(mCacheHit)}</p>
+                          </div>
+                          <div className="px-2.5 py-2 rounded-lg bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
+                            <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase">I/O Ratio</p>
+                            <p className={`text-[12px] font-black tabular-nums ${mIoRatio > 3 ? 'text-amber-500' : 'text-slate-600 dark:text-white/60'}`}>
+                              {mIoRatio > 0 ? `${mIoRatio.toFixed(1)}:1` : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Sessions using this model */}
+                        {modelSessions.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider mb-1.5">{u.sessions || 'Sessions'} ({modelSessions.length})</p>
+                            <div className="space-y-1">
+                              {modelSessions.map(s => (
+                                <div key={s.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50/60 dark:bg-white/[0.01] hover:bg-slate-100/80 dark:hover:bg-white/[0.03] transition-colors text-[10px]">
+                                  <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-white/60">{s.label || s.key}</span>
+                                  <span className="font-mono font-bold tabular-nums text-indigo-500 shrink-0">{fmtTokens(getSessionTokens(s))}</span>
+                                  <span className="font-mono text-amber-500 shrink-0">{fmtCost(getSessionCost(s))}</span>
+                                  {onNavigateToSession && (
+                                    <button onClick={(e) => { e.stopPropagation(); onNavigateToSession(s.key); }}
+                                      className="w-5 h-5 rounded bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 flex items-center justify-center transition-colors shrink-0"
+                                      title={u.goToSession}>
+                                      <span className="material-symbols-outlined text-[12px]">chat</span>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {modelSessions.length === 0 && (
+                          <p className="text-[10px] text-slate-400 dark:text-white/30 text-center py-2">{u?.noSessionsForModel || 'No session data linked to this model'}</p>
+                        )}
+                      </div>
+                    )}
+                    </div>
+                  </div>
                 </div>
-              ))
+              );})
             )}
           </div>
         );})()}
@@ -1202,19 +1489,47 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
         {/* Sessions Tab */}
         {totals && tab === 'sessions' && (
           <div className="space-y-2 max-w-6xl mx-auto animate-in fade-in duration-300">
-            {/* Header with search, sort, count */}
+            {/* Header with search, filters, sort, count */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-1 mb-2">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div className="relative flex-1 max-w-[220px]">
+              <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                <div className="relative flex-1 max-w-[180px] min-w-[120px]">
                   <span className="material-symbols-outlined text-[14px] text-slate-400 absolute start-2 top-1/2 -translate-y-1/2">search</span>
                   <input type="text" value={sessionSearch} onChange={e => { setSessionSearch(e.target.value); setSessionsPage(1); }}
                     placeholder={u?.searchSessions || 'Search sessions...'}
                     className="w-full ps-7 pe-2 py-1 text-[10px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white/70 outline-none focus:border-primary" />
                 </div>
+                {/* Channel filter dropdown */}
+                {uniqueChannels.length > 0 && (
+                  <select value={selectedChannel || ''} onChange={e => { setSelectedChannel(e.target.value || null); setSessionsPage(1); }}
+                    className={`text-[10px] px-2 py-1 rounded-lg border bg-white dark:bg-white/5 dark:text-white/70 outline-none transition-colors ${
+                      selectedChannel ? 'border-primary text-primary font-bold' : 'border-slate-200 dark:border-white/10 text-slate-500'
+                    }`}>
+                    <option value="">{u?.allChannels || 'All Channels'}</option>
+                    {uniqueChannels.map(ch => <option key={ch} value={ch}>{ch}</option>)}
+                  </select>
+                )}
+                {/* Agent filter dropdown */}
+                {uniqueAgents.length > 0 && (
+                  <select value={selectedAgent || ''} onChange={e => { setSelectedAgent(e.target.value || null); setSessionsPage(1); }}
+                    className={`text-[10px] px-2 py-1 rounded-lg border bg-white dark:bg-white/5 dark:text-white/70 outline-none transition-colors ${
+                      selectedAgent ? 'border-primary text-primary font-bold' : 'border-slate-200 dark:border-white/10 text-slate-500'
+                    }`}>
+                    <option value="">{u?.allAgents || 'All Agents'}</option>
+                    {uniqueAgents.map(ag => <option key={ag} value={ag}>{ag}</option>)}
+                  </select>
+                )}
                 <span className="text-[11px] text-slate-500 dark:text-white/50 shrink-0">
                   {filteredSessions.length} {u?.sessionsCount || 'sessions'}
                   {selectedModel && <span className="text-primary ms-1">· {selectedModel}</span>}
+                  {selectedChannel && <span className="text-primary ms-1">· {selectedChannel}</span>}
+                  {selectedAgent && <span className="text-primary ms-1">· {selectedAgent}</span>}
                 </span>
+                {(selectedModel || selectedChannel || selectedAgent) && (
+                  <button onClick={() => { setSelectedModel(null); setSelectedChannel(null); setSelectedAgent(null); setSessionsPage(1); }}
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-white/[0.06] text-slate-500 dark:text-white/40 hover:bg-slate-300/60 dark:hover:bg-white/[0.1] transition-colors">
+                    {u?.clearFilter || 'Clear'}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <div className="flex bg-slate-100 dark:bg-white/[0.06] p-0.5 rounded-md">
@@ -1239,21 +1554,34 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
             ) : (
               <>
               {paginatedSessions
-                .map((s, i) => (
-                  <div key={s.key} className="rounded-xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] px-4 py-3 hover:border-primary/30 transition-colors">
-                    <div className="flex items-center gap-3">
+                .map((s, i) => {
+                  const isExpanded = expandedSessionKey === s.key;
+                  const msgs = getSessionMessages(s);
+                  const sTotals = s.totals || s.usage as any || {};
+                  // #8 Inactive detection (>7 days)
+                  const lastActive = getSessionLastActive(s);
+                  const isInactive = lastActive ? (Date.now() - new Date(lastActive).getTime()) > 7 * 86400_000 : false;
+                  // #7 Extract model names from session data
+                  const sessionModels: string[] = (s as any).models || (s as any).modelNames || [];
+                  return (
+                  <div key={s.key} className={`rounded-xl border bg-white dark:bg-white/[0.02] transition-colors ${isExpanded ? 'border-primary/30 ring-1 ring-primary/10' : 'border-slate-200/60 dark:border-white/[0.06] hover:border-primary/20'}`}>
+                    {/* Clickable session row */}
+                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => toggleSessionExpand(s.key)}>
                       <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-slate-400 dark:text-white/40">
                         {(sessionsPage - 1) * PAGE_SIZE + i + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[11px] font-bold dark:text-white/80 text-slate-700 truncate">{s.label || s.key}</p>
-                          {getSessionLastActive(s) && <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtRelativeTime(getSessionLastActive(s), u)}</span>}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-[11px] font-bold dark:text-white/80 text-slate-700 truncate max-w-[180px]">{s.label || s.key}</p>
+                          {s.channel && <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold shrink-0">{s.channel}</span>}
+                          {s.agentId && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">{s.agentId}</span>}
+                          {lastActive && <span className="text-[10px] text-slate-400 dark:text-white/35">{fmtRelativeTime(lastActive, u)}</span>}
+                          {isInactive && <span className="text-[9px] px-1 py-0.5 rounded bg-slate-200/60 dark:bg-white/[0.06] text-slate-400 dark:text-white/25 font-bold">Inactive</span>}
                         </div>
                         <div className="flex gap-3 mt-0.5 text-[10px] text-slate-400 dark:text-white/35">
-                          <span>{u.messages}: {getSessionMessages(s).total || 0}</span>
-                          <span>{u.toolCalls}: {getSessionMessages(s).toolCalls || 0}</span>
-                          {(getSessionMessages(s).errors || 0) > 0 && <span className="text-red-400">{u.errors}: {getSessionMessages(s).errors}</span>}
+                          <span>{u.messages}: {msgs.total || 0}</span>
+                          <span>{u.toolCalls}: {msgs.toolCalls || 0}</span>
+                          {(msgs.errors || 0) > 0 && <span className="text-red-400">{u.errors}: {msgs.errors}</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -1261,33 +1589,149 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
                           <p className="text-[12px] font-bold tabular-nums dark:text-white/80 text-slate-600">{fmtTokens(getSessionTokens(s))}</p>
                           <p className="text-[10px] font-mono text-amber-500">{fmtCost(getSessionCost(s))}</p>
                         </div>
-                        <button onClick={() => openSessionDetail(s.key, 'timeseries')}
-                          className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 flex items-center justify-center transition-colors"
-                          title={u.timeseries}>
-                          <span className="material-symbols-outlined text-[14px]">timeline</span>
-                        </button>
-                        <button onClick={() => openSessionDetail(s.key, 'logs')}
-                          className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 flex items-center justify-center transition-colors"
-                          title={u.usageLogs}>
-                          <span className="material-symbols-outlined text-[14px]">receipt_long</span>
-                        </button>
                         {onNavigateToSession && (
-                          <button onClick={() => onNavigateToSession(s.key)}
+                          <button onClick={(e) => { e.stopPropagation(); onNavigateToSession(s.key); }}
                             className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 flex items-center justify-center transition-colors"
                             title={u.goToSession}>
                             <span className="material-symbols-outlined text-[14px]">chat</span>
                           </button>
                         )}
+                        <span className={`material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
                       </div>
                     </div>
-                    <div className="mt-2">
+                    {/* Progress bar */}
+                    <div className="px-4 pb-2">
                       <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
                         <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-500"
                           style={{ width: `${Math.max((getSessionTokens(s) / maxSessionTokens) * 100, 0.5)}%` }} />
                       </div>
                     </div>
+                    {/* ═══ Inline Expanded Detail with #15 smooth animation ═══ */}
+                    <div className={`grid transition-all duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                      <div className="overflow-hidden">
+                      {isExpanded && (
+                      <div className="border-t border-slate-200/60 dark:border-white/[0.06] px-4 py-3 space-y-3">
+                        {/* #7 Model tags */}
+                        {sessionModels.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {sessionModels.map((m: string) => (
+                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold truncate max-w-[120px]">{m}</span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Summary stats row */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { label: u.inputTokens || 'Input', value: fmtTokens(sTotals.input || 0), cost: fmtCost(sTotals.inputCost || 0), color: '#6366f1' },
+                            { label: u.outputTokens || 'Output', value: fmtTokens(sTotals.output || 0), cost: fmtCost(sTotals.outputCost || 0), color: '#f59e0b' },
+                            { label: u.cacheRead || 'Cache Read', value: fmtTokens(sTotals.cacheRead || 0), cost: fmtCost(sTotals.cacheReadCost || 0), color: '#10b981' },
+                            { label: u.messages || 'Messages', value: String(msgs.total || 0), cost: `${msgs.toolCalls || 0} ${u.toolCalls || 'tools'}`, color: '#8b5cf6' },
+                          ].map(item => (
+                            <div key={item.label} className="px-2.5 py-2 rounded-lg bg-slate-50/80 dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
+                              <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase">{item.label}</p>
+                              <p className="text-[12px] font-black tabular-nums mt-0.5" style={{ color: item.color }}>{item.value}</p>
+                              <p className="text-[9px] font-mono text-slate-400 dark:text-white/30">{item.cost}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Detail sub-tabs: timeseries / logs */}
+                        <div className="flex items-center gap-1 border-b border-slate-200/40 dark:border-white/[0.04]">
+                          <button onClick={() => setDetailView('timeseries')}
+                            className={`px-3 py-1.5 text-[10px] font-bold border-b-2 transition-all ${detailView === 'timeseries' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-white/50'}`}>
+                            <span className="material-symbols-outlined text-[12px] align-middle me-0.5">timeline</span>
+                            {u.timeseries || 'Time Series'}
+                          </button>
+                          <button onClick={() => setDetailView('logs')}
+                            className={`px-3 py-1.5 text-[10px] font-bold border-b-2 transition-all ${detailView === 'logs' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-white/50'}`}>
+                            <span className="material-symbols-outlined text-[12px] align-middle me-0.5">receipt_long</span>
+                            {u.usageLogs || 'Usage Logs'}
+                          </button>
+                        </div>
+                        {/* Timeseries content */}
+                        {detailView === 'timeseries' && (
+                          <div>
+                            {tsLoading ? (
+                              <div className="flex items-center justify-center py-8 text-slate-400">
+                                <span className="material-symbols-outlined text-[16px] animate-spin me-1">progress_activity</span>
+                                <span className="text-[10px]">{u.timeseriesLoading}</span>
+                              </div>
+                            ) : tsData && tsData.length > 0 ? (() => {
+                              const filtered = tsData.filter((pt: any) => (pt.tokens || pt.value || 0) > 0);
+                              const maxVal = Math.max(...filtered.map((p: any) => p.tokens || p.value || 1), 1);
+                              return filtered.length > 0 ? (
+                                <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                  {filtered.map((pt: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-slate-50/60 dark:bg-white/[0.01] text-[10px]">
+                                      <span className="font-mono text-slate-400 dark:text-white/40 w-28 shrink-0">{fmtTimestamp(pt.timestamp || pt.date || pt.t, u)}</span>
+                                      <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
+                                        <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(100, ((pt.tokens || pt.value || 0) / maxVal) * 100)}%` }} />
+                                      </div>
+                                      <span className="font-mono font-bold text-indigo-500 w-14 text-end shrink-0">{fmtTokens(pt.tokens || pt.value || 0)}</span>
+                                      {pt.cost != null && <span className="font-mono text-amber-500 w-14 text-end shrink-0">{fmtCost(pt.cost)}</span>}
+                                      {pt.latencyMs != null && <span className="font-mono text-emerald-500 w-14 text-end shrink-0">{fmtMs(pt.latencyMs)}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : <div className="text-center py-8 text-slate-400 dark:text-white/40 text-[10px]">{u.timeseriesEmpty}</div>;
+                            })() : (
+                              <div className="text-center py-8 text-slate-400 dark:text-white/40 text-[10px]">{u.timeseriesEmpty}</div>
+                            )}
+                          </div>
+                        )}
+                        {/* Logs content */}
+                        {detailView === 'logs' && (() => {
+                          const filtered = (logsData || []).filter((log: any) => (log.tokens || 0) > 0 || log.error);
+                          const totalLogsPages = Math.ceil(filtered.length / PAGE_SIZE);
+                          const paginatedLogs = filtered.slice((logsPage - 1) * PAGE_SIZE, logsPage * PAGE_SIZE);
+                          return (
+                            <div>
+                              {logsLoading ? (
+                                <div className="flex items-center justify-center py-8 text-slate-400">
+                                  <span className="material-symbols-outlined text-[16px] animate-spin me-1">progress_activity</span>
+                                  <span className="text-[10px]">{u.logsLoading}</span>
+                                </div>
+                              ) : paginatedLogs.length > 0 ? (
+                                <>
+                                <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                  {paginatedLogs.map((log: any, idx: number) => (
+                                    <div key={idx} className="px-2 py-1.5 rounded-md bg-slate-50/60 dark:bg-white/[0.01]">
+                                      <div className="flex items-center gap-2 text-[10px]">
+                                        <span className="font-mono text-slate-400 dark:text-white/40 w-28 shrink-0">{fmtTimestamp(log.timestamp || log.date || log.ts, u)}</span>
+                                        {log.model && <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold truncate max-w-[80px]">{log.model}</span>}
+                                        <span className="ms-auto font-mono font-bold theme-text-secondary">{fmtTokens(log.tokens || 0)}</span>
+                                        {log.cost != null && <span className="font-mono text-amber-500">{fmtCost(log.cost)}</span>}
+                                        {log.latencyMs != null && <span className="font-mono text-emerald-500">{fmtMs(log.latencyMs)}</span>}
+                                      </div>
+                                      {log.error && <p className="text-[10px] text-red-400 mt-0.5">{log.error}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                                {totalLogsPages > 1 && (
+                                  <div className="flex items-center justify-center gap-2 pt-2">
+                                    <button onClick={() => setLogsPage(p => Math.max(1, p - 1))} disabled={logsPage === 1}
+                                      className="px-2 py-1 rounded text-[10px] font-bold theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 transition-colors">
+                                      ← {u.prevPage}
+                                    </button>
+                                    <span className="text-[10px] text-slate-400 dark:text-white/40">{logsPage}/{totalLogsPages}</span>
+                                    <button onClick={() => setLogsPage(p => Math.min(totalLogsPages, p + 1))} disabled={logsPage === totalLogsPages}
+                                      className="px-2 py-1 rounded text-[10px] font-bold theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 transition-colors">
+                                      {u.nextPage} →
+                                    </button>
+                                  </div>
+                                )}
+                                </>
+                              ) : (
+                                <div className="text-center py-8 text-slate-400 dark:text-white/40 text-[10px]">{u.noLogs}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                      </div>
+                    </div>
                   </div>
-                ))}
+                );})}
               {/* Pagination */}
               {totalSessionPages > 1 && (
                 <div className="flex items-center justify-center gap-2 pt-4">
@@ -1325,108 +1769,7 @@ const Usage: React.FC<UsageProps> = ({ language, onNavigateToSession }) => {
           </div>
         )}
 
-        {/* Timeseries Tab */}
-        {tab === 'timeseries' && (
-          <div className="max-w-6xl mx-auto animate-in fade-in duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <button onClick={() => setTab('sessions')} className="p-1 text-slate-400 hover:text-primary transition-colors">
-                  <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-                </button>
-                <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/80">{u.timeseries}</h3>
-                {selectedSessionKey && <span className="text-[10px] font-mono text-slate-400 dark:text-white/35 truncate max-w-[200px]">{selectedSessionKey}</span>}
-              </div>
-              <button onClick={() => { setTsData(null); fetchTimeseries(); }} disabled={tsLoading}
-                className="text-[10px] text-primary hover:underline disabled:opacity-40">{u.refresh}</button>
-            </div>
-            {tsLoading ? (
-              <div className="flex items-center justify-center py-16 text-slate-400">
-                <span className="material-symbols-outlined text-[20px] animate-spin me-2">progress_activity</span>
-                <span className="text-[11px]">{u.timeseriesLoading}</span>
-              </div>
-            ) : tsData && tsData.length > 0 ? (() => {
-              const filtered = tsData.filter((pt: any) => (pt.tokens || pt.value || 0) > 0);
-              const maxVal = Math.max(...filtered.map((p: any) => p.tokens || p.value || 1), 1);
-              return filtered.length > 0 ? (
-              <div className="space-y-1">
-                {filtered.map((pt: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
-                    <span className="text-[10px] font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(pt.timestamp || pt.date || pt.t, u)}</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
-                      <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(100, ((pt.tokens || pt.value || 0) / maxVal) * 100)}%` }} />
-                    </div>
-                    <span className="text-[10px] font-mono font-bold theme-text-secondary w-16 text-end">{fmtTokens(pt.tokens || pt.value || 0)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <div className="text-center py-16 text-slate-400 dark:text-white/40 text-[11px]">{u.timeseriesEmpty}</div>;})() : (
-              <div className="text-center py-16 text-slate-400 dark:text-white/40 text-[11px]">{u.timeseriesEmpty}</div>
-            )}
-          </div>
-        )}
-
-        {/* Logs Tab */}
-        {tab === 'logs' && (() => {
-          const filtered = (logsData || []).filter((log: any) => (log.tokens || 0) > 0 || log.error);
-          const totalLogsPages = Math.ceil(filtered.length / PAGE_SIZE);
-          const paginatedLogs = filtered.slice((logsPage - 1) * PAGE_SIZE, logsPage * PAGE_SIZE);
-          return (
-          <div className="max-w-6xl mx-auto animate-in fade-in duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <button onClick={() => setTab('sessions')} className="p-1 text-slate-400 hover:text-primary transition-colors">
-                  <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-                </button>
-                <h3 className="text-[12px] font-bold text-slate-700 dark:text-white/80">{u.usageLogs}</h3>
-                {selectedSessionKey && <span className="text-[10px] font-mono text-slate-400 dark:text-white/35 truncate max-w-[200px]">{selectedSessionKey}</span>}
-                {filtered.length > 0 && <span className="text-[10px] text-slate-400 dark:text-white/40">({filtered.length} {u.rowsCount})</span>}
-              </div>
-              <button onClick={() => { setLogsData(null); setLogsPage(1); fetchLogs(); }} disabled={logsLoading}
-                className="text-[10px] text-primary hover:underline disabled:opacity-40">{u.loadLogs}</button>
-            </div>
-            {logsLoading ? (
-              <div className="flex items-center justify-center py-16 text-slate-400">
-                <span className="material-symbols-outlined text-[20px] animate-spin me-2">progress_activity</span>
-                <span className="text-[11px]">{u.logsLoading}</span>
-              </div>
-            ) : paginatedLogs.length > 0 ? (
-              <>
-              <div className="space-y-1">
-                {paginatedLogs.map((log: any, i: number) => (
-                  <div key={i} className="px-3 py-2 rounded-lg bg-white dark:bg-white/[0.02] border border-slate-200/40 dark:border-white/[0.04]">
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <span className="font-mono text-slate-400 dark:text-white/40 w-32 shrink-0">{fmtTimestamp(log.timestamp || log.date || log.ts, u)}</span>
-                      {log.model && <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-500 font-bold truncate max-w-[100px]">{log.model}</span>}
-                      {log.session && <span className="text-slate-400 dark:text-white/35 truncate max-w-[100px]">{log.session}</span>}
-                      <span className="ms-auto font-mono font-bold theme-text-secondary">{fmtTokens(log.tokens || 0)}</span>
-                      {log.cost != null && <span className="font-mono text-amber-500">{fmtCost(log.cost)}</span>}
-                    </div>
-                    {log.error && <p className="text-[11px] text-red-400 mt-0.5">{log.error}</p>}
-                  </div>
-                ))}
-              </div>
-              {/* Logs Pagination */}
-              {totalLogsPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-4">
-                  <button onClick={() => setLogsPage(p => Math.max(1, p - 1))} disabled={logsPage === 1}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    ← {u.prevPage}
-                  </button>
-                  <span className="text-[10px] text-slate-400 dark:text-white/40">
-                    {logsPage} / {totalLogsPages}
-                  </span>
-                  <button onClick={() => setLogsPage(p => Math.min(totalLogsPages, p + 1))} disabled={logsPage === totalLogsPages}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/[0.1] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    {u.nextPage} →
-                  </button>
-                </div>
-              )}
-              </>
-            ) : (
-              <div className="text-center py-16 text-slate-400 dark:text-white/40 text-[11px]">{u.noLogs}</div>
-            )}
-          </div>
-        );})()}
+        {/* (Timeseries and Logs are now inline within session expansion above) */}
       </div>
 
       {/* Budget Settings Modal */}

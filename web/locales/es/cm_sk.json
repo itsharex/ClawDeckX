@@ -14,7 +14,7 @@
     "featured": "Skills destacados",
     "popular": "Servidores populares",
     "eligible": "Disponible",
-    "notEligible": "No disponible",
+    "notEligible": "Necesita configuración",
     "bundled": "Incluido",
     "managed": "Gestionado",
     "disabled": "Desactivado",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "URL base de ClawHub Convex. Las rutas API se agregan automáticamente. Requiere reinicio tras el cambio.",
     "sourceConfigSkillHubHint": "URL de datos de SkillHub. Requiere reinicio tras el cambio.",
     "sourceConfigRestart": "Reinicio necesario tras guardar",
-    "sourceConfigSaved": "Guardado. Reinicie para aplicar los cambios."
+    "sourceConfigSaved": "Guardado. Reinicie para aplicar los cambios.",
+    "recipeInstallOk": "instalado correctamente",
+    "recipeInstallPartial": "instalado (verifique en una nueva terminal)",
+    "recipeInstallFailed": "instalación fallida",
+    "recipePkgNotFound": "no encontrado en PATH",
+    "recipeLocalOnly": "La instalación con un clic solo está disponible en gateway local",
+    "recipeUnsupported": "Método de instalación no soportado"
   }
 }

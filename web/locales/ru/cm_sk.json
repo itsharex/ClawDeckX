@@ -14,7 +14,7 @@
     "featured": "Рекомендуемые навыки",
     "popular": "Популярные серверы",
     "eligible": "Доступен",
-    "notEligible": "Недоступен",
+    "notEligible": "Требуется настройка",
     "bundled": "Встроенный",
     "managed": "Управляемый",
     "disabled": "Отключён",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "Базовый URL ClawHub Convex. Пути API добавляются автоматически. Требуется перезапуск после изменения.",
     "sourceConfigSkillHubHint": "URL данных SkillHub. Требуется перезапуск после изменения.",
     "sourceConfigRestart": "Требуется перезапуск после сохранения",
-    "sourceConfigSaved": "Сохранено. Перезапустите для применения изменений."
+    "sourceConfigSaved": "Сохранено. Перезапустите для применения изменений.",
+    "recipeInstallOk": "успешно установлено",
+    "recipeInstallPartial": "установлено (проверьте в новом терминале)",
+    "recipeInstallFailed": "ошибка установки",
+    "recipePkgNotFound": "не найдено в PATH",
+    "recipeLocalOnly": "Установка в один клик доступна только на локальном шлюзе",
+    "recipeUnsupported": "Неподдерживаемый метод установки"
   }
 }

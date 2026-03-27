@@ -19,24 +19,6 @@
     "enabled": "技能已启用",
     "disabled": "技能已禁用",
     "toggleFailed": "切换失败",
-    "noDescription": "暂无描述",
-    "toolsCatalog": "工具",
-    "toolsCatalogTitle": "工具目录",
-    "toolsCatalogLoading": "正在加载工具目录...",
-    "toolsCatalogLoadFail": "加载工具目录失败",
-    "toolsCatalogRetry": "重试",
-    "toolsCatalogTotal": "个工具",
-    "toolsCatalogCore": "内置",
-    "toolsCatalogPlugin": "插件",
-    "toolsCatalogSearch": "搜索工具...",
-    "toolsCatalogFilterAll": "全部",
-    "toolsCatalogProfile": "配置档",
-    "toolsCatalogProfiles": "配置档",
-    "toolsCatalogProfileMinimal": "精简",
-    "toolsCatalogProfileCoding": "编程",
-    "toolsCatalogProfileMessaging": "消息",
-    "toolsCatalogProfileFull": "完整",
-    "toolsCatalogOptional": "可选",
-    "toolsCatalogNoResults": "没有匹配的工具"
+    "noDescription": "暂无描述"
   }
 }

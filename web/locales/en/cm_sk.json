@@ -14,7 +14,7 @@
     "featured": "Featured Skills",
     "popular": "Popular Servers",
     "eligible": "Available",
-    "notEligible": "Unavailable",
+    "notEligible": "Needs Setup",
     "bundled": "Bundled",
     "managed": "Managed",
     "disabled": "Disabled",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex base URL. API paths are appended automatically. Changes require restart.",
     "sourceConfigSkillHubHint": "SkillHub upstream data URL. Changes require restart.",
     "sourceConfigRestart": "Restart required after saving",
-    "sourceConfigSaved": "Saved. Restart to apply changes."
+    "sourceConfigSaved": "Saved. Restart to apply changes.",
+    "recipeInstallOk": "installed successfully",
+    "recipeInstallPartial": "installed (verify bins in new terminal)",
+    "recipeInstallFailed": "install failed",
+    "recipePkgNotFound": "not found in PATH",
+    "recipeLocalOnly": "Recipe install is only available on local gateway",
+    "recipeUnsupported": "Unsupported install method"
   }
 }

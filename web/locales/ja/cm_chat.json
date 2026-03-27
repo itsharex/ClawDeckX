@@ -192,6 +192,14 @@
     "sessionType": "タイプ",
     "childSessions": "サブセッション",
     "elapsed": "経過時間",
-    "lastLatency": "レイテンシ"
+    "lastLatency": "レイテンシ",
+    "secToolPolicy": "ツールポリシー",
+    "secSandbox": "サンドボックス",
+    "secExec": "実行",
+    "secProfile_minimal": "ミニマル",
+    "secProfile_coding": "コーディング",
+    "secProfile_messaging": "メッセージ",
+    "secProfile_full": "フル",
+    "secGoAgent": "エージェント設定へ"
   }
 }

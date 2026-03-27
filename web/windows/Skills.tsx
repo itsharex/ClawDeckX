@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import type { LocaleNamespace } from '../locales/types';
-import { gwApi, clawHubApi, skillTranslationApi, serverConfigApi } from '../services/api';
+import { gwApi, clawHubApi, skillTranslationApi, serverConfigApi, hostInfoApi } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -12,7 +12,6 @@ import TranslateModelPicker from '../components/TranslateModelPicker';
 import EmptyState from '../components/EmptyState';
 import PluginCenter from './PluginCenter';
 import SkillHub from './SkillHub';
-import ToolsCatalog from '../components/ToolsCatalog';
 import { copyToClipboard } from '../utils/clipboard';
 import { pickLocalizedText } from '../utils/localizedContent';
 
@@ -27,12 +26,12 @@ interface SkillStatus {
   requirements: { bins: string[]; anyBins: string[]; env: string[]; config: string[]; os: string[] };
   missing: { bins: string[]; anyBins: string[]; env: string[]; config: string[]; os: string[] };
   configChecks: { path: string; value: unknown; satisfied: boolean }[];
-  install: { id: string; kind: string; label: string; bins: string[] }[];
+  install: { id: string; kind: string; label: string; bins: string[]; package?: string; formula?: string }[];
 }
 
 interface SkillsConfig { [key: string]: { enabled?: boolean; apiKey?: string; env?: Record<string, string> } }
 
-type TabId = 'all' | 'market' | 'plugins' | 'skillhub' | 'tools';
+type TabId = 'all' | 'market' | 'plugins' | 'skillhub';
 type FilterId = 'all' | 'eligible' | 'missing';
 
 type SkillMessage = { kind: 'success' | 'error'; message: string };
@@ -200,13 +199,15 @@ const SkillCard: React.FC<{
   onConfigure: (skill: SkillStatus) => void;
   onCopyInstall: (skill: SkillStatus) => void;
   onSendInstall: (skill: SkillStatus) => void;
+  onRecipeInstall: (skill: SkillStatus, recipe: SkillStatus['install'][0]) => void;
   onToggle: (skill: SkillStatus) => void;
   gwReady: boolean;
   busyKey: string | null;
   message: SkillMessage | null;
   translation?: { name: string; description: string; status: string };
   autoTranslate: boolean;
-}> = ({ skill, config, language, onConfigure, onCopyInstall, onSendInstall, onToggle, gwReady, busyKey, message, translation, autoTranslate }) => {
+  availablePkgManagers: string[];
+}> = ({ skill, config, language, onConfigure, onCopyInstall, onSendInstall, onRecipeInstall, onToggle, gwReady, busyKey, message, translation, autoTranslate, availablePkgManagers }) => {
   const sk = (getTranslation(language) as any).sk;
   const showTranslated = autoTranslate && language !== 'en' && translation?.status === 'cached';
   const entry = config[skill.skillKey];
@@ -217,6 +218,13 @@ const SkillCard: React.FC<{
   const missingEnv = skill.missing.env.length;
   const missingOs = skill.missing.os.length;
   const missingConfig = skill.missing.config.length;
+
+  // Filter recipes to only those whose package manager is available on this host
+  const pkgManagerMap: Record<string, string> = { brew: 'brew', node: 'npm', npm: 'npm', winget: 'winget', scoop: 'scoop', choco: 'choco', apt: 'apt', pip: 'pip3' };
+  const filteredRecipes = skill.install.filter(r => {
+    const mapped = pkgManagerMap[r.kind.toLowerCase()];
+    return mapped ? availablePkgManagers.includes(mapped) : false;
+  });
 
   const unsupportedOs = missingOs > 0;
 
@@ -297,8 +305,17 @@ const SkillCard: React.FC<{
       )}
 
       {/* 操作按钮 */}
-      <div className="flex gap-1.5 mt-auto pt-1" onClick={e => e.stopPropagation()}>
-        {hasMissing && !unsupportedOs && (
+      <div className="flex flex-wrap gap-1.5 mt-auto pt-1" onClick={e => e.stopPropagation()}>
+        {/* One-click recipe install buttons (only show recipes whose pkg manager exists on host) */}
+        {hasMissing && !unsupportedOs && filteredRecipes.length > 0 && filteredRecipes.map(recipe => (
+          <button key={recipe.id} onClick={() => onRecipeInstall(skill, recipe)} disabled={isBusy}
+            className="flex-1 h-7 bg-mac-green/15 text-mac-green hover:bg-mac-green/25 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 truncate disabled:opacity-50">
+            <span className="material-symbols-outlined text-[12px]">{isBusy ? 'progress_activity' : 'download'}</span>
+            <span className="truncate">{isBusy ? sk.installing : recipe.label}</span>
+          </button>
+        ))}
+        {/* Fallback: send to agent / copy when no usable recipes on this platform */}
+        {hasMissing && !unsupportedOs && filteredRecipes.length === 0 && (
           gwReady ? (
             <button onClick={() => onSendInstall(skill)}
               className="flex-1 h-7 bg-primary/15 text-primary hover:bg-primary/25 text-[10px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 truncate">
@@ -538,6 +555,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const marketSearchReqSeqRef = useRef(0);
   const marketSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Available package managers on the host (for recipe button filtering)
+  const [availablePkgManagers, setAvailablePkgManagers] = useState<string[]>([]);
+
   const fetchSkills = useCallback(async () => {
     const reqId = ++skillsReqSeqRef.current;
     setLoading(true);
@@ -582,6 +602,15 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     const raf = requestAnimationFrame(() => { fetchSkills(); });
     return () => cancelAnimationFrame(raf);
   }, [fetchSkills]);
+
+  // Fetch available package managers for recipe button filtering
+  useEffect(() => {
+    hostInfoApi.get().then((info: any) => {
+      if (Array.isArray(info?.availablePkgManagers)) {
+        setAvailablePkgManagers(info.availablePkgManagers);
+      }
+    }).catch(() => { /* non-critical */ });
+  }, []);
 
   // 检测是否有可用频道 + 是否配置了模型 (only when gateway is ready)
   useEffect(() => {
@@ -765,6 +794,49 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       toast('error', `${skRef.current.sendFailed}: ${err?.message || ''}`);
     }
   }, [toast]);
+
+  // 一键安装配方（直接执行 brew/npm/winget 等）
+  const handleRecipeInstall = useCallback(async (skill: SkillStatus, recipe: SkillStatus['install'][0]) => {
+    setBusyKey(skill.skillKey);
+    setSkillMessages(prev => ({ ...prev, [skill.skillKey]: { kind: 'success', message: `${skRef.current.installing || 'Installing...'} ${recipe.label}` } }));
+    try {
+      const result = await clawHubApi.installRecipe({
+        recipeId: recipe.id,
+        kind: recipe.kind,
+        package: recipe.package,
+        formula: recipe.formula,
+        bins: recipe.bins,
+        label: recipe.label,
+        skillKey: skill.skillKey,
+      });
+      if (result.success) {
+        const allVerified = recipe.bins.length === 0 || recipe.bins.every(b => result.verifiedBins[b]);
+        setSkillMessages(prev => ({
+          ...prev,
+          [skill.skillKey]: {
+            kind: 'success',
+            message: allVerified
+              ? `✓ ${recipe.label} ${skRef.current.recipeInstallOk || 'installed successfully'}`
+              : `✓ ${recipe.label} ${skRef.current.recipeInstallPartial || 'installed (verify bins in new terminal)'}`,
+          },
+        }));
+        // Refresh skills to update eligibility
+        fetchSkills();
+      }
+    } catch (err: any) {
+      const msg = err?.message || '';
+      let userMsg = `${recipe.label}: ${skRef.current.recipeInstallFailed || 'install failed'}`;
+      if (msg.includes('PKG_MANAGER_NOT_FOUND')) {
+        userMsg = `${recipe.kind} ${skRef.current.recipePkgNotFound || 'not found in PATH'}`;
+      } else if (msg.includes('RECIPE_LOCAL_ONLY')) {
+        userMsg = skRef.current.recipeLocalOnly || 'Recipe install is only available on local gateway';
+      } else if (msg) {
+        userMsg += ` — ${msg.slice(0, 120)}`;
+      }
+      setSkillMessages(prev => ({ ...prev, [skill.skillKey]: { kind: 'error', message: userMsg } }));
+    }
+    setBusyKey(null);
+  }, [fetchSkills]);
 
   // 复制市场技能安装信息到剪贴板
   const handleCopyMarketInstall = useCallback((item: any) => {
@@ -1120,7 +1192,6 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'all', label: sk.skillsTab || sk.allSkills, count: skills.length },
     { id: 'plugins', label: sk.pluginCenter || 'Plugins' },
-    { id: 'tools', label: skillsMarket.toolsCatalog || sk.toolsCatalog || 'Tools' },
     { id: 'market', label: 'ClawHub' },
     { id: 'skillhub', label: 'SkillHub' },
   ];
@@ -1158,7 +1229,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         </div>
 
         {/* 搜索栏 */}
-        {activeTab !== 'plugins' && activeTab !== 'skillhub' && activeTab !== 'tools' && (
+        {activeTab !== 'plugins' && activeTab !== 'skillhub' && (
         <div className="p-3 flex flex-row items-center gap-2">
           {activeTab !== 'market' ? (
             <>
@@ -1365,14 +1436,6 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         )}
       </div>
 
-      {/* Tools Catalog */}
-      {activeTab === 'tools' && (
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar neon-scrollbar">
-          <div className="max-w-6xl mx-auto">
-            <ToolsCatalog language={language} />
-          </div>
-        </div>
-      )}
 
       {/* 插件中心 */}
       {activeTab === 'plugins' && (
@@ -1385,7 +1448,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       )}
 
       {/* 内容区 */}
-      {activeTab !== 'plugins' && activeTab !== 'skillhub' && activeTab !== 'tools' && (
+      {activeTab !== 'plugins' && activeTab !== 'skillhub' && (
       <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar neon-scrollbar">
         <div className="max-w-6xl mx-auto">
           {/* 加载/错误状态 */}
@@ -1475,9 +1538,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                                 className="absolute top-2 start-2 z-10 w-4 h-4 rounded accent-primary" />
                             )}
                             <SkillCard skill={skill} config={skillsConfig} language={language}
-                              onConfigure={setConfigSkill} onCopyInstall={handleCopyInstall} onSendInstall={handleSendInstall} onToggle={handleToggle}
+                              onConfigure={setConfigSkill} onCopyInstall={handleCopyInstall} onSendInstall={handleSendInstall} onRecipeInstall={handleRecipeInstall} onToggle={handleToggle}
                               gwReady={canSendToAgent} busyKey={busyKey} message={skillMessages[skill.skillKey] || null}
-                              translation={translations[skill.skillKey]} autoTranslate={autoTranslate} />
+                              translation={translations[skill.skillKey]} autoTranslate={autoTranslate} availablePkgManagers={availablePkgManagers} />
                           </div>
                         ))}
                       </div>
@@ -1494,9 +1557,9 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                           className="absolute top-2 start-2 z-10 w-4 h-4 rounded accent-primary" />
                       )}
                       <SkillCard skill={skill} config={skillsConfig} language={language}
-                        onConfigure={setConfigSkill} onCopyInstall={handleCopyInstall} onSendInstall={handleSendInstall} onToggle={handleToggle}
+                        onConfigure={setConfigSkill} onCopyInstall={handleCopyInstall} onSendInstall={handleSendInstall} onRecipeInstall={handleRecipeInstall} onToggle={handleToggle}
                         gwReady={canSendToAgent} busyKey={busyKey} message={skillMessages[skill.skillKey] || null}
-                        translation={translations[skill.skillKey]} autoTranslate={autoTranslate} />
+                        translation={translations[skill.skillKey]} autoTranslate={autoTranslate} availablePkgManagers={availablePkgManagers} />
                     </div>
                   ))}
                 </div>

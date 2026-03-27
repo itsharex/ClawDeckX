@@ -43,6 +43,12 @@ interface SessionInfo {
   parentSessionKey?: string;
 }
 
+interface SecurityInfo {
+  toolProfile?: string;
+  sandboxMode?: string;
+  execSecurity?: string;
+}
+
 interface UsagePanelProps {
   sessionKey: string;
   gwReady: boolean;
@@ -50,7 +56,9 @@ interface UsagePanelProps {
   loadTimeseries?: (key: string) => Promise<any>;
   labels: Record<string, string>;
   session?: SessionInfo;
+  securityInfo?: SecurityInfo;
   onModelChange?: (model: string | null) => void;
+  onNavigateAgent?: () => void;
   loadModels?: () => Promise<{ value: string; label: string }[]>;
 }
 
@@ -91,7 +99,7 @@ const Chip: React.FC<{ icon: string; label: string; value: string; cls?: string 
   </span>
 );
 
-export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loadUsage, loadTimeseries, labels: a, session: s, onModelChange, loadModels }) => {
+export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loadUsage, loadTimeseries, labels: a, session: s, securityInfo: sec, onModelChange, onNavigateAgent, loadModels }) => {
   const [usage, setUsage] = useState<any>(null);
   const [timeseries, setTimeseries] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -127,6 +135,16 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
   }, [gwReady, sessionKey, loadUsage, loadTimeseries]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Force-refresh if initial load returned null but session is now populated
+  const hadNullUsage = useRef(false);
+  useEffect(() => {
+    if (!usage && !loading && !error && gwReady && sessionKey) hadNullUsage.current = true;
+    if (hadNullUsage.current && s?.totalTokens && !usage) {
+      hadNullUsage.current = false;
+      loadData(true);
+    }
+  }, [s?.totalTokens, usage, loading, error, gwReady, sessionKey, loadData]);
 
   useEffect(() => {
     if (!modelPickerOpen) return;
@@ -240,6 +258,57 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
               </div>
             )}
           </div>
+        )}
+
+        {/* ═══ Security / Tool Policy ═══ */}
+        {sec && (sec.toolProfile || sec.sandboxMode || sec.execSecurity) && (
+          <>
+            <Div />
+            <div>
+              <div className={`flex items-center justify-between mb-1.5 ${onNavigateAgent ? 'cursor-pointer group' : ''}`} onClick={onNavigateAgent}>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-white/30 uppercase flex items-center gap-1 group-hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[11px]">security</span>
+                  {a.secToolPolicy || 'Tool Policy'}
+                </span>
+                {onNavigateAgent && (
+                  <span className="material-symbols-outlined text-[10px] text-slate-400 dark:text-white/20 opacity-0 group-hover:opacity-100 group-hover:text-primary transition-all">open_in_new</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {sec.toolProfile && (() => {
+                  const p = sec.toolProfile;
+                  const cls = p === 'full' ? 'text-amber-500 bg-amber-500/10 border-amber-500/15'
+                    : p === 'minimal' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/15'
+                    : 'text-blue-500 bg-blue-500/10 border-blue-500/15';
+                  return (
+                    <span className={`inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-md border font-bold ${cls}`}>
+                      {a[`secProfile_${p}`] || p}
+                    </span>
+                  );
+                })()}
+                {sec.sandboxMode && (() => {
+                  const on = sec.sandboxMode !== 'Off' && sec.sandboxMode !== 'off';
+                  const cls = on ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/15' : 'text-slate-400 bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10';
+                  return (
+                    <span className={`inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-md border font-bold ${cls}`}>
+                      {a.secSandbox || 'Sandbox'}: {sec.sandboxMode}
+                    </span>
+                  );
+                })()}
+                {sec.execSecurity && (() => {
+                  const v = sec.execSecurity;
+                  const cls = v === 'sandbox' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/15'
+                    : v === 'prompt' ? 'text-blue-500 bg-blue-500/10 border-blue-500/15'
+                    : 'text-amber-500 bg-amber-500/10 border-amber-500/15';
+                  return (
+                    <span className={`inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-md border font-bold ${cls}`}>
+                      {a.secExec || 'Exec'}: {v}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+          </>
         )}
 
         {/* ═══ Context Window ═══ */}
@@ -533,11 +602,37 @@ export const UsagePanel: React.FC<UsagePanelProps> = ({ sessionKey, gwReady, loa
           </div>
         )}
 
-        {/* ═══ Loading placeholder ═══ */}
+        {/* ═══ Loading skeleton ═══ */}
         {!u && !error && loading && (
-          <div className="flex items-center justify-center py-4 text-[10px] text-slate-400 dark:text-white/20">
-            <span className="material-symbols-outlined text-[14px] animate-spin me-1">progress_activity</span>
-            {a.loading || 'Loading...'}
+          <div className="space-y-3 animate-pulse">
+            {/* Model skeleton */}
+            <div>
+              <div className="h-2.5 w-12 rounded bg-slate-200/60 dark:bg-white/5 mb-1.5" />
+              <div className="h-10 rounded-lg bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04]" />
+            </div>
+            <Div />
+            {/* Context skeleton */}
+            <div>
+              <div className="h-2.5 w-14 rounded bg-slate-200/60 dark:bg-white/5 mb-1.5" />
+              <div className="h-4 w-16 rounded bg-slate-200/60 dark:bg-white/5 mb-1" />
+              <div className="h-2 rounded-full bg-slate-200/60 dark:bg-white/5 mb-1" />
+              <div className="grid grid-cols-2 gap-1.5 mt-1">
+                <div className="h-8 rounded-md bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04]" />
+                <div className="h-8 rounded-md bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/40 dark:border-white/[0.04]" />
+              </div>
+            </div>
+            <Div />
+            {/* Stats chips skeleton */}
+            <div className="flex flex-wrap gap-1.5">
+              <div className="h-5 w-14 rounded-md bg-slate-200/60 dark:bg-white/5" />
+              <div className="h-5 w-16 rounded-md bg-slate-200/60 dark:bg-white/5" />
+            </div>
+            <Div />
+            {/* Cost skeleton */}
+            <div>
+              <div className="h-2.5 w-10 rounded bg-slate-200/60 dark:bg-white/5 mb-1.5" />
+              <div className="h-6 w-12 rounded bg-slate-200/60 dark:bg-white/5" />
+            </div>
           </div>
         )}
       </div>

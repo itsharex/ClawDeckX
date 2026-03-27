@@ -617,6 +617,7 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/clawhub/search", clawHubHandler.Search)
 	router.GET("/api/v1/clawhub/skill", clawHubHandler.SkillDetail)
 	router.POST("/api/v1/clawhub/install", web.RequireAdmin(clawHubHandler.Install))
+	router.POST("/api/v1/clawhub/install-recipe", web.RequireAdmin(clawHubHandler.InstallRecipe))
 	router.POST("/api/v1/clawhub/install-stream", web.RequireAdmin(clawHubHandler.InstallStreamSSE))
 	router.POST("/api/v1/clawhub/uninstall", web.RequireAdmin(clawHubHandler.Uninstall))
 	router.POST("/api/v1/clawhub/update", web.RequireAdmin(clawHubHandler.Update))

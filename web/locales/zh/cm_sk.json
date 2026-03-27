@@ -14,7 +14,7 @@
     "featured": "精选技能",
     "popular": "热门服务",
     "eligible": "可用",
-    "notEligible": "不可用",
+    "notEligible": "需配置",
     "bundled": "内置",
     "managed": "托管",
     "disabled": "已禁用",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex 基础地址，API 路径自动拼接。修改后需重启。",
     "sourceConfigSkillHubHint": "SkillHub 上游数据 URL，修改后需重启。",
     "sourceConfigRestart": "保存后需重启生效",
-    "sourceConfigSaved": "已保存，重启后生效。"
+    "sourceConfigSaved": "已保存，重启后生效。",
+    "recipeInstallOk": "安装成功",
+    "recipeInstallPartial": "已安装（请在新终端中验证）",
+    "recipeInstallFailed": "安装失败",
+    "recipePkgNotFound": "未在 PATH 中找到",
+    "recipeLocalOnly": "一键安装仅支持本地网关",
+    "recipeUnsupported": "不支持的安装方式"
   }
 }

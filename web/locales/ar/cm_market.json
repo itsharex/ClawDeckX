@@ -19,24 +19,6 @@
     "enabled": "تم تفعيل المهارة",
     "disabled": "تم تعطيل المهارة",
     "toggleFailed": "فشل التبديل",
-    "noDescription": "لا يوجد وصف متاح",
-    "toolsCatalog": "Tools",
-    "toolsCatalogTitle": "Tools Catalog",
-    "toolsCatalogLoading": "Loading tools catalog...",
-    "toolsCatalogLoadFail": "Failed to load tools catalog",
-    "toolsCatalogRetry": "Retry",
-    "toolsCatalogTotal": "tools",
-    "toolsCatalogCore": "core",
-    "toolsCatalogPlugin": "plugin",
-    "toolsCatalogSearch": "Search tools...",
-    "toolsCatalogFilterAll": "All",
-    "toolsCatalogProfile": "Profile",
-    "toolsCatalogProfiles": "Profiles",
-    "toolsCatalogProfileMinimal": "Minimal",
-    "toolsCatalogProfileCoding": "Coding",
-    "toolsCatalogProfileMessaging": "Messaging",
-    "toolsCatalogProfileFull": "Full",
-    "toolsCatalogOptional": "optional",
-    "toolsCatalogNoResults": "No tools match your filters"
+    "noDescription": "لا يوجد وصف متاح"
   }
 }

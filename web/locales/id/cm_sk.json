@@ -14,7 +14,7 @@
     "featured": "Skill Unggulan",
     "popular": "Server Populer",
     "eligible": "Tersedia",
-    "notEligible": "Tidak Tersedia",
+    "notEligible": "Perlu Pengaturan",
     "bundled": "Bawaan",
     "managed": "Dikelola",
     "disabled": "Nonaktif",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex base URL. API paths are appended automatically. Changes require restart.",
     "sourceConfigSkillHubHint": "SkillHub upstream data URL. Changes require restart.",
     "sourceConfigRestart": "Restart required after saving",
-    "sourceConfigSaved": "Saved. Restart to apply changes."
+    "sourceConfigSaved": "Saved. Restart to apply changes.",
+    "recipeInstallOk": "berhasil diinstal",
+    "recipeInstallPartial": "terinstal (verifikasi di terminal baru)",
+    "recipeInstallFailed": "instalasi gagal",
+    "recipePkgNotFound": "tidak ditemukan di PATH",
+    "recipeLocalOnly": "Instalasi satu-klik hanya tersedia di gateway lokal",
+    "recipeUnsupported": "Metode instalasi tidak didukung"
   }
 }

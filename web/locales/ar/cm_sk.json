@@ -14,7 +14,7 @@
     "featured": "مهارات مميزة",
     "popular": "خوادم شائعة",
     "eligible": "متاحة",
-    "notEligible": "غير متاحة",
+    "notEligible": "يحتاج إعداد",
     "bundled": "مدمج",
     "managed": "مدار",
     "disabled": "معطّل",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "عنوان URL الأساسي لـ ClawHub Convex. يتم إلحاق مسارات API تلقائيًا. يتطلب إعادة التشغيل بعد التغيير.",
     "sourceConfigSkillHubHint": "عنوان URL لبيانات SkillHub. يتطلب إعادة التشغيل بعد التغيير.",
     "sourceConfigRestart": "يتطلب إعادة التشغيل بعد الحفظ",
-    "sourceConfigSaved": "تم الحفظ. أعد التشغيل لتطبيق التغييرات."
+    "sourceConfigSaved": "تم الحفظ. أعد التشغيل لتطبيق التغييرات.",
+    "recipeInstallOk": "تم التثبيت بنجاح",
+    "recipeInstallPartial": "تم التثبيت (تحقق في طرفية جديدة)",
+    "recipeInstallFailed": "فشل التثبيت",
+    "recipePkgNotFound": "غير موجود في PATH",
+    "recipeLocalOnly": "التثبيت بنقرة واحدة متاح فقط على البوابة المحلية",
+    "recipeUnsupported": "طريقة تثبيت غير مدعومة"
   }
 }

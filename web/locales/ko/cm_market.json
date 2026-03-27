@@ -19,24 +19,6 @@
     "enabled": "스킬 활성화됨",
     "disabled": "스킬 비활성화됨",
     "toggleFailed": "전환 실패",
-    "noDescription": "설명 없음",
-    "toolsCatalog": "도구 카탈로그",
-    "toolsCatalogTitle": "도구 카탈로그",
-    "toolsCatalogLoading": "로딩 중...",
-    "toolsCatalogLoadFail": "로드 실패",
-    "toolsCatalogRetry": "재시도",
-    "toolsCatalogTotal": "개 도구",
-    "toolsCatalogCore": "코어",
-    "toolsCatalogPlugin": "플러그인",
-    "toolsCatalogSearch": "도구 검색...",
-    "toolsCatalogFilterAll": "전체",
-    "toolsCatalogProfile": "프로필",
-    "toolsCatalogProfiles": "도구 프로필",
-    "toolsCatalogProfileMinimal": "미니멀",
-    "toolsCatalogProfileCoding": "코딩",
-    "toolsCatalogProfileMessaging": "메시징",
-    "toolsCatalogProfileFull": "전체",
-    "toolsCatalogOptional": "선택",
-    "toolsCatalogNoResults": "결과 없음"
+    "noDescription": "설명 없음"
   }
 }

@@ -14,7 +14,7 @@
     "featured": "おすすめスキル",
     "popular": "人気サーバー",
     "eligible": "利用可能",
-    "notEligible": "利用不可",
+    "notEligible": "設定が必要",
     "bundled": "組込み",
     "managed": "マネージド",
     "disabled": "無効",
@@ -306,6 +306,12 @@
     "sourceConfigClawHubHint": "ClawHub Convex ベース URL。APIパスは自動付加されます。変更後は再起動が必要です。",
     "sourceConfigSkillHubHint": "SkillHub 上流データ URL。変更後は再起動が必要です。",
     "sourceConfigRestart": "保存後、再起動が必要です",
-    "sourceConfigSaved": "保存しました。変更を反映するには再起動してください。"
+    "sourceConfigSaved": "保存しました。変更を反映するには再起動してください。",
+    "recipeInstallOk": "インストール成功",
+    "recipeInstallPartial": "インストール済み（新しいターミナルで確認してください）",
+    "recipeInstallFailed": "インストール失敗",
+    "recipePkgNotFound": "PATHに見つかりません",
+    "recipeLocalOnly": "ワンクリックインストールはローカルゲートウェイでのみ利用可能です",
+    "recipeUnsupported": "サポートされていないインストール方法"
   }
 }

@@ -192,6 +192,14 @@
     "sessionType": "Тип",
     "childSessions": "Подсессии",
     "elapsed": "Прошло времени",
-    "lastLatency": "Задержка"
+    "lastLatency": "Задержка",
+    "secToolPolicy": "Политика инструментов",
+    "secSandbox": "Песочница",
+    "secExec": "Выполнение",
+    "secProfile_minimal": "Minimal",
+    "secProfile_coding": "Coding",
+    "secProfile_messaging": "Messaging",
+    "secProfile_full": "Full",
+    "secGoAgent": "Настроить в агенте"
   }
 }

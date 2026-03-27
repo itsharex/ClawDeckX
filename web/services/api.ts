@@ -1257,6 +1257,8 @@ export const clawHubApi = {
   search: (q: string) => get<any[]>(`/api/v1/clawhub/search?q=${encodeURIComponent(q)}`),
   detail: (slug: string) => get(`/api/v1/clawhub/skill?slug=${encodeURIComponent(slug)}`),
   install: (slug: string) => post('/api/v1/clawhub/install', { slug }),
+  installRecipe: (recipe: { recipeId: string; kind: string; package?: string; formula?: string; bins?: string[]; label?: string; skillKey?: string }) =>
+    post<{ success: boolean; recipeId: string; kind: string; output: string; verifiedBins: Record<string, boolean> }>('/api/v1/clawhub/install-recipe', recipe),
   uninstall: (slug: string) => post('/api/v1/clawhub/uninstall', { slug }),
   update: (slug: string) => post('/api/v1/clawhub/update', { slug }),
   updateAll: () => post('/api/v1/clawhub/update', { all: true }),

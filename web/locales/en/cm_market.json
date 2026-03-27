@@ -19,24 +19,6 @@
     "enabled": "Skill enabled",
     "disabled": "Skill disabled",
     "toggleFailed": "Failed to toggle",
-    "noDescription": "No description available",
-    "toolsCatalog": "Tools",
-    "toolsCatalogTitle": "Tools Catalog",
-    "toolsCatalogLoading": "Loading tools catalog...",
-    "toolsCatalogLoadFail": "Failed to load tools catalog",
-    "toolsCatalogRetry": "Retry",
-    "toolsCatalogTotal": "tools",
-    "toolsCatalogCore": "core",
-    "toolsCatalogPlugin": "plugin",
-    "toolsCatalogSearch": "Search tools...",
-    "toolsCatalogFilterAll": "All",
-    "toolsCatalogProfile": "Profile",
-    "toolsCatalogProfiles": "Profiles",
-    "toolsCatalogProfileMinimal": "Minimal",
-    "toolsCatalogProfileCoding": "Coding",
-    "toolsCatalogProfileMessaging": "Messaging",
-    "toolsCatalogProfileFull": "Full",
-    "toolsCatalogOptional": "optional",
-    "toolsCatalogNoResults": "No tools match your filters"
+    "noDescription": "No description available"
   }
 }

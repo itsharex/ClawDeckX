@@ -192,6 +192,14 @@
     "sessionType": "Tipe",
     "childSessions": "Sub-sesi",
     "elapsed": "Waktu berlalu",
-    "lastLatency": "Latensi"
+    "lastLatency": "Latensi",
+    "secToolPolicy": "Kebijakan Alat",
+    "secSandbox": "Sandbox",
+    "secExec": "Eksekusi",
+    "secProfile_minimal": "Minimal",
+    "secProfile_coding": "Coding",
+    "secProfile_messaging": "Messaging",
+    "secProfile_full": "Full",
+    "secGoAgent": "Konfigurasi di Agen"
   }
 }
