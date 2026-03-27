@@ -800,28 +800,28 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     setBusyKey(skill.skillKey);
     setSkillMessages(prev => ({ ...prev, [skill.skillKey]: { kind: 'success', message: `${skRef.current.installing || 'Installing...'} ${recipe.label}` } }));
     try {
-      const result = await clawHubApi.installRecipe({
-        recipeId: recipe.id,
-        kind: recipe.kind,
-        package: recipe.package,
-        formula: recipe.formula,
-        bins: recipe.bins,
-        label: recipe.label,
-        skillKey: skill.skillKey,
+      const result = await gwApi.skillsInstall({
+        name: skill.skillKey,
+        installId: recipe.id,
       });
-      if (result.success) {
-        const allVerified = recipe.bins.length === 0 || recipe.bins.every(b => result.verifiedBins[b]);
+      if (result.ok) {
         setSkillMessages(prev => ({
           ...prev,
           [skill.skillKey]: {
             kind: 'success',
-            message: allVerified
-              ? `✓ ${recipe.label} ${skRef.current.recipeInstallOk || 'installed successfully'}`
-              : `✓ ${recipe.label} ${skRef.current.recipeInstallPartial || 'installed (verify bins in new terminal)'}`,
+            message: `✓ ${recipe.label} ${skRef.current.recipeInstallOk || 'installed successfully'}`,
           },
         }));
         // Refresh skills to update eligibility
         fetchSkills();
+      } else {
+        setSkillMessages(prev => ({
+          ...prev,
+          [skill.skillKey]: {
+            kind: 'error',
+            message: `${recipe.label}: ${skRef.current.recipeInstallFailed || 'install failed'}${result.message ? ` — ${String(result.message).slice(0, 120)}` : ''}`,
+          },
+        }));
       }
     } catch (err: any) {
       const msg = err?.message || '';
