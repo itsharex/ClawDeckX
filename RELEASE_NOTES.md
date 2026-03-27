@@ -1,15 +1,19 @@
 ﻿## What's Changed
 
-### ✨ New Features / 新功能
+### 🐛 Bug Fixes / 修复
 
-- usage panel UX overhaul with expandable models, session filters, and enhanced metrics
-- security config navigation, channel policy editor, collapsible tool pickers, i18n
+- hide snapshot toolbar on config-history tab
+- backup dir outside state path, radio scope, notify reorder, i18n ON/OFF
 
 ### 🌐 Internationalization / 国际化
 
-- remove 1054 unused keys per locale across 13 languages
+- rename ocBackupFull to Standard backup for clarity
+
+### 📦 Build & Deploy / 构建部署
+
+- upgrade Node.js from 22 to 24
 
 ---
-**Full Changelog**: [v0.0.30...v0.0.31](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.30...v0.0.31)
+**Full Changelog**: [v0.0.31...v0.0.32](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.31...v0.0.32)
 
 
