@@ -112,9 +112,10 @@ func (h *WizardHandler) TestModel(w http.ResponseWriter, r *http.Request) {
 		req.APIKey = resolvedFromRef
 	}
 
-	// For existing provider configs, apiKey may arrive as a redacted placeholder.
-	// Resolve the real key via gateway config.get or local config.
-	if req.Provider != "ollama" && isRedactedAPIKey(req.APIKey) {
+	// For existing provider configs, apiKey may arrive as a redacted placeholder
+	// or be empty (frontend hides stored secrets). Resolve the real key via
+	// gateway config.get or local config.
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
 		if realKey := h.resolveProviderAPIKeyViaGW(req.Provider); realKey != "" {
 			req.APIKey = strings.TrimSpace(h.resolveAPIKeyReference(realKey))
 		} else if localKey := h.resolveProviderAPIKeyViaLocalConfig(req.Provider); localKey != "" {
@@ -204,7 +205,7 @@ func (h *WizardHandler) TestProviderSmart(w http.ResponseWriter, r *http.Request
 		req.APIKey = resolvedFromRef
 	}
 
-	if req.Provider != "ollama" && isRedactedAPIKey(req.APIKey) {
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
 		if realKey := h.resolveProviderAPIKeyViaGW(req.Provider); realKey != "" {
 			req.APIKey = strings.TrimSpace(h.resolveAPIKeyReference(realKey))
 		} else if localKey := h.resolveProviderAPIKeyViaLocalConfig(req.Provider); localKey != "" {
@@ -334,9 +335,10 @@ func (h *WizardHandler) DiscoverModels(w http.ResponseWriter, r *http.Request) {
 		req.APIKey = resolvedFromRef
 	}
 
-	// For existing provider configs, apiKey may arrive as a redacted placeholder.
-	// Resolve the real key via gateway config.get or local config.
-	if req.Provider != "ollama" && isRedactedAPIKey(req.APIKey) {
+	// For existing provider configs, apiKey may arrive as a redacted placeholder
+	// or be empty (frontend hides stored secrets). Resolve the real key via
+	// gateway config.get or local config.
+	if req.Provider != "ollama" && (req.APIKey == "" || isRedactedAPIKey(req.APIKey)) {
 		if realKey := h.resolveProviderAPIKeyViaGW(req.Provider); realKey != "" {
 			req.APIKey = strings.TrimSpace(h.resolveAPIKeyReference(realKey))
 		} else if localKey := h.resolveProviderAPIKeyViaLocalConfig(req.Provider); localKey != "" {
