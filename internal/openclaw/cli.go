@@ -515,16 +515,14 @@ type BackupArchiveInfo struct {
 }
 
 // DefaultBackupDir returns the default directory for storing OpenClaw native backups.
+// The directory MUST be outside the OpenClaw state dir (~/.openclaw), because the
+// OpenClaw CLI refuses to write backup archives inside a source path.
 func DefaultBackupDir() string {
-	stateDir := ResolveStateDir()
-	if stateDir == "" {
-		home, _ := os.UserHomeDir()
-		if home == "" {
-			return ""
-		}
-		stateDir = filepath.Join(home, ".openclaw")
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		return ""
 	}
-	dir := filepath.Join(stateDir, "backups")
+	dir := filepath.Join(home, "ClawDeckX", "backups")
 	os.MkdirAll(dir, 0o700)
 	return dir
 }

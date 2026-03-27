@@ -37,8 +37,7 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
   const [snapshotModeTab, setSnapshotModeTab] = useState<'manual' | 'scheduled' | 'config-history'>('manual');
   const [backupMethod, setBackupMethod] = useState<'clawdeckx' | 'openclaw'>('clawdeckx');
   const [ocBackupCreating, setOcBackupCreating] = useState(false);
-  const [ocIncludeWorkspace, setOcIncludeWorkspace] = useState(true);
-  const [ocOnlyConfig, setOcOnlyConfig] = useState(false);
+  const [ocBackupScope, setOcBackupScope] = useState<'full' | 'workspace' | 'config'>('full');
   const [ocVerify, setOcVerify] = useState(false);
   const [ocArchives, setOcArchives] = useState<OcBackupArchive[]>([]);
   const [ocInstalled, setOcInstalled] = useState(false);
@@ -201,7 +200,7 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
     if (!ocInstalled) { toast('error', s.ocBackupNotInstalled || 'OpenClaw CLI not installed'); return; }
     setOcBackupCreating(true);
     try {
-      await ocBackupApi.create({ includeWorkspace: ocIncludeWorkspace && !ocOnlyConfig, onlyConfig: ocOnlyConfig, verify: ocVerify });
+      await ocBackupApi.create({ includeWorkspace: ocBackupScope === 'workspace', onlyConfig: ocBackupScope === 'config', verify: ocVerify });
       toast('success', s.ocBackupCreateOk || 'OpenClaw backup created successfully');
       fetchOcArchives();
     } catch (err: any) { toast('error', err?.message || s.ocBackupCreateFail || 'Failed to create OpenClaw backup'); }
@@ -490,18 +489,19 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
                 <p className="text-[12px] text-slate-400 dark:text-white/40">{s.ocBackupNotInstalled || 'OpenClaw CLI not installed'}</p>
               </div>
             ) : (<>
-              <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={ocIncludeWorkspace && !ocOnlyConfig} disabled={ocOnlyConfig} onChange={e => setOcIncludeWorkspace(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
-                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupIncludeWorkspace || 'Include workspace'}</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={ocOnlyConfig} onChange={e => setOcOnlyConfig(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
-                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupOnlyConfig || 'Config only'}</span>
-                </label>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+                {(['full', 'workspace', 'config'] as const).map(scope => (
+                  <label key={scope} className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="oc-backup-scope" checked={ocBackupScope === scope} onChange={() => setOcBackupScope(scope)} className="accent-primary" />
+                    <span className={`${ocBackupScope === scope ? 'text-slate-800 dark:text-white/80 font-medium' : 'text-slate-500 dark:text-white/50'}`}>
+                      {scope === 'full' ? (s.ocBackupFull || 'Full backup') : scope === 'workspace' ? (s.ocBackupIncludeWorkspace || 'Include workspace') : (s.ocBackupOnlyConfig || 'Config only')}
+                    </span>
+                  </label>
+                ))}
+                <span className="w-px h-4 bg-slate-200 dark:bg-white/10" />
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input type="checkbox" checked={ocVerify} onChange={e => setOcVerify(e.target.checked)} className="rounded border-slate-300 dark:border-white/20 text-primary" />
-                  <span className="text-slate-600 dark:text-white/60">{s.ocBackupVerify || 'Verify after creation'}</span>
+                  <span className="text-slate-500 dark:text-white/50">{s.ocBackupVerify || 'Verify after creation'}</span>
                 </label>
               </div>
               <div className="flex justify-end">
@@ -557,7 +557,8 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
 
         {snapshotModeTab === 'config-history' && (<div className={rowCls}><div className="px-4 py-3"><ConfigBackupTab s={s} /></div></div>)}
 
-        {/* Batch management toolbar */}
+        {/* Batch management toolbar + snapshot list — hide when OpenClaw backup method is active */}
+        {(snapshotModeTab !== 'manual' || backupMethod !== 'openclaw') && <>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5">
             <select value={filterTrigger} onChange={e => setFilterTrigger(e.target.value)} className="px-2 py-1 rounded-lg text-[11px] border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-600 dark:text-white/60">
@@ -599,6 +600,7 @@ const SnapshotTab: React.FC<SnapshotTabProps> = ({ s, inputCls, labelCls, rowCls
             {filteredSnapshots.length > snapshotListLimit && (<div className="flex justify-center py-2"><button className="text-[11px] text-primary hover:underline" onClick={() => setSnapshotListLimit(prev => prev + 20)}>{s.snapshotShowMore || 'Show more'} ({filteredSnapshots.length - snapshotListLimit} {s.snapshotRemaining || 'remaining'})</button></div>)}
           </>)}
         </div>
+        </>}
       </div>
       {renderRestoreWizard()}
 

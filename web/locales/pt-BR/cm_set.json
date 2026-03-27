@@ -366,7 +366,10 @@
     "runtimeRestartHint": "Restart the container to activate the updated binary",
     "logout": "Sair",
     "logoutConfirm": "Sair da sessão atual? Você precisará entrar novamente com seu nome de usuário e senha.",
-    "logoutDesc": "Encerrar a sessão atual e voltar à tela de login. Você precisará entrar novamente na próxima vez."
+    "logoutDesc": "Encerrar a sessão atual e voltar à tela de login. Você precisará entrar novamente na próxima vez.",
+    "on": "ON",
+    "off": "OFF",
+    "ocBackupFull": "Backup completo"
   },
   "pref": {
     "title": "Preferências",

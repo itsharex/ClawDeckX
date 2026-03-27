@@ -366,7 +366,10 @@
     "runtimeRestartHint": "Restart the container to activate the updated binary",
     "logout": "Déconnexion",
     "logoutConfirm": "Se déconnecter de la session en cours ? Vous devrez vous reconnecter avec votre nom d'utilisateur et votre mot de passe.",
-    "logoutDesc": "Terminer la session en cours et revenir à l'écran de connexion. Vous devrez vous reconnecter la prochaine fois."
+    "logoutDesc": "Terminer la session en cours et revenir à l'écran de connexion. Vous devrez vous reconnecter la prochaine fois.",
+    "on": "ON",
+    "off": "OFF",
+    "ocBackupFull": "Sauvegarde complète"
   },
   "pref": {
     "title": "Préférences",

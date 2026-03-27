@@ -366,7 +366,10 @@
     "runtimeRestartHint": "Restart the container to activate the updated binary",
     "logout": "Logout",
     "logoutConfirm": "Log out of the current session? You will need to sign in again with your username and password.",
-    "logoutDesc": "End the current session and return to the login screen. You will need to sign in again next time."
+    "logoutDesc": "End the current session and return to the login screen. You will need to sign in again next time.",
+    "on": "ON",
+    "off": "OFF",
+    "ocBackupFull": "Full backup"
   },
   "pref": {
     "title": "Preferences",

@@ -366,7 +366,10 @@
     "runtimeRestartHint": "Restart the container to activate the updated binary",
     "logout": "Keluar",
     "logoutConfirm": "Keluar dari sesi saat ini? Anda perlu masuk kembali dengan nama pengguna dan kata sandi.",
-    "logoutDesc": "Akhiri sesi saat ini dan kembali ke layar masuk. Anda perlu masuk kembali lain kali."
+    "logoutDesc": "Akhiri sesi saat ini dan kembali ke layar masuk. Anda perlu masuk kembali lain kali.",
+    "on": "ON",
+    "off": "OFF",
+    "ocBackupFull": "Cadangan penuh"
   },
   "pref": {
     "title": "Preferences",

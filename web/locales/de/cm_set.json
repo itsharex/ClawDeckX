@@ -366,7 +366,10 @@
     "runtimeRestartHint": "Restart the container to activate the updated binary",
     "logout": "Abmelden",
     "logoutConfirm": "Von der aktuellen Sitzung abmelden? Sie müssen sich erneut mit Benutzername und Passwort anmelden.",
-    "logoutDesc": "Die aktuelle Sitzung beenden und zum Anmeldebildschirm zurückkehren. Beim nächsten Mal müssen Sie sich erneut anmelden."
+    "logoutDesc": "Die aktuelle Sitzung beenden und zum Anmeldebildschirm zurückkehren. Beim nächsten Mal müssen Sie sich erneut anmelden.",
+    "on": "AN",
+    "off": "AUS",
+    "ocBackupFull": "Vollständiges Backup"
   },
   "pref": {
     "title": "Einstellungen",

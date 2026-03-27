@@ -574,20 +574,6 @@ const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, onT
                 </div>
               )}
 
-              {/* Notification channels — data-driven via NotifyChannelCard */}
-              {notifyChannelDefs.map(ch => (
-                <NotifyChannelCard
-                  key={ch.id}
-                  channel={ch}
-                  config={notifyCfg}
-                  onFieldChange={setNf}
-                  testLabel={s.notifyTest}
-                  inputClassName={inputCls}
-                  labelClassName={labelCls}
-                  rowClassName={rowCls}
-                />
-              ))}
-
               {/* 通知事件配置 */}
               <div className="rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
                 <div className="px-5 py-3 border-b border-slate-100 dark:border-white/[0.06] flex items-center gap-2">
@@ -619,6 +605,20 @@ const Settings: React.FC<SettingsProps> = ({ language, onLogout, pendingTab, onT
                   </div>
                 </div>
               </div>
+
+              {/* Notification channels — data-driven via NotifyChannelCard */}
+              {notifyChannelDefs.map(ch => (
+                <NotifyChannelCard
+                  key={ch.id}
+                  channel={ch}
+                  config={notifyCfg}
+                  onFieldChange={setNf}
+                  testLabel={s.notifyTest}
+                  inputClassName={inputCls}
+                  labelClassName={labelCls}
+                  rowClassName={rowCls}
+                />
+              ))}
 
               {/* Save button at bottom */}
               <div className="flex justify-end pt-2">
