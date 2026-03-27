@@ -96,15 +96,25 @@ func (h *SkillTranslationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	h.mu.Lock()
 	for _, key := range keys {
 		if t, ok := cacheMap[key]; ok {
-			entries = append(entries, translationEntry{
-				SkillKey:    key,
-				Lang:        lang,
-				Name:        t.Name,
-				Description: t.Description,
-				SourceHash:  t.SourceHash,
-				Status:      "cached",
-				Engine:      t.Engine,
-			})
+			// Discard cached entries where the translated name is garbage (e.g. URL).
+			// This forces the frontend to show the original name and re-trigger translation.
+			if isGarbageTranslation("", t.Name) {
+				entries = append(entries, translationEntry{
+					SkillKey: key,
+					Lang:     lang,
+					Status:   "none",
+				})
+			} else {
+				entries = append(entries, translationEntry{
+					SkillKey:    key,
+					Lang:        lang,
+					Name:        t.Name,
+					Description: t.Description,
+					SourceHash:  t.SourceHash,
+					Status:      "cached",
+					Engine:      t.Engine,
+				})
+			}
 		} else if h.running[key+":"+lang] {
 			entries = append(entries, translationEntry{
 				SkillKey: key,
