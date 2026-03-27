@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { copyToClipboard } from '../utils/clipboard';
 
 const MAX_RENDER_CHARS = 50_000;
 
@@ -13,11 +14,15 @@ interface MarkdownRendererProps {
 
 const CodeBlock: React.FC<{ code: string; copyLabel?: string }> = ({ code, copyLabel }) => {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(code).then(() => {
+    copyToClipboard(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 2000);
     });
   };
 
@@ -28,7 +33,7 @@ const CodeBlock: React.FC<{ code: string; copyLabel?: string }> = ({ code, copyL
           onClick={handleCopy}
           className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/60 transition sci-badge cursor-pointer select-none"
         >
-          {copied ? '✓' : (copyLabel || 'Copy')}
+          {copied ? '✓' : copyFailed ? '✗' : (copyLabel || 'Copy')}
         </button>
       </div>
       <pre className="bg-slate-900 dark:bg-black/30 rounded-xl p-3 text-[10px] font-mono text-slate-100 overflow-auto max-h-[60vh]">
