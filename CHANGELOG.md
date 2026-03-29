@@ -1,4 +1,31 @@
-﻿# v0.0.33
+﻿# v0.0.34
+
+_2026-03-29_
+
+## What's Changed
+
+### ✨ New Features / 新功能
+
+- add MCP handler, mirror config, McpCenter UI and settings
+
+### 🐛 Bug Fixes / 修复
+
+- relax SKILL.md path validation, expand editor modal, add resize
+- remove save button from mirror settings, make prefs sections collapsible
+- resolve api key for model discovery
+
+### 🌐 Internationalization / 国际化
+
+- add mirror and mcp test keys to all 11 non-en locales
+
+---
+**Full Changelog**: [v0.0.33...v0.0.34](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.33...v0.0.34)
+
+
+
+---
+
+# v0.0.33
 
 _2026-03-27_
 
@@ -731,6 +758,7 @@ _2026-03-15_
 
 
 ---
+
 
 
 
