@@ -30,8 +30,10 @@ type GatewayClient interface {
 	Request(method string, params interface{}) (json.RawMessage, error)
 }
 
-// managedSkillsDir returns the openclaw managed skills directory (~/.openclaw/skills).
-// This is where the gateway's skills.status RPC scans for installed skills.
+// managedSkillsDir returns the openclaw managed skills directory (~/.openclaw/workspace).
+// Note: clawhub CLI ignores --dir parameter and always installs to ~/.openclaw/workspace,
+// so we must use workspace directory to match clawhub's actual behavior.
+// This differs from openclaw's "openclaw-managed" source which scans ~/.openclaw/skills.
 func managedSkillsDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,9 +41,9 @@ func managedSkillsDir() string {
 	}
 	// Respect OPENCLAW_STATE_DIR if set
 	if dir := os.Getenv("OPENCLAW_STATE_DIR"); dir != "" {
-		return filepath.Join(dir, "skills")
+		return filepath.Join(dir, "workspace")
 	}
-	return filepath.Join(home, ".openclaw", "skills")
+	return filepath.Join(home, ".openclaw", "workspace")
 }
 
 // NewSkillHubHandler creates a new SkillHub handler.
@@ -332,6 +334,50 @@ func (h *SkillHubHandler) InstallSkill(w http.ResponseWriter, r *http.Request) {
 		}
 		web.Fail(w, r, "INSTALL_TIMEOUT", "Installation timed out after 3 minutes", http.StatusGatewayTimeout)
 	}
+}
+
+// UninstallSkill uninstalls a specific skill by deleting its directory.
+// This approach doesn't require SkillHub CLI to be installed.
+// POST /api/v1/skillhub/uninstall-skill
+func (h *SkillHubHandler) UninstallSkill(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Slug string `json:"slug"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Slug == "" {
+		web.Fail(w, r, "INVALID_PARAMS", "slug is required", http.StatusBadRequest)
+		return
+	}
+
+	// Safety check: slug must not contain path separators
+	if strings.ContainsAny(req.Slug, "/\\..") {
+		web.Fail(w, r, "INVALID_PARAMS", "invalid skill name", http.StatusBadRequest)
+		return
+	}
+
+	logger.Log.Info().Str("slug", req.Slug).Msg("uninstalling skill")
+
+	// Find skill directory
+	skillsDir := managedSkillsDir()
+	skillPath := filepath.Join(skillsDir, req.Slug)
+
+	// Check if skill exists
+	if _, err := os.Stat(skillPath); os.IsNotExist(err) {
+		web.Fail(w, r, "SKILL_NOT_FOUND", "skill not found: "+req.Slug, http.StatusNotFound)
+		return
+	}
+
+	// Delete skill directory
+	if err := os.RemoveAll(skillPath); err != nil {
+		logger.Log.Error().Err(err).Str("slug", req.Slug).Msg("skill uninstall failed")
+		web.Fail(w, r, "UNINSTALL_FAILED", err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	logger.Log.Info().Str("slug", req.Slug).Msg("skill uninstalled successfully")
+	web.OK(w, r, map[string]interface{}{
+		"success": true,
+		"slug":    req.Slug,
+	})
 }
 
 func (h *SkillHubHandler) proxyRemoteSkillHubJSON(w http.ResponseWriter, r *http.Request, upstreamURL string) {

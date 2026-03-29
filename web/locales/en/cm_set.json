@@ -442,7 +442,31 @@
     "startupSessions": "Sessions",
     "startupEditor": "Editor",
     "startupSkills": "Skills",
-    "startupAgents": "Agents"
+    "startupAgents": "Agents",
+    "mirror": {
+      "title": "Mirror Acceleration & Network",
+      "desc": "Configure npm, GitHub, Docker, pip, Go mirrors for faster access",
+      "presetHint": "One-click switch between network presets, auto-fills all recommended mirrors",
+      "presetCn": "China Acceleration",
+      "presetGlobal": "Global Network",
+      "presetCnApplied": "Switched to China acceleration preset",
+      "presetGlobalApplied": "Switched to global network preset",
+      "detectHint": "Detect current system-level mirror configuration for each tool",
+      "detectBtn": "Detect System Config",
+      "detecting": "Detecting...",
+      "detectFailed": "Failed to detect system configuration",
+      "saveConfig": "Save Config",
+      "saving": "Saving...",
+      "savedOk": "Configuration saved",
+      "saveFailed": "Save failed",
+      "applyAll": "Apply All to System",
+      "applyingAll": "Applying...",
+      "applyAllOk": "All mirror settings applied to system",
+      "applyAllPartial": "Some settings applied. Check individual tools for details.",
+      "applyFailed": "Apply failed",
+      "dockerRestartHint": "Docker mirror changes take effect after restarting the Docker daemon. Run `sudo systemctl restart docker` or restart from Docker Desktop.",
+      "scopeHint": "Apply to system = writes ~/.npmrc · go env · ~/.pip/pip.conf · ~/.gitconfig · daemon.json"
+    }
   },
   "hi": {
     "title": "Host Info",

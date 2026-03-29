@@ -516,6 +516,9 @@ func RunServe(args []string) int {
 	router.GET("/api/v1/skills", skillsHandler.List)
 	router.GET("/api/v1/skills/translations", skillTransHandler.Get)
 	router.POST("/api/v1/skills/translations", skillTransHandler.Translate)
+	skillFileHandler := handlers.NewSkillFileHandler()
+	router.GET("/api/v1/skills/file", skillFileHandler.ReadSkillMd)
+	router.PUT("/api/v1/skills/file", web.RequireAdmin(skillFileHandler.WriteSkillMd))
 
 	router.GET("/api/v1/setup/scan", setupWizardHandler.Scan)
 	router.GET("/api/v1/setup/status", setupWizardHandler.Status)
@@ -645,10 +648,23 @@ func RunServe(args []string) int {
 	router.POST("/api/v1/skillhub/install", web.RequireAdmin(skillHubHandler.Install))
 	router.POST("/api/v1/skillhub/upgrade-cli", web.RequireAdmin(skillHubHandler.UpgradeCLI))
 	router.POST("/api/v1/skillhub/install-skill", web.RequireAdmin(skillHubHandler.InstallSkill))
+	router.POST("/api/v1/skillhub/uninstall-skill", web.RequireAdmin(skillHubHandler.UninstallSkill))
 	router.GET("/api/v1/skillhub/remote/skills", skillHubHandler.RemoteListSkills)
 	router.GET("/api/v1/skillhub/remote/search", skillHubHandler.RemoteSearchSkills)
 	router.GET("/api/v1/skillhub/remote/top", skillHubHandler.RemoteTopSkills)
 	router.GET("/api/v1/skillhub/installed", skillHubHandler.GetInstalledSkills)
+
+	mcpHandler := handlers.NewMcpHandler()
+	router.GET("/api/v1/mcp/servers", mcpHandler.List)
+	router.PUT("/api/v1/mcp/servers", web.RequireAdmin(mcpHandler.Set))
+	router.POST("/api/v1/mcp/servers/delete", web.RequireAdmin(mcpHandler.Delete))
+	router.POST("/api/v1/mcp/servers/test", web.RequireAdmin(mcpHandler.Test))
+
+	mirrorConfigHandler := handlers.NewMirrorConfigHandler()
+	router.GET("/api/v1/mirror-config", mirrorConfigHandler.Get)
+	router.PUT("/api/v1/mirror-config", web.RequireAdmin(mirrorConfigHandler.Set))
+	router.GET("/api/v1/mirror-config/detect", mirrorConfigHandler.DetectSystem)
+	router.POST("/api/v1/mirror-config/apply", web.RequireAdmin(mirrorConfigHandler.ApplyToSystem))
 
 	multiAgentHandler := handlers.NewMultiAgentHandler(gwClient)
 	router.POST("/api/v1/multi-agent/deploy", web.RequireAdmin(multiAgentHandler.Deploy))

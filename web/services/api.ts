@@ -1608,6 +1608,106 @@ export const skillHubApi = {
   cliStatus: () => get<SkillHubCLIStatus>('/api/v1/skillhub/cli-status'),
   install: () => post<{ success: boolean; output: string }>('/api/v1/skillhub/install', {}),
   installSkill: (slug: string) => post<{ success: boolean; output: string; slug: string }>('/api/v1/skillhub/install-skill', { slug }),
+  uninstallSkill: (slug: string) => post<{ success: boolean; output: string; slug: string }>('/api/v1/skillhub/uninstall-skill', { slug }),
   getInstalledSkills: () => get<{ skills: string[] }>('/api/v1/skillhub/installed'),
   upgradeCli: () => post<{ success: boolean; output: string }>('/api/v1/skillhub/upgrade-cli', {}),
+};
+
+// ==================== MCP ====================
+export interface McpServerConfig {
+  type?: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export interface McpServerEntry {
+  name: string;
+  config: McpServerConfig;
+}
+
+export interface McpListResponse {
+  servers: McpServerEntry[];
+  path: string;
+}
+
+export interface McpToolInfo {
+  name: string;
+  title?: string;
+  description?: string;
+}
+
+export interface McpServerTestResult {
+  name: string;
+  type: string;
+  ok: boolean;
+  category?: string;
+  stage?: string;
+  statusCode?: number;
+  statusText?: string;
+  message: string;
+  resolvedPath?: string;
+  target?: string;
+  protocol?: string;
+  protocolOk?: boolean;
+  serverName?: string;
+  serverVersion?: string;
+  tools?: McpToolInfo[];
+  details?: Record<string, string>;
+}
+
+export const mcpApi = {
+  list: () => get<McpListResponse>('/api/v1/mcp/servers'),
+  set: (name: string, config: McpServerConfig, oldName?: string) =>
+    put<{ name: string; config: McpServerConfig; path: string }>('/api/v1/mcp/servers', { name, config, ...(oldName && oldName !== name ? { oldName } : {}) }),
+  delete: (name: string) =>
+    post<{ removed: boolean; name: string; path: string }>('/api/v1/mcp/servers/delete', { name }),
+  test: (name: string) =>
+    post<McpServerTestResult>('/api/v1/mcp/servers/test', { name }),
+};
+
+export interface MirrorConfig {
+  preset: string;        // "cn" | "global" | "custom"
+  npmRegistry: string;
+  githubProxy: string;
+  dockerMirror: string;
+  pipIndex: string;
+  goProxy: string;
+}
+
+export interface SystemMirrorStatus {
+  npmRegistry: string;
+  goProxy: string;
+  pipIndex: string;
+  githubProxy: string;
+  dockerMirror: string;
+}
+
+export interface MirrorApplyResult {
+  tool: string;
+  ok: boolean;
+  message: string;
+}
+
+export const mirrorConfigApi = {
+  get: () => get<MirrorConfig>('/api/v1/mirror-config'),
+  set: (cfg: MirrorConfig) => put<{ message: string }>('/api/v1/mirror-config', cfg),
+  detect: () => get<SystemMirrorStatus>('/api/v1/mirror-config/detect'),
+  apply: (tools: string[], config: MirrorConfig) =>
+    post<{ results: MirrorApplyResult[] }>('/api/v1/mirror-config/apply', { tools, config }),
+};
+
+export interface SkillFileReadResponse {
+  content: string;
+  exists: boolean;
+  path: string;
+}
+
+export const skillFileApi = {
+  read: (baseDir: string) =>
+    get<SkillFileReadResponse>(`/api/v1/skills/file?baseDir=${encodeURIComponent(baseDir)}`),
+  write: (baseDir: string, content: string) =>
+    put<{ saved: boolean; path: string }>('/api/v1/skills/file', { baseDir, content }),
 };

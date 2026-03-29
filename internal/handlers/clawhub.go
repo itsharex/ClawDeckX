@@ -586,20 +586,27 @@ func (h *ClawHubHandler) InstalledList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	skillsDir := filepath.Join(home, ".openclaw", "skills")
-
-	// read lockfile
-	lockPath := filepath.Join(skillsDir, ".clawhub", "lock.json")
-	var lockData struct {
+	// read lockfile from workspace (primary) or skills (legacy) directory
+	type lockFileData struct {
 		Version string `json:"version"`
 		Skills  map[string]struct {
 			Version     interface{} `json:"version"`
 			InstalledAt int64       `json:"installedAt"`
 		} `json:"skills"`
 	}
+	var lockData lockFileData
 
-	if data, err := os.ReadFile(lockPath); err == nil {
-		json.Unmarshal(data, &lockData)
+	// Try workspace directory first (openclaw's new location)
+	lockPaths := []string{
+		filepath.Join(home, ".openclaw", "workspace", ".clawhub", "lock.json"),
+		filepath.Join(home, ".openclaw", "skills", ".clawhub", "lock.json"),
+	}
+	for _, lockPath := range lockPaths {
+		if data, err := os.ReadFile(lockPath); err == nil {
+			if json.Unmarshal(data, &lockData) == nil && len(lockData.Skills) > 0 {
+				break
+			}
+		}
 	}
 
 	// scan skill directories
@@ -657,7 +664,7 @@ func (h *ClawHubHandler) InstalledList(w http.ResponseWriter, r *http.Request) {
 
 	web.OK(w, r, map[string]interface{}{
 		"skills":    skills,
-		"skillsDir": skillsDir,
+		"skillsDir": filepath.Join(home, ".openclaw", "workspace"),
 	})
 }
 
@@ -706,6 +713,9 @@ func (h *ClawHubHandler) runClawHub(args []string) (string, error) {
 
 func resolveInstalledSkillPath(home, slug string) (string, bool) {
 	candidates := []string{
+		// Primary: clawhub CLI ignores --dir and always installs to workspace
+		filepath.Join(home, ".openclaw", "workspace", slug),
+		// Legacy: older openclaw versions used skills directory
 		filepath.Join(home, ".openclaw", "skills", slug),
 		// Backward compatibility: older ClawDeckX builds invoked clawhub from
 		// ~/.openclaw/skills without "--dir .", which installs into ./skills/<slug>.
@@ -721,21 +731,31 @@ func resolveInstalledSkillPath(home, slug string) (string, bool) {
 
 // removeLockEntry removes a skill entry from the lockfile.
 func (h *ClawHubHandler) removeLockEntry(home, slug string) {
-	lockPath := filepath.Join(home, ".openclaw", "skills", ".clawhub", "lock.json")
-	data, err := os.ReadFile(lockPath)
-	if err != nil {
-		return
+	// Try workspace directory first (openclaw's new location), then skills (legacy)
+	lockPaths := []string{
+		filepath.Join(home, ".openclaw", "workspace", ".clawhub", "lock.json"),
+		filepath.Join(home, ".openclaw", "skills", ".clawhub", "lock.json"),
 	}
 
-	var lock map[string]interface{}
-	if json.Unmarshal(data, &lock) != nil {
-		return
-	}
+	for _, lockPath := range lockPaths {
+		data, err := os.ReadFile(lockPath)
+		if err != nil {
+			continue
+		}
 
-	if skills, ok := lock["skills"].(map[string]interface{}); ok {
-		delete(skills, slug)
-		if updated, err := json.MarshalIndent(lock, "", "  "); err == nil {
-			os.WriteFile(lockPath, updated, 0644)
+		var lock map[string]interface{}
+		if json.Unmarshal(data, &lock) != nil {
+			continue
+		}
+
+		if skills, ok := lock["skills"].(map[string]interface{}); ok {
+			if _, exists := skills[slug]; exists {
+				delete(skills, slug)
+				if updated, err := json.MarshalIndent(lock, "", "  "); err == nil {
+					os.WriteFile(lockPath, updated, 0644)
+				}
+				return
+			}
 		}
 	}
 }
@@ -838,13 +858,13 @@ func (h *ClawHubHandler) CLIStatus(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/clawhub/install-recipe
 func (h *ClawHubHandler) InstallRecipe(w http.ResponseWriter, r *http.Request) {
 	var params struct {
-		RecipeID string `json:"recipeId"`
-		Kind     string `json:"kind"`
-		Package  string `json:"package"`  // npm package name
-		Formula  string `json:"formula"`  // brew formula / winget/scoop/choco/apt package
-		Bins     []string `json:"bins"`   // expected binaries after install
-		Label    string `json:"label"`
-		SkillKey string `json:"skillKey"` // for logging
+		RecipeID string   `json:"recipeId"`
+		Kind     string   `json:"kind"`
+		Package  string   `json:"package"` // npm package name
+		Formula  string   `json:"formula"` // brew formula / winget/scoop/choco/apt package
+		Bins     []string `json:"bins"`    // expected binaries after install
+		Label    string   `json:"label"`
+		SkillKey string   `json:"skillKey"` // for logging
 	}
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		web.Fail(w, r, "INVALID_PARAMS", "invalid request", http.StatusBadRequest)

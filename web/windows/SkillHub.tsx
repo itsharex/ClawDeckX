@@ -3,6 +3,7 @@ import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { skillHubApi, skillHubRemoteApi, SkillHubSkill, SkillHubPageResponse } from '../services/api';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import CustomSelect from '../components/CustomSelect';
 import { copyToClipboard } from '../utils/clipboard';
@@ -329,6 +330,7 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
   const skRef = useRef(sk);
   skRef.current = sk;
   const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const [cliStatus, setCLIStatus] = useState<'checking' | 'not-installed' | 'installing' | 'installed' | 'error' | 'dismissed'>('checking');
   const [cliError, setCLIError] = useState<string>('');
@@ -352,6 +354,7 @@ const SkillHub: React.FC<SkillHubProps> = ({ language }) => {
   const [topLoading, setTopLoading] = useState(false);
   const [detailSkill, setDetailSkill] = useState<SkillHubSkill | null>(null);
   const [installingSlug, setInstallingSlug] = useState<string | null>(null);
+  const [uninstallingSlug, setUninstallingSlug] = useState<string | null>(null);
   const [confirmSkill, setConfirmSkill] = useState<SkillHubSkill | null>(null);
   const [installedSkillNames, setInstalledSkillNames] = useState<Set<string>>(new Set());
 
@@ -693,6 +696,42 @@ const handleInstallSkill = useCallback(async (skill: SkillHubSkill) => {
   }
 }, [installingSlug, toast, fetchInstalledSkills]);
 
+// Uninstall skill via API
+const handleUninstallSkill = useCallback(async (skill: SkillHubSkill) => {
+  if (uninstallingSlug) return;
+  const ok = await confirm({
+    title: skRef.current.uninstall || 'Uninstall',
+    message: `${skRef.current.confirmUninstall || 'Uninstall'} "${skill.name}"?`,
+    confirmText: skRef.current.uninstall || 'Uninstall',
+    cancelText: skRef.current.cancel || 'Cancel',
+    danger: true,
+  });
+  if (!ok) return;
+  setUninstallingSlug(skill.slug);
+  try {
+    const result = await skillHubApi.uninstallSkill(skill.slug);
+    if (result.success) {
+      toast('success', `${skill.name} ${skRef.current.uninstallSuccess || 'uninstalled successfully'}`);
+      setInstalledSkillNames(prev => {
+        const next = new Set(prev);
+        next.delete(skill.slug);
+        next.delete(skill.name);
+        return next;
+      });
+      fetchInstalledSkills();
+    }
+  } catch (err: any) {
+    const msg = err?.message || 'Uninstall failed';
+    if (msg.includes('CLI_NOT_INSTALLED')) {
+      toast('error', skRef.current.skillHubBannerNotInstalled || 'SkillHub CLI not installed');
+    } else {
+      toast('error', `${skRef.current.uninstallFailed || 'Uninstall failed'}: ${msg}`);
+    }
+  } finally {
+    setUninstallingSlug(null);
+  }
+}, [uninstallingSlug, toast, fetchInstalledSkills]);
+
 const categories = useMemo(() => {
   return [...REMOTE_SKILLHUB_CATEGORIES];
 }, []);
@@ -864,16 +903,28 @@ const categoryOptions = useMemo(() => {
                         <span className="material-symbols-outlined text-[12px]">content_copy</span>
                         <span className="truncate">{sk.copyPrompt || 'Copy Prompt'}</span>
                       </button>
-                      {/* Right: Install or Copy CLI (shrink-0, compact) */}
-                      <button onClick={(e) => { e.stopPropagation(); handleRightButton(skill); }}
-                        disabled={installingSlug === skill.slug}
-                        className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : isSkillHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
-                        title={isSkillHubCLIInstalled ? `${sk.installSkill || 'Install'} ${skill.slug}` : `${sk.copyCLI || 'Copy'}: skillhub install ${skill.slug}`}>
-                        <span className={`material-symbols-outlined text-[12px] ${installingSlug === skill.slug ? 'animate-spin' : ''}`}>
-                          {installingSlug === skill.slug ? 'progress_activity' : (isSkillHubCLIInstalled ? 'download' : 'terminal')}
-                        </span>
-                        {isSkillHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
-                      </button>
+                      {/* Right: Uninstall (if installed) or Install/Copy CLI */}
+                      {installedSkillNames.has(skill.slug) && isSkillHubCLIInstalled ? (
+                        <button onClick={(e) => { e.stopPropagation(); handleUninstallSkill(skill); }}
+                          disabled={uninstallingSlug === skill.slug}
+                          className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${uninstallingSlug === skill.slug ? 'bg-mac-red/20 text-mac-red cursor-wait' : 'bg-mac-red/10 text-mac-red hover:bg-mac-red/20'}`}
+                          title={sk.uninstall || 'Uninstall'}>
+                          <span className={`material-symbols-outlined text-[12px] ${uninstallingSlug === skill.slug ? 'animate-spin' : ''}`}>
+                            {uninstallingSlug === skill.slug ? 'progress_activity' : 'delete'}
+                          </span>
+                          <span className="truncate">{sk.uninstall || 'Uninstall'}</span>
+                        </button>
+                      ) : (
+                        <button onClick={(e) => { e.stopPropagation(); handleRightButton(skill); }}
+                          disabled={installingSlug === skill.slug}
+                          className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${installingSlug === skill.slug ? 'bg-primary/20 text-primary cursor-wait' : isSkillHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
+                          title={isSkillHubCLIInstalled ? `${sk.installSkill || 'Install'} ${skill.slug}` : `${sk.copyCLI || 'Copy'}: skillhub install ${skill.slug}`}>
+                          <span className={`material-symbols-outlined text-[12px] ${installingSlug === skill.slug ? 'animate-spin' : ''}`}>
+                            {installingSlug === skill.slug ? 'progress_activity' : (isSkillHubCLIInstalled ? 'download' : 'terminal')}
+                          </span>
+                          {isSkillHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

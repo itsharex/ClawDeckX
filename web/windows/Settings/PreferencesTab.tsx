@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { Preferences, WindowControlsPosition, WallpaperSource, StartupWindowMode } from '../../utils/preferences';
 import { updatePreferences, resolveWallpaperData, applyResolvedWallpaper, getCachedWallpaper, selectWallpaperHistoryEntry, setCachedWallpaper } from '../../utils/preferences';
 import { useToast } from '../../components/Toast';
+import MirrorSettings from './MirrorSettings';
 
 interface PreferencesTabProps {
   s: Record<string, any>;
@@ -520,6 +521,10 @@ const PreferencesTab: React.FC<PreferencesTabProps> = ({ s, pref, prefs, onPrefs
           </>)}
         </div>
       </div>
+
+      {/* Mirror Acceleration Settings */}
+      <MirrorSettings s={s} m={(pref as any).mirror ?? {}} />
+
     </div>
   );
 };

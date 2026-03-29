@@ -442,7 +442,31 @@
     "startupAgents": "智能体",
     "wallpaperPreviewAlt": "壁纸预览",
     "wallpaperHistoryAlt": "壁纸历史项",
-    "wallpaperFavoriteAlt": "收藏壁纸项"
+    "wallpaperFavoriteAlt": "收藏壁纸项",
+    "mirror": {
+      "title": "镜像加速 & 网络环境",
+      "desc": "配置 npm、GitHub、Docker、pip、Go 等工具的国内加速镜像源",
+      "presetHint": "一键切换网络环境预设，自动填充所有工具的推荐镜像",
+      "presetCn": "国内加速",
+      "presetGlobal": "国际网络",
+      "presetCnApplied": "已切换为国内加速配置",
+      "presetGlobalApplied": "已切换为国际网络配置",
+      "detectHint": "检测当前系统已配置的各工具镜像源",
+      "detectBtn": "检测系统配置",
+      "detecting": "检测中...",
+      "detectFailed": "系统配置检测失败",
+      "saveConfig": "保存配置",
+      "saving": "保存中...",
+      "savedOk": "配置已保存",
+      "saveFailed": "保存失败",
+      "applyAll": "一键应用全部到系统",
+      "applyingAll": "应用中...",
+      "applyAllOk": "所有镜像配置已应用到系统",
+      "applyAllPartial": "部分配置应用成功，请查看各工具详情",
+      "applyFailed": "应用失败",
+      "dockerRestartHint": "Docker 镜像加速需要重启 Docker Daemon 后生效。请执行 `sudo systemctl restart docker` 或从 Docker Desktop 重启。",
+      "scopeHint": "应用到系统 = 修改 ~/.npmrc · go env · ~/.pip/pip.conf · ~/.gitconfig · daemon.json"
+    }
   },
   "hi": {
     "title": "宿主机信息",

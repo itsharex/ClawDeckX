@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import type { LocaleNamespace } from '../locales/types';
-import { gwApi, clawHubApi, skillTranslationApi, serverConfigApi, hostInfoApi } from '../services/api';
+import { gwApi, clawHubApi, skillTranslationApi, serverConfigApi, hostInfoApi, skillFileApi } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -12,6 +12,7 @@ import TranslateModelPicker from '../components/TranslateModelPicker';
 import EmptyState from '../components/EmptyState';
 import PluginCenter from './PluginCenter';
 import SkillHub from './SkillHub';
+import McpCenter from './McpCenter';
 import { copyToClipboard } from '../utils/clipboard';
 import { pickLocalizedText } from '../utils/localizedContent';
 
@@ -31,7 +32,7 @@ interface SkillStatus {
 
 interface SkillsConfig { [key: string]: { enabled?: boolean; apiKey?: string; env?: Record<string, string> } }
 
-type TabId = 'all' | 'market' | 'plugins' | 'skillhub';
+type TabId = 'all' | 'market' | 'plugins' | 'skillhub' | 'mcp';
 type FilterId = 'all' | 'eligible' | 'missing';
 
 type SkillMessage = { kind: 'success' | 'error'; message: string };
@@ -113,18 +114,44 @@ const ConfigModal: React.FC<{
 }> = ({ skill, config, language, onSave, onClose }) => {
   const sk = (getTranslation(language) as any).sk;
   const entry = config[skill.skillKey] || {};
+  const [activeTab, setActiveTab] = useState<'config' | 'skillmd'>('config');
   const [enabled, setEnabled] = useState(entry.enabled !== false);
   const [apiKey, setApiKey] = useState(entry.apiKey || '');
   const [envPairs, setEnvPairs] = useState<[string, string][]>(() => {
     const e = entry.env || {};
     const pairs = Object.entries(e) as [string, string][];
-    // 补充 missing env 的空行
     for (const envName of skill.missing.env) {
       if (!pairs.some(([k]) => k === envName)) pairs.push([envName, '']);
     }
     return pairs.length > 0 ? pairs : [['', '']];
   });
   const [saving, setSaving] = useState(false);
+
+  // SKILL.md editor state — only for user-installed (non-bundled) skills
+  const canEditSkillMd = Boolean(skill.baseDir) && !skill.bundled;
+  const [mdContent, setMdContent] = useState('');
+  const [mdLoading, setMdLoading] = useState(false);
+  const [mdExists, setMdExists] = useState(false);
+  const [mdPath, setMdPath] = useState('');
+  const [mdSaving, setMdSaving] = useState(false);
+  const [mdError, setMdError] = useState('');
+  const mdLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (activeTab === 'skillmd' && canEditSkillMd && !mdLoadedRef.current) {
+      mdLoadedRef.current = true;
+      setMdLoading(true);
+      setMdError('');
+      skillFileApi.read(skill.baseDir).then((res: any) => {
+        const data = res?.data ?? res;
+        setMdContent(data.content ?? '');
+        setMdExists(data.exists ?? false);
+        setMdPath(data.path ?? '');
+      }).catch((err: any) => {
+        setMdError(err?.message || sk.skillMdLoadFailed || 'Failed to load SKILL.md');
+      }).finally(() => setMdLoading(false));
+    }
+  }, [activeTab, canEditSkillMd, skill.baseDir, sk.skillMdLoadFailed]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -136,58 +163,155 @@ const ConfigModal: React.FC<{
     } finally { setSaving(false); }
   };
 
+  const handleSaveMd = async () => {
+    setMdSaving(true);
+    setMdError('');
+    try {
+      await skillFileApi.write(skill.baseDir, mdContent);
+      setMdExists(true);
+      onClose();
+    } catch (err: any) {
+      setMdError(err?.message || sk.skillMdSaveFailed || 'Failed to save SKILL.md');
+    } finally { setMdSaving(false); }
+  };
+
+  const tabs = [
+    { id: 'config' as const, label: sk.configureSkill || 'Configure', icon: 'tune' },
+    ...(canEditSkillMd ? [{ id: 'skillmd' as const, label: 'SKILL.md', icon: 'description' }] : []),
+  ];
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden theme-panel sci-card" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-white/5 flex items-center gap-3">
+      <div className={`w-full mx-4 rounded-2xl shadow-2xl overflow-hidden theme-panel sci-card flex flex-col ${activeTab === 'skillmd' ? 'max-w-2xl' : 'max-w-md'}`} style={{ maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-white/5 flex items-center gap-3 shrink-0">
           <span className="text-xl">{skill.emoji || '⚙️'}</span>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-sm text-[var(--color-text)] dark:text-white truncate">{sk.configureSkill}: {skill.name}</h3>
-            <p className="text-[10px] theme-text-muted truncate">{skill.skillKey}</p>
+            <h3 className="font-bold text-sm text-[var(--color-text)] dark:text-white truncate">{skill.name}</h3>
+            <p className="text-[10px] theme-text-muted truncate font-mono">{skill.skillKey}</p>
           </div>
           <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
             <span className="material-symbols-outlined text-[16px] theme-text-muted">close</span>
           </button>
         </div>
-        <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar neon-scrollbar">
-          {/* 启用/禁用 */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[var(--color-text)] dark:text-white/80">{enabled ? sk.enable : sk.disable}</span>
-            <button onClick={() => setEnabled(!enabled)} className={`w-10 h-5 rounded-full transition-colors relative ${enabled ? 'bg-mac-green' : 'bg-slate-300 dark:bg-white/20'}`}>
-              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'}`} />
-            </button>
+
+        {/* Tab bar (only shown when SKILL.md tab is available) */}
+        {tabs.length > 1 && (
+          <div className="px-5 pt-3 shrink-0 flex gap-1 border-b border-slate-200 dark:border-white/5">
+            {tabs.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-bold rounded-t-lg transition-colors border-b-2 -mb-px ${
+                  activeTab === tab.id
+                    ? 'border-primary text-primary bg-primary/5'
+                    : 'border-transparent theme-text-muted hover:text-[var(--color-text)] dark:hover:text-white'
+                }`}>
+                <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
           </div>
-          {/* API Key */}
-          {skill.primaryEnv && (
-            <div>
-              <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1 block">{sk.apiKey} ({skill.primaryEnv})</label>
-              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={skill.primaryEnv}
-                className="w-full h-9 px-3 theme-field rounded-lg text-xs font-mono outline-none focus:border-primary sci-input" />
-            </div>
-          )}
-          {/* 环境变量 */}
-          <div>
-            <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1 block">{sk.envVars}</label>
-            {envPairs.map(([k, v], i) => (
-              <div key={i} className="flex gap-1.5 mb-1.5">
-                <input value={k} onChange={e => { const n = [...envPairs]; n[i] = [e.target.value, v]; setEnvPairs(n); }} placeholder={sk.key}
-                  className="flex-1 h-8 px-2 theme-field rounded text-[10px] font-mono outline-none focus:border-primary sci-input" />
-                <input value={v} onChange={e => { const n = [...envPairs]; n[i] = [k, e.target.value]; setEnvPairs(n); }} placeholder={sk.value}
-                  className="flex-1 h-8 px-2 theme-field rounded text-[10px] font-mono outline-none focus:border-primary sci-input" />
-                <button onClick={() => setEnvPairs(envPairs.filter((_, j) => j !== i))} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-mac-red">
-                  <span className="material-symbols-outlined text-[14px]">remove_circle</span>
+        )}
+
+        {/* Config tab */}
+        {activeTab === 'config' && (
+          <>
+            <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar neon-scrollbar flex-1">
+              {/* 启用/禁用 */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[var(--color-text)] dark:text-white/80">{enabled ? sk.enable : sk.disable}</span>
+                <button onClick={() => setEnabled(!enabled)} className={`w-10 h-5 rounded-full transition-colors relative ${enabled ? 'bg-mac-green' : 'bg-slate-300 dark:bg-white/20'}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'}`} />
                 </button>
               </div>
-            ))}
-            <button onClick={() => setEnvPairs([...envPairs, ['', '']])} className="text-[10px] text-primary font-bold hover:underline">+ {sk.addEnv}</button>
-          </div>
-        </div>
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-white/5 flex justify-end gap-2">
-          <button onClick={onClose} className="h-8 px-4 text-xs font-bold theme-text-secondary hover:text-[var(--color-text)] dark:hover:text-white">{sk.cancel}</button>
-          <button onClick={handleSave} disabled={saving} className="h-8 px-5 bg-primary text-white text-xs font-bold rounded-lg disabled:opacity-50">
-            {saving ? sk.loading : sk.save}
-          </button>
-        </div>
+              {/* API Key */}
+              {skill.primaryEnv && (
+                <div>
+                  <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1 block">{sk.apiKey} ({skill.primaryEnv})</label>
+                  <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={skill.primaryEnv}
+                    className="w-full h-9 px-3 theme-field rounded-lg text-xs font-mono outline-none focus:border-primary sci-input" />
+                </div>
+              )}
+              {/* 环境变量 */}
+              <div>
+                <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1 block">{sk.envVars}</label>
+                {envPairs.map(([k, v], i) => (
+                  <div key={i} className="flex gap-1.5 mb-1.5">
+                    <input value={k} onChange={e => { const n = [...envPairs]; n[i] = [e.target.value, v]; setEnvPairs(n); }} placeholder={sk.key}
+                      className="flex-1 h-8 px-2 theme-field rounded text-[10px] font-mono outline-none focus:border-primary sci-input" />
+                    <input value={v} onChange={e => { const n = [...envPairs]; n[i] = [k, e.target.value]; setEnvPairs(n); }} placeholder={sk.value}
+                      className="flex-1 h-8 px-2 theme-field rounded text-[10px] font-mono outline-none focus:border-primary sci-input" />
+                    <button onClick={() => setEnvPairs(envPairs.filter((_, j) => j !== i))} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-mac-red">
+                      <span className="material-symbols-outlined text-[14px]">remove_circle</span>
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => setEnvPairs([...envPairs, ['', '']])} className="text-[10px] text-primary font-bold hover:underline">+ {sk.addEnv}</button>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-white/5 flex justify-end gap-2 shrink-0">
+              <button onClick={onClose} className="h-8 px-4 text-xs font-bold theme-text-secondary hover:text-[var(--color-text)] dark:hover:text-white">{sk.cancel}</button>
+              <button onClick={handleSave} disabled={saving} className="h-8 px-5 bg-primary text-white text-xs font-bold rounded-lg disabled:opacity-50">
+                {saving ? sk.loading : sk.save}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* SKILL.md editor tab */}
+        {activeTab === 'skillmd' && (
+          <>
+            <div className="flex-1 flex flex-col overflow-hidden p-4 gap-2 min-h-0">
+              {/* Path hint */}
+              {mdPath && (
+                <p className="text-[10px] theme-text-muted font-mono truncate shrink-0">
+                  <span className="material-symbols-outlined text-[11px] me-1 align-middle">folder</span>
+                  {mdPath}
+                </p>
+              )}
+              {/* Loading */}
+              {mdLoading && (
+                <div className="flex-1 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl animate-spin text-primary/40">progress_activity</span>
+                </div>
+              )}
+              {/* Error */}
+              {!mdLoading && mdError && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-2xl text-mac-red">error</span>
+                  <p className="text-xs text-mac-red">{mdError}</p>
+                </div>
+              )}
+              {/* Editor */}
+              {!mdLoading && !mdError && (
+                <>
+                  {!mdExists && (
+                    <p className="text-[10px] text-amber-500 shrink-0 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">info</span>
+                      {sk.skillMdNew || 'SKILL.md does not exist yet — saving will create it.'}
+                    </p>
+                  )}
+                  <textarea
+                    value={mdContent}
+                    onChange={e => setMdContent(e.target.value)}
+                    spellCheck={false}
+                    className="flex-1 w-full resize-none theme-field rounded-lg text-[11px] font-mono p-3 outline-none focus:border-primary sci-input leading-relaxed custom-scrollbar neon-scrollbar"
+                    placeholder="# Skill name&#10;&#10;Describe what this skill does..."
+                  />
+                </>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-white/5 flex items-center justify-between shrink-0">
+              <p className="text-[10px] theme-text-muted">{sk.skillMdHint || 'Changes take effect after gateway restart.'}</p>
+              <div className="flex gap-2">
+                <button onClick={onClose} className="h-8 px-4 text-xs font-bold theme-text-secondary hover:text-[var(--color-text)] dark:hover:text-white">{sk.cancel}</button>
+                <button onClick={handleSaveMd} disabled={mdSaving || mdLoading} className="h-8 px-5 bg-primary text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1.5">
+                  {mdSaving && <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>}
+                  {mdSaving ? (sk.skillMdSaving || 'Saving...') : sk.save}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -251,8 +375,10 @@ const SkillCard: React.FC<{
       {/* 状态标签行 */}
       <div className="flex flex-wrap gap-1 mb-2">
         <span className="text-[10px] px-1.5 py-0.5 rounded-full theme-field theme-text-muted font-bold">{skill.source}</span>
-        {skill.bundled && skill.source !== 'openclaw-bundled' && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-bold">{sk.bundled}</span>
+        {skill.bundled ? (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-bold">{sk.bundled || 'Built-in'}</span>
+        ) : (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 font-bold">{sk.userInstalled || 'User'}</span>
         )}
         {isDisabled ? (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 text-slate-500 font-bold">{sk.disabled}</span>
@@ -549,6 +675,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const [clawHubCliUpgrading, setClawHubCliUpgrading] = useState(false);
   const [clawHubUpgradeDismissed, setClawHubUpgradeDismissed] = useState(false);
   const [marketInstallingSlug, setMarketInstallingSlug] = useState<string | null>(null);
+  const [marketUninstallingSlug, setMarketUninstallingSlug] = useState<string | null>(null);
   const [marketConfirmSkill, setMarketConfirmSkill] = useState<any>(null);
   const skillsReqSeqRef = useRef(0);
   const marketListReqSeqRef = useRef(0);
@@ -924,6 +1051,37 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
     }
   }, [marketInstallingSlug, toast]);
 
+  // Uninstall skill via ClawHub API
+  const handleClawHubUninstall = useCallback(async (item: any) => {
+    const slug = item.slug || item.name || '';
+    if (marketUninstallingSlug) return;
+    const ok = await confirm({
+      title: skRef.current.uninstall || 'Uninstall',
+      message: `${skRef.current.confirmUninstall || 'Uninstall'} "${item.displayName || slug}"?`,
+      confirmText: skRef.current.uninstall || 'Uninstall',
+      cancelText: skRef.current.cancel || 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
+    setMarketUninstallingSlug(slug);
+    try {
+      const result = await clawHubApi.uninstall(slug);
+      if (result.success) {
+        toast('success', `${item.displayName || slug} ${skRef.current.uninstallSuccess || 'uninstalled successfully'}`);
+        setMarketInstalledSlugs(prev => {
+          const next = new Set(prev);
+          next.delete(slug);
+          return next;
+        });
+        fetchSkills();
+      }
+    } catch (err: any) {
+      toast('error', `${skRef.current.uninstallFailed || 'Uninstall failed'}: ${err?.message || ''}`);
+    } finally {
+      setMarketUninstallingSlug(null);
+    }
+  }, [marketUninstallingSlug, toast, fetchSkills]);
+
   // Right button on ClawHub card: if CLI installed → confirm dialog; else → copy CLI command
   const handleMarketRightButton = useCallback((item: any) => {
     if (isClawHubCLIInstalled) {
@@ -1192,6 +1350,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'all', label: sk.skillsTab || sk.allSkills, count: skills.length },
     { id: 'plugins', label: sk.pluginCenter || 'Plugins' },
+    { id: 'mcp', label: sk.mcpCenter || 'MCP' },
     { id: 'market', label: 'ClawHub' },
     { id: 'skillhub', label: 'SkillHub' },
   ];
@@ -1229,7 +1388,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         </div>
 
         {/* 搜索栏 */}
-        {activeTab !== 'plugins' && activeTab !== 'skillhub' && (
+        {activeTab !== 'plugins' && activeTab !== 'skillhub' && activeTab !== 'mcp' && (
         <div className="p-3 flex flex-row items-center gap-2">
           {activeTab !== 'market' ? (
             <>
@@ -1447,8 +1606,13 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
         <SkillHub language={language} />
       )}
 
+      {/* MCP 服务器管理 */}
+      {activeTab === 'mcp' && (
+        <McpCenter language={language} />
+      )}
+
       {/* 内容区 */}
-      {activeTab !== 'plugins' && activeTab !== 'skillhub' && (
+      {activeTab !== 'plugins' && activeTab !== 'skillhub' && activeTab !== 'mcp' && (
       <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar neon-scrollbar">
         <div className="max-w-6xl mx-auto">
           {/* 加载/错误状态 */}
@@ -1721,16 +1885,28 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
                               <span className="material-symbols-outlined text-[12px]">content_copy</span>
                               <span className="truncate">{sk.copyInstallInfo}</span>
                             </button>
-                            {/* Right: Install or Copy CLI (shrink-0, compact) */}
-                            <button onClick={(e) => { e.stopPropagation(); handleMarketRightButton(item); }}
-                              disabled={marketInstallingSlug === slug}
-                              className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${marketInstallingSlug === slug ? 'bg-primary/20 text-primary cursor-wait' : isClawHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
-                              title={isClawHubCLIInstalled ? `${sk.installSkill || 'Install'} ${slug}` : `clawhub install ${slug}`}>
-                              <span className={`material-symbols-outlined text-[12px] ${marketInstallingSlug === slug ? 'animate-spin' : ''}`}>
-                                {marketInstallingSlug === slug ? 'progress_activity' : (isClawHubCLIInstalled ? 'download' : 'terminal')}
-                              </span>
-                              {isClawHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
-                            </button>
+                            {/* Right: Uninstall (if installed) or Install/Copy CLI */}
+                            {isInstalled && isClawHubCLIInstalled ? (
+                              <button onClick={(e) => { e.stopPropagation(); handleClawHubUninstall(item); }}
+                                disabled={marketUninstallingSlug === slug}
+                                className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${marketUninstallingSlug === slug ? 'bg-mac-red/20 text-mac-red cursor-wait' : 'bg-mac-red/10 text-mac-red hover:bg-mac-red/20'}`}
+                                title={sk.uninstall || 'Uninstall'}>
+                                <span className={`material-symbols-outlined text-[12px] ${marketUninstallingSlug === slug ? 'animate-spin' : ''}`}>
+                                  {marketUninstallingSlug === slug ? 'progress_activity' : 'delete'}
+                                </span>
+                                <span className="truncate">{sk.uninstall || 'Uninstall'}</span>
+                              </button>
+                            ) : (
+                              <button onClick={(e) => { e.stopPropagation(); handleMarketRightButton(item); }}
+                                disabled={marketInstallingSlug === slug}
+                                className={`h-7 px-3 text-[10px] font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${marketInstallingSlug === slug ? 'bg-primary/20 text-primary cursor-wait' : isClawHubCLIInstalled ? 'bg-primary text-white hover:bg-primary/90' : 'theme-field theme-text-secondary hover:bg-slate-200 dark:hover:bg-white/10'}`}
+                                title={isClawHubCLIInstalled ? `${sk.installSkill || 'Install'} ${slug}` : `clawhub install ${slug}`}>
+                                <span className={`material-symbols-outlined text-[12px] ${marketInstallingSlug === slug ? 'animate-spin' : ''}`}>
+                                  {marketInstallingSlug === slug ? 'progress_activity' : (isClawHubCLIInstalled ? 'download' : 'terminal')}
+                                </span>
+                                {isClawHubCLIInstalled && <span className="truncate">{sk.installSkill || 'Install'}</span>}
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1758,7 +1934,7 @@ const Skills: React.FC<SkillsProps> = ({ language }) => {
       )}
 
       {/* 底部状态栏 */}
-      {activeTab !== 'plugins' && (
+      {activeTab !== 'plugins' && activeTab !== 'mcp' && (
       <footer className="h-8 px-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 flex items-center justify-between shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/20">
         <div className="flex items-center gap-3">
           <span>{skills.length} {sk.skillCount}</span>
