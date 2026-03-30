@@ -204,8 +204,10 @@ if command -v openclaw &>/dev/null; then
     echo "[docker-entrypoint] Config path: $OPENCLAW_CONFIG"
     echo "[docker-entrypoint] Gateway log: $GATEWAY_LOG"
 
-    ensure_default_clawhub || true
-    ensure_default_skillhub || true
+    if [ "${OCD_SKIP_EXTRAS:-0}" != "1" ]; then
+        ensure_default_clawhub || true
+        ensure_default_skillhub || true
+    fi
 
     if ensure_default_openclaw_config; then
         sanitize_openclaw_plugin_config || true
@@ -215,6 +217,9 @@ if command -v openclaw &>/dev/null; then
         GATEWAY_WAIT_SECONDS=30
         if [ "$OPENCLAW_CONFIG_CREATED" = "1" ]; then
             GATEWAY_WAIT_SECONDS=120
+        fi
+        if [ -n "${OCD_GATEWAY_WAIT_SECONDS:-}" ]; then
+            GATEWAY_WAIT_SECONDS="$OCD_GATEWAY_WAIT_SECONDS"
         fi
         echo "[docker-entrypoint] Waiting up to ${GATEWAY_WAIT_SECONDS}s for OpenClaw gateway readiness..."
         # Wait for gateway to be ready
