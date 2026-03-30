@@ -593,9 +593,9 @@ const Nodes: React.FC<NodesProps> = ({ language }) => {
   }, [deviceSearchInput]);
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => { fetchNodes(); fetchPresence(); });
+    const raf = requestAnimationFrame(() => { fetchNodes(); fetchPresence(); fetchDevices(); });
     return () => cancelAnimationFrame(raf);
-  }, [fetchNodes, fetchPresence]);
+  }, [fetchNodes, fetchPresence, fetchDevices]);
   useEffect(() => {
     if (tab === 'devices') {
       fetchDevices();
