@@ -14,6 +14,10 @@
 - optimize arm64 smoke test for QEMU slowness
 - replace softprops/action-gh-release with gh CLI
 
+### 🔧 Maintenance / 维护
+
+- untrack scripts/ (local-only)
+
 ---
 **Full Changelog**: [v0.0.35...v0.0.36](https://ghproxy.com/https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.35...v0.0.36)
 
