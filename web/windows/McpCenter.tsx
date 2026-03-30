@@ -203,6 +203,7 @@ const EditModal: React.FC<{
   const [command, setCommand] = useState(entry?.config.command ?? '');
   const [args, setArgs] = useState<string[]>(entry?.config.args ?? []);
   const [url, setUrl] = useState(entry?.config.url ?? '');
+  const [headers, setHeaders] = useState<Record<string, string>>(entry?.config.headers ?? {});
   const [env, setEnv] = useState<Record<string, string>>(entry?.config.env ?? {});
   const [extraJson, setExtraJson] = useState('');
   const [saving, setSaving] = useState(false);
@@ -234,6 +235,7 @@ const EditModal: React.FC<{
     setCommand(p.config.command ?? '');
     setArgs(p.config.args ?? []);
     setUrl(p.config.url ?? '');
+    setHeaders(p.config.headers ?? {});
     setEnv(p.config.env ?? {});
     setMode('form');
   };
@@ -262,6 +264,7 @@ const EditModal: React.FC<{
       if (args.length > 0) config.args = args;
     } else {
       config.url = url.trim();
+      if (Object.keys(headers).length > 0) config.headers = headers;
     }
     if (Object.keys(env).length > 0) config.env = env;
     if (extraJson.trim()) {
@@ -525,18 +528,32 @@ const EditModal: React.FC<{
 
               {/* sse fields */}
               {serverType === 'sse' && (
-                <div>
-                  <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1.5 block">
-                    {t.serverUrl}
-                  </label>
-                  <input
-                    value={url}
-                    onChange={e => { setUrl(e.target.value); setUrlError(''); }}
-                    placeholder={t.urlPlaceholder}
-                    className={`w-full h-9 px-3 theme-field rounded-lg text-xs font-mono outline-none focus:border-primary sci-input ${urlError ? 'border-mac-red' : ''}`}
-                  />
-                  {urlError && <p className="text-[10px] text-mac-red mt-1">{urlError}</p>}
-                </div>
+                <>
+                  <div>
+                    <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1.5 block">
+                      {t.serverUrl}
+                    </label>
+                    <input
+                      value={url}
+                      onChange={e => { setUrl(e.target.value); setUrlError(''); }}
+                      placeholder={t.urlPlaceholder}
+                      className={`w-full h-9 px-3 theme-field rounded-lg text-xs font-mono outline-none focus:border-primary sci-input ${urlError ? 'border-mac-red' : ''}`}
+                    />
+                    {urlError && <p className="text-[10px] text-mac-red mt-1">{urlError}</p>}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold theme-text-muted uppercase tracking-wider mb-1.5 block">
+                      {t.headers || 'Headers'}
+                    </label>
+                    <EnvEditor
+                      env={headers}
+                      onChange={setHeaders}
+                      addLabel={t.addHeader || 'Add Header'}
+                      keyPlaceholder={t.headerKeyPlaceholder || 'Header name'}
+                      valuePlaceholder={t.headerValuePlaceholder || 'Value'}
+                    />
+                  </div>
+                </>
               )}
 
               {/* Env */}
