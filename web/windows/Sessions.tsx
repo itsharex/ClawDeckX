@@ -1637,7 +1637,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     const pastedFiles: File[] = [];
     for (let i = 0; i < items.length; i++) {
       const file = items[i].getAsFile();
-      if (file && (items[i].type.startsWith('image/') || items[i].type.startsWith('application/') || items[i].type.startsWith('text/'))) {
+      if (file && items[i].type.startsWith('image/')) {
         pastedFiles.push(file);
       }
     }
@@ -1653,11 +1653,12 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE);
+    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && f.type.startsWith('image/'));
+    if (validFiles.length === 0) { if (fileInputRef.current) fileInputRef.current.value = ''; return; }
     const results = await Promise.all(validFiles.map(readFileAsDataUrl));
     setPendingAttachments(prev => [...(prev || []), ...results].slice(0, 5));
     if (fileInputRef.current) fileInputRef.current.value = '';
-    if (!modelSupportsImages && results.some(r => r.isImage)) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
+    if (!modelSupportsImages) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
   }, [readFileAsDataUrl, modelSupportsImages, toast]);
 
   // Handle drag & drop files into the input area
@@ -1668,11 +1669,11 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
     const MAX_FILE_SIZE = 10 * 1024 * 1024;
-    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE);
+    const validFiles = Array.from(files).filter(f => f.size <= MAX_FILE_SIZE && f.type.startsWith('image/'));
     if (validFiles.length === 0) return;
     const results = await Promise.all(validFiles.map(readFileAsDataUrl));
     setPendingAttachments(prev => [...(prev || []), ...results].slice(0, 5));
-    if (!modelSupportsImages && results.some(r => r.isImage)) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
+    if (!modelSupportsImages) toast('warning', cRef.current.modelNoVision || 'Current model does not support image input');
   }, [readFileAsDataUrl, modelSupportsImages, toast]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -3380,7 +3381,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
                 </div>
               )}
               <div className="flex items-end gap-1.5">
-                <input ref={fileInputRef} type="file" accept="image/*,.pdf,.txt,.csv,.md,.json,.xml,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.tar,.gz" multiple className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
                 <button onClick={() => fileInputRef.current?.click()} disabled={!gwReady || (pendingAttachments?.length || 0) >= 5}
                   className="relative w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors disabled:opacity-30"
                   title={!modelSupportsImages ? (c.modelNoVision || 'Current model does not support image input') : (c.attachFile || 'Attach File')}>
