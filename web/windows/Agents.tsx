@@ -2,11 +2,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi, workspaceMemoryApi, MemoryFileEntry } from '../services/api';
+import { gwApi, workspaceMemoryApi, MemoryFileEntry, multiAgentApi, WizardStep2Request } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { fmtAgoCompact } from '../utils/time';
 import { subscribeManagerWS } from '../services/manager-ws';
-import { templateSystem, WorkspaceTemplate } from '../services/template-system';
+import { templateSystem, WorkspaceTemplate, resolveTemplatePrompt } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -124,6 +124,19 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [cronStatus, setCronStatus] = useState<any>(null);
   const [cronJobs, setCronJobs] = useState<any[]>([]);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
+
+  // AI file generate state
+  const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [aiGenPrompt, setAiGenPrompt] = useState('');
+  const [aiGenRunning, setAiGenRunning] = useState(false);
+  const [aiGenStream, setAiGenStream] = useState('');
+  const [aiGenResult, setAiGenResult] = useState<string | null>(null);
+  const aiGenAbortRef = useRef<AbortController | null>(null);
+  const aiGenBufRef = useRef('');
+  const aiGenRafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Core files that support AI generation */
+  const AI_GEN_FILES = ['SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md'];
 
   // Load workspace file templates
   useEffect(() => {
@@ -365,6 +378,123 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     } catch (err: any) { toast('error', err?.message || a.fileSaveFailed); }
     setFileSaving(false);
   }, [selectedId, fileActive, fileDrafts, a]);
+
+  // Open AI generate panel for the current file
+  const openAiGen = useCallback(async () => {
+    if (!fileActive || !selectedId) return;
+    setAiGenResult(null);
+    setAiGenStream('');
+    setAiGenOpen(true);
+    // Build a default prompt based on the file type and current agent identity
+    const agentName = identity?.name || selectedId;
+    const agentRole = identity?.role || '';
+    const agentDesc = identity?.description || '';
+    const fileKey = fileActive.replace('.md', '').toLowerCase();
+    // Try to find a matching multi-agent template prompt for this agent's scenario
+    let resolved: string | undefined;
+    try {
+      const templates = await templateSystem.getMultiAgentTemplates(language);
+      // Look for a template whose name partially matches the agent's scenario context
+      // Try each template's agentFile prompt as the base
+      const first = templates[0];
+      if (first?.content.prompts?.agentFile) {
+        resolved = resolveTemplatePrompt(first.content.prompts.agentFile, language, {
+          agentName, agentRole, agentDesc, scenarioName: agentRole,
+        });
+      }
+    } catch { /* ignore */ }
+    // Fallback: build a generic prompt tuned to the specific file
+    if (!resolved) {
+      const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+      const fileHints: Record<string, string> = {
+        'soul': 'Write a SOUL.md persona file: 3 paragraphs covering identity/personality, core responsibilities, and working style.',
+        'agents': 'Write an AGENTS.md session startup file: what context to load on start, what outputs to produce, collaboration style.',
+        'user': 'Write a USER.md profile file: describe the human user this agent serves — their role, preferences, communication style.',
+        'identity': 'Write an IDENTITY.md file in format: Name: X | Creature: X | Vibe: X | Emoji: X',
+        'heartbeat': 'Write a HEARTBEAT.md checklist: 5 recurring tasks as markdown checkboxes (- [ ] item).',
+      };
+      const hint = fileHints[fileKey] || `Write content for ${fileActive}.`;
+      resolved = `Generate ${fileActive} content for agent "${agentName}".\nRole: ${agentRole}\nLanguage: ${langHint}\n\n${hint}`;
+    }
+    setAiGenPrompt(resolved);
+  }, [fileActive, selectedId, identity, language]);
+
+  const handleAiGenRun = useCallback(() => {
+    if (!fileActive || !selectedId || aiGenRunning) return;
+    aiGenAbortRef.current?.abort();
+    aiGenBufRef.current = '';
+    if (aiGenRafRef.current !== null) { clearTimeout(aiGenRafRef.current); aiGenRafRef.current = null; }
+    setAiGenStream('');
+    setAiGenResult(null);
+    setAiGenRunning(true);
+    const agentName = identity?.name || selectedId;
+    const agentRole = identity?.role || '';
+    const agentDesc = identity?.description || '';
+    const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    const req: WizardStep2Request = {
+      agentId: selectedId,
+      agentName,
+      agentRole,
+      agentDesc,
+      scenarioName: agentRole || agentName,
+      language: langHint,
+      customPrompt: aiGenPrompt,
+    };
+    aiGenAbortRef.current = multiAgentApi.wizardStep2(
+      req,
+      (token) => {
+        aiGenBufRef.current += token;
+        if (aiGenRafRef.current === null) {
+          aiGenRafRef.current = setTimeout(() => {
+            setAiGenStream(aiGenBufRef.current);
+            aiGenRafRef.current = null;
+          }, 30);
+        }
+      },
+      (data) => {
+        setAiGenRunning(false);
+        // Extract plain text from the parsed result if possible
+        const parsed = data?.parsed ?? data;
+        let content = '';
+        if (parsed && typeof parsed === 'object') {
+          const fileKey = fileActive!.replace('.md', '').toLowerCase();
+          const keyMap: Record<string, string[]> = {
+            soul: ['soul', 'soulSnippet'],
+            agents: ['agentsMd', 'agents'],
+            user: ['userMd', 'user'],
+            identity: ['identityMd', 'identity'],
+            heartbeat: ['heartbeat'],
+          };
+          const keys = keyMap[fileKey] ?? [];
+          for (const k of keys) {
+            if (parsed[k]) { content = parsed[k]; break; }
+          }
+          if (!content) content = aiGenBufRef.current;
+        } else {
+          content = aiGenBufRef.current;
+        }
+        setAiGenResult(content);
+        setAiGenStream(content);
+      },
+      (code, msg) => {
+        setAiGenRunning(false);
+        toast('error', `${code}: ${msg}`);
+      },
+    );
+  }, [fileActive, selectedId, identity, language, aiGenPrompt, aiGenRunning]);
+
+  const handleAiGenStop = useCallback(() => {
+    aiGenAbortRef.current?.abort();
+    setAiGenRunning(false);
+  }, []);
+
+  const handleAiGenApply = useCallback(() => {
+    if (!fileActive || !aiGenResult) return;
+    setFileDrafts(prev => ({ ...prev, [fileActive!]: aiGenResult }));
+    setAiGenOpen(false);
+    setAiGenResult(null);
+    setAiGenStream('');
+  }, [fileActive, aiGenResult]);
 
   // CRUD state
   const [crudMode, setCrudMode] = useState<'create' | 'edit' | null>(null);
@@ -1393,6 +1523,20 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                             ) : fileActive}
                           </span>
                           <div className="flex gap-2">
+                            {/* AI Generate button — shown for core agent files */}
+                            {fileActive && AI_GEN_FILES.includes(fileActive) && !fileActive.startsWith('memory/') && (
+                              <button
+                                onClick={() => { setTplDropdown(false); if (aiGenOpen) { setAiGenOpen(false); } else { openAiGen(); } }}
+                                className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-colors flex items-center gap-1 ${
+                                  aiGenOpen
+                                    ? 'border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                                    : 'border-violet-400/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/5'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-[12px]">auto_awesome</span>
+                                {a.aiGenerate || 'AI Write'}
+                              </button>
+                            )}
                             {/* Template insert dropdown */}
                             {fileActive && fileTemplates.filter(t => t.targetFile === fileActive).length > 0 && (
                               <div className="relative">
@@ -1430,6 +1574,58 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                               className="text-[10px] px-3 py-1 rounded-lg bg-primary text-white font-bold disabled:opacity-30">{fileSaving ? a.saving : a.save}</button>
                           </div>
                         </div>
+                        {/* AI Generate Panel */}
+                        {aiGenOpen && fileActive && AI_GEN_FILES.includes(fileActive) && (
+                          <div className="rounded-xl border border-violet-400/30 bg-violet-500/5 dark:bg-violet-500/[0.06] p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
+                                {a.aiGenerateTitle || 'AI Write File Content'}
+                              </span>
+                              <button onClick={() => { setAiGenOpen(false); setAiGenStream(''); setAiGenResult(null); }}
+                                className="text-[10px] text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/60 transition-colors">
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                              </button>
+                            </div>
+                            <textarea
+                              value={aiGenPrompt}
+                              onChange={e => setAiGenPrompt(e.target.value)}
+                              rows={4}
+                              disabled={aiGenRunning}
+                              className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-white/[0.03] border border-violet-400/20 text-[11px] font-mono text-slate-700 dark:text-white/70 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500/30 disabled:opacity-60"
+                            />
+                            <div className="flex items-center gap-2">
+                              {!aiGenRunning ? (
+                                <button onClick={handleAiGenRun} disabled={!aiGenPrompt.trim()}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-violet-600 text-white font-bold hover:bg-violet-700 disabled:opacity-40 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">play_arrow</span>
+                                  {a.aiGenStart || 'Generate'}
+                                </button>
+                              ) : (
+                                <button onClick={handleAiGenStop}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500 text-white font-bold hover:bg-red-600 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">stop</span>
+                                  {a.aiGenStop || 'Stop'}
+                                </button>
+                              )}
+                              {aiGenResult && !aiGenRunning && (
+                                <button onClick={handleAiGenApply}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">check</span>
+                                  {a.aiGenApply || 'Apply to File'}
+                                </button>
+                              )}
+                              {aiGenRunning && (
+                                <span className="text-[10px] text-violet-500 dark:text-violet-400 animate-pulse">{a.aiGenRunning || 'Generating…'}</span>
+                              )}
+                            </div>
+                            {aiGenStream && (
+                              <pre className="w-full max-h-48 overflow-y-auto p-2.5 rounded-lg bg-white dark:bg-black/20 border border-violet-400/20 text-[10px] font-mono text-slate-700 dark:text-white/60 whitespace-pre-wrap break-words neon-scrollbar">
+                                {aiGenStream}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                         {/* File path hint */}
                         {filesList?.workspace && fileActive && !fileActive.startsWith('memory/') && (
                           <div className="flex items-center gap-1.5 px-1 -mt-0.5">

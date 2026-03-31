@@ -97,6 +97,22 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Doctor check IDs that relate to this FAQ"
+        },
+        "prompts": {
+          "type": "object",
+          "description": "AI generation prompts for this template (en/zh only). Keys map to specific generation phases.",
+          "properties": {
+            "step1": {
+              "type": "object",
+              "description": "Prompt for wizard step1 (team structure generation). Keyed by language code (en, zh).",
+              "additionalProperties": { "type": "string" }
+            },
+            "agentFile": {
+              "type": "object",
+              "description": "Prompt template for per-agent file generation. Keyed by language code (en, zh). Supports placeholders: {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}.",
+              "additionalProperties": { "type": "string" }
+            }
+          }
         }
       }
     }

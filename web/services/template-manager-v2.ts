@@ -99,6 +99,13 @@ export interface ScenarioTemplate {
   integrations?: IntegrationConfig[];
 }
 
+export interface MultiAgentTemplatePrompts {
+  /** Prompt for wizard step1 (team structure). Keys: 'en', 'zh'. Supports {{scenarioName}}, {{description}}, {{agentCount}}, {{workflowType}}. */
+  step1?: Record<string, string>;
+  /** Prompt for per-agent file generation. Keys: 'en', 'zh'. Supports {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}. */
+  agentFile?: Record<string, string>;
+}
+
 export interface MultiAgentTemplate {
   id: string;
   type: 'multi-agent';
@@ -109,6 +116,7 @@ export interface MultiAgentTemplate {
     agents: TemplateAgent[];
     workflow: TemplateWorkflow;
     examples?: string[];
+    prompts?: MultiAgentTemplatePrompts;
   };
 }
 

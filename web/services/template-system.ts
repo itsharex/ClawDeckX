@@ -21,7 +21,8 @@ import { templateApi } from './api';
 // Re-export types
 export type { 
   ScenarioTemplate, 
-  MultiAgentTemplate, 
+  MultiAgentTemplate,
+  MultiAgentTemplatePrompts,
   AgentTemplate,
   KnowledgeItem,
   KnowledgeItemType,
@@ -33,6 +34,45 @@ export type {
   TemplateMetadata,
   TemplateRequirements,
 } from './template-manager-v2';
+
+// ============================================================================
+// Prompt resolution helper
+// ============================================================================
+
+export interface PromptPlaceholders {
+  scenarioName?: string;
+  description?: string;
+  agentCount?: string;
+  workflowType?: string;
+  agentName?: string;
+  agentRole?: string;
+  agentDesc?: string;
+}
+
+/**
+ * Resolve a prompt string from a template prompts map.
+ * Falls back: requested lang → 'en' → undefined.
+ * Replaces {{placeholder}} tokens with provided values.
+ */
+export function resolveTemplatePrompt(
+  prompts: Record<string, string> | undefined,
+  language: string,
+  placeholders?: PromptPlaceholders,
+): string | undefined {
+  if (!prompts) return undefined;
+  const lang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
+  const raw = prompts[lang] ?? prompts['en'];
+  if (!raw) return undefined;
+  if (!placeholders) return raw;
+  return raw
+    .replace(/\{\{scenarioName\}\}/g, placeholders.scenarioName ?? '')
+    .replace(/\{\{description\}\}/g, placeholders.description ?? '')
+    .replace(/\{\{agentCount\}\}/g, placeholders.agentCount ?? '')
+    .replace(/\{\{workflowType\}\}/g, placeholders.workflowType ?? '')
+    .replace(/\{\{agentName\}\}/g, placeholders.agentName ?? '')
+    .replace(/\{\{agentRole\}\}/g, placeholders.agentRole ?? '')
+    .replace(/\{\{agentDesc\}\}/g, placeholders.agentDesc ?? '');
+}
 export type { TemplateSource } from './template-sources';
 
 // ============================================================================

@@ -65,7 +65,17 @@
       "Create a blog post about AI trends in 2026",
       "Produce a newsletter about productivity tips",
       "Write and publish a product announcement"
-    ]
+    ],
+    "prompts": {
+      "step1": {
+        "en": "Output ONLY valid JSON, no markdown.\n\nYou are designing a Content Factory multi-agent team.\nScenario: {{scenarioName}}\nDescription: {{description}}\nAgents: {{agentCount}}\nWorkflow: sequential\n\nCreate a sequential content production team: researcher, writer, editor, and publisher roles. Each agent should have a clear handoff point.\nFor each agent: id (kebab-case), name, role (≤8 words), description (≤20 words), icon (Material Symbol), color (Tailwind gradient).\nreasoning: ≤15 words. workflow: sequential steps with clear handoffs.\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"sequential\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}",
+        "zh": "只输出合法JSON，不要Markdown。\n\n你正在设计一个内容工厂多智能体团队。\n场景：{{scenarioName}}\n描述：{{description}}\n智能体数量：{{agentCount}}\n工作流：顺序\n\n创建一个顺序内容生产团队：研究员、写作者、编辑和发布者角色，每个智能体有清晰的交接点。\n每个智能体：id（短横线格式）、名称、角色（≤8字）、描述（≤20字）、图标（Material Symbol）、颜色（Tailwind渐变）。\n推理：≤15字。工作流：有明确交接的顺序步骤。\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"sequential\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}"
+      },
+      "agentFile": {
+        "en": "Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for a content production AI agent:\nName: {{agentName}}\nRole: {{agentRole}}\nDescription: {{agentDesc}}\nTeam scenario: {{scenarioName}}\n\nThis agent is part of a sequential content factory pipeline. Emphasize their specific stage (research/writing/editing/publishing) and handoff responsibilities.\n\nFields:\n- soul: 3 sentences (persona, content stage responsibilities, handoff style)\n- agentsMd: 2 sentences (session startup: what to read first, what output to produce)\n- userMd: 1 sentence (profile of the content team lead this agent serves)\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: \"- [ ] item1\\n- [ ] item2\\n- [ ] item3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+        "zh": "只输出合法JSON，不要Markdown。\n\n为内容生产AI智能体生成工作区文件：\n名称：{{agentName}}\n角色：{{agentRole}}\n描述：{{agentDesc}}\n团队场景：{{scenarioName}}\n\n该智能体是顺序内容工厂流水线的一部分，重点强调其具体阶段（研究/写作/编辑/发布）和交接职责。\n\n字段：\n- soul：3句话（人设、内容阶段职责、交接风格）\n- agentsMd：2句话（会话启动：先读什么，产出什么）\n- userMd：1句话（该智能体服务的内容负责人画像）\n- identityMd：\"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat：\"- [ ] 事项1\\n- [ ] 事项2\\n- [ ] 事项3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}"
+      }
+    }
   },
   "skills": [
     {

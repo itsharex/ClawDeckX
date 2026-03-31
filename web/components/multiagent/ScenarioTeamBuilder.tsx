@@ -13,6 +13,7 @@ import {
 import { useToast } from '../Toast';
 import { resolveTemplateColor } from '../../utils/templateColors';
 import { subscribeManagerWS } from '../../services/manager-ws';
+import { templateSystem, resolveTemplatePrompt } from '../../services/template-system';
 
 interface ScenarioTeamBuilderProps {
   language: Language;
@@ -50,17 +51,19 @@ interface ScenarioTemplate {
   teamSize: 'small' | 'medium' | 'large';
   name: string;
   desc: string;
+  /** ID matching templates/official/multi-agent/{id}.json — used to load prompts */
+  multiAgentTemplateId?: string;
 }
 
 const SCENARIO_TEMPLATES: ScenarioTemplate[] = [
   { icon: 'code', color: 'from-blue-500 to-cyan-500', nameKey: 'tpl_softdev_name', descKey: 'tpl_softdev_desc', workflowType: 'collaborative', teamSize: 'medium', name: 'Software Dev Team', desc: 'Full-stack software development team with PM, architects, frontend/backend devs and QA. Responsible for requirement analysis, system design, coding, code review, testing, and delivery management.' },
-  { icon: 'campaign', color: 'from-pink-500 to-rose-500', nameKey: 'tpl_marketing_name', descKey: 'tpl_marketing_desc', workflowType: 'parallel', teamSize: 'medium', name: 'Content Marketing', desc: 'Content creation and marketing team producing SEO articles, social media posts, email newsletters, and marketing copy. Handles content strategy, writing, editing, distribution, and analytics.' },
-  { icon: 'support_agent', color: 'from-green-500 to-emerald-500', nameKey: 'tpl_support_name', descKey: 'tpl_support_desc', workflowType: 'routing', teamSize: 'medium', name: 'Customer Support', desc: 'Multi-tier customer support team handling inbound requests through triage, L1/L2/L3 specialists, and escalation management. Focus on fast resolution, knowledge base maintenance, and CSAT improvement.' },
-  { icon: 'science', color: 'from-violet-500 to-purple-500', nameKey: 'tpl_research_name', descKey: 'tpl_research_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Research Team', desc: 'Academic or market research team with lead researcher, domain experts, data analysts, and critical reviewers. Conducts literature review, data collection, analysis, and report writing.' },
+  { icon: 'campaign', color: 'from-pink-500 to-rose-500', nameKey: 'tpl_marketing_name', descKey: 'tpl_marketing_desc', workflowType: 'parallel', teamSize: 'medium', name: 'Content Marketing', desc: 'Content creation and marketing team producing SEO articles, social media posts, email newsletters, and marketing copy. Handles content strategy, writing, editing, distribution, and analytics.', multiAgentTemplateId: 'content-factory' },
+  { icon: 'support_agent', color: 'from-green-500 to-emerald-500', nameKey: 'tpl_support_name', descKey: 'tpl_support_desc', workflowType: 'routing', teamSize: 'medium', name: 'Customer Support', desc: 'Multi-tier customer support team handling inbound requests through triage, L1/L2/L3 specialists, and escalation management. Focus on fast resolution, knowledge base maintenance, and CSAT improvement.', multiAgentTemplateId: 'customer-support' },
+  { icon: 'science', color: 'from-violet-500 to-purple-500', nameKey: 'tpl_research_name', descKey: 'tpl_research_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Research Team', desc: 'Academic or market research team with lead researcher, domain experts, data analysts, and critical reviewers. Conducts literature review, data collection, analysis, and report writing.', multiAgentTemplateId: 'research-team' },
   { icon: 'storefront', color: 'from-orange-500 to-amber-500', nameKey: 'tpl_ecommerce_name', descKey: 'tpl_ecommerce_desc', workflowType: 'collaborative', teamSize: 'large', name: 'E-Commerce Operations', desc: 'E-commerce operations team managing product listings, pricing strategy, inventory, customer service, promotions, and analytics. Covers the full order-to-fulfillment workflow.' },
   { icon: 'school', color: 'from-teal-500 to-cyan-500', nameKey: 'tpl_education_name', descKey: 'tpl_education_desc', workflowType: 'sequential', teamSize: 'small', name: 'Education Content', desc: 'Online education content team creating courses, quizzes, video scripts, and learning materials. Roles include instructional designer, subject matter expert, writer, and quality reviewer.' },
   { icon: 'account_balance', color: 'from-slate-500 to-gray-600', nameKey: 'tpl_finance_name', descKey: 'tpl_finance_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Financial Analysis', desc: 'Financial analysis team covering market research, financial modeling, risk assessment, portfolio analysis, and investment reporting. Produces detailed research reports and recommendations.' },
-  { icon: 'build', color: 'from-indigo-500 to-blue-600', nameKey: 'tpl_devops_name', descKey: 'tpl_devops_desc', workflowType: 'collaborative', teamSize: 'small', name: 'DevOps Team', desc: 'DevOps and SRE team managing CI/CD pipelines, infrastructure as code, monitoring, incident response, and deployment automation. Ensures system reliability, security, and scalability.' },
+  { icon: 'build', color: 'from-indigo-500 to-blue-600', nameKey: 'tpl_devops_name', descKey: 'tpl_devops_desc', workflowType: 'collaborative', teamSize: 'small', name: 'DevOps Team', desc: 'DevOps and SRE team managing CI/CD pipelines, infrastructure as code, monitoring, incident response, and deployment automation. Ensures system reliability, security, and scalability.', multiAgentTemplateId: 'devops-team' },
 ];
 
 const WORKFLOW_TYPES = [
@@ -309,12 +312,41 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   }, []);
 
   const handleApplyTemplate = useCallback((tpl: ScenarioTemplate) => {
-    setScenarioName(stb[tpl.nameKey] || tpl.name);
-    setDescription(stb[tpl.descKey] || tpl.desc);
+    const name = stb[tpl.nameKey] || tpl.name;
+    const desc = stb[tpl.descKey] || tpl.desc;
+    setScenarioName(name);
+    setDescription(desc);
     setWorkflowType(tpl.workflowType);
     setTeamSize(tpl.teamSize);
     setTemplatePickerOpen(false);
-  }, [stb]);
+    // Clear cached step1 result so next wizard run is fresh with new prompts
+    wzStep1ResultRef.current = null;
+    setWzStep1Result(null);
+    // Load template prompts if linked
+    if (tpl.multiAgentTemplateId) {
+      const agentCount = tpl.teamSize === 'small' ? '3-4' : tpl.teamSize === 'large' ? '8-10' : '5-7';
+      templateSystem.getMultiAgentTemplates(language).then(templates => {
+        const matched = templates.find(t => t.id === tpl.multiAgentTemplateId);
+        if (!matched?.content.prompts) return;
+        const step1 = resolveTemplatePrompt(matched.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: tpl.workflowType,
+        });
+        if (step1) setWzStep1Prompt(step1);
+        // Store agentFile prompt template for later per-agent use
+        const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
+        wzAgentFilePromptRef.current = matched.content.prompts.agentFile?.[agentFileLang]
+          ?? matched.content.prompts.agentFile?.['en']
+          ?? null;
+      }).catch(() => { /* prompts optional */ });
+    } else {
+      // No linked template — clear to use backend defaults
+      setWzStep1Prompt('');
+      wzAgentFilePromptRef.current = null;
+    }
+  }, [stb, language]);
 
   const buildPrompt = useCallback(() => {
     const agentCountHint = teamSize === 'small' ? '3 to 4' : teamSize === 'large' ? '8 to 10' : '5 to 7';
@@ -542,6 +574,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
   const [wzStep1Error, setWzStep1Error] = useState<string | null>(null);
   const [wzStep1Result, setWzStep1Result] = useState<any>(null); // cached parsed JSON
   const wzStep1ResultRef = useRef<any>(null); // mirror for reading in callbacks before state settles
+  const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
   const wzStep1AbortRef = useRef<AbortController | null>(null);
   const wzStep1BufRef = useRef('');
   const wzStep1RafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -552,6 +585,8 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
   const wzStep2ActiveIdxRef = useRef(0);
   // Stable ref to the start-step1 function so handleConfirmWizard can auto-invoke it
   const wzStartStep1Ref = useRef<(() => void) | null>(null);
+  // Cached agentFile prompt template from loaded multi-agent template (raw, with {{placeholders}})
+  const wzAgentFilePromptRef = useRef<string | null>(null);
 
   const wzLangHint = language === 'zh' || language === 'zh-TW' ? 'Chinese'
     : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
@@ -573,7 +608,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
       workflowType,
       language,
       modelId: selectedModel || undefined,
-      customPrompt: editablePrompt || undefined,
+      customPrompt: wzStep1Prompt || undefined,
     };
 
     wzStep1AbortRef.current = multiAgentApi.wizardStep1(
@@ -592,11 +627,18 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
         wzStep1ResultRef.current = doneData;
         setWzStep1Result(doneData);
         const agentList: any[] = doneData.parsed?.template?.agents ?? [];
+        const agentFilePromptTpl = wzAgentFilePromptRef.current;
         setWzAgents(agentList.map((a: any) => {
           const core = { id: a.id ?? '', name: a.name ?? '', role: a.role ?? '', description: a.description ?? '', icon: a.icon ?? 'person', color: a.color ?? 'from-blue-500 to-cyan-500' };
-          return { ...core, status: 'pending' as WzAgentStatus, streamBuf: '', soul: '', agentsMd: '', userMd: '', identityMd: '', heartbeat: '', expanded: false, showPrompt: false,
-            customPrompt: `Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: ${core.name}\nRole: ${core.role}\nDescription: ${core.description}\nScenario: ${scenarioName}\nLanguage: ${wzLangHint}\n\nFields:\n- soul: 3 sentences\n- agentsMd: 2 sentences\n- userMd: 1 sentence\n- identityMd: "Name: X | Creature: X | Vibe: X | Emoji: X"\n- heartbeat: "- [ ] item1\\n- [ ] item2\\n- [ ] item3"\n\n{"soul":"","agentsMd":"","userMd":"","identityMd":"","heartbeat":""}`,
-          };
+          // Resolve per-agent prompt: use template if available, otherwise fallback to generic default
+          const customPrompt = agentFilePromptTpl
+            ? agentFilePromptTpl
+              .replace(/\{\{agentName\}\}/g, core.name)
+              .replace(/\{\{agentRole\}\}/g, core.role)
+              .replace(/\{\{agentDesc\}\}/g, core.description)
+              .replace(/\{\{scenarioName\}\}/g, scenarioName)
+            : `Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: ${core.name}\nRole: ${core.role}\nDescription: ${core.description}\nScenario: ${scenarioName}\nLanguage: ${wzLangHint}\n\nFields:\n- soul: 3 sentences\n- agentsMd: 2 sentences\n- userMd: 1 sentence\n- identityMd: "Name: X | Creature: X | Vibe: X | Emoji: X"\n- heartbeat: "- [ ] item1\\n- [ ] item2\\n- [ ] item3"\n\n{"soul":"","agentsMd":"","userMd":"","identityMd":"","heartbeat":""}`;
+          return { ...core, status: 'pending' as WzAgentStatus, streamBuf: '', soul: '', agentsMd: '', userMd: '', identityMd: '', heartbeat: '', expanded: false, showPrompt: false, customPrompt };
         }));
         setWzPhase('step2');
       },
@@ -605,7 +647,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
         setWzStep1Error(`${code}: ${msg}`);
       },
     );
-  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, editablePrompt, wzLangHint]);
+  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, wzStep1Prompt, wzLangHint]);
 
   // Register auto-start ref so handleConfirmWizard can call it after state flush
   useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
@@ -1423,16 +1465,17 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">{stb.promptLabel || 'AI Prompt'}</span>
-                      <button onClick={() => setEditablePrompt(buildPrompt())} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
+                      <button onClick={() => setWzStep1Prompt('')} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
                         <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                         {stb.promptReset || 'Reset'}
                       </button>
                     </div>
                     <textarea
-                      value={editablePrompt}
-                      onChange={e => setEditablePrompt(e.target.value)}
+                      value={wzStep1Prompt}
+                      onChange={e => setWzStep1Prompt(e.target.value)}
                       rows={6}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed"
+                      placeholder="Leave empty to use the default compact prompt (recommended)"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
                       spellCheck={false}
                     />
                   </div>

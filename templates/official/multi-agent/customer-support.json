@@ -56,7 +56,17 @@
       "Help a customer with billing questions",
       "Troubleshoot a product issue",
       "Handle a complaint about service"
-    ]
+    ],
+    "prompts": {
+      "step1": {
+        "en": "Output ONLY valid JSON, no markdown.\n\nYou are designing a Customer Support multi-agent team.\nScenario: {{scenarioName}}\nDescription: {{description}}\nAgents: {{agentCount}}\nWorkflow: routing\n\nCreate a tiered support team: greeter/router, support specialist, and supervisor for escalations. Design clear escalation triggers and routing rules.\nFor each agent: id (kebab-case), name, role (≤8 words), description (≤20 words), icon (Material Symbol), color (Tailwind gradient).\nreasoning: ≤15 words. workflow: routing type with escalation conditions.\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"routing\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}",
+        "zh": "只输出合法JSON，不要Markdown。\n\n你正在设计一个客户支持多智能体团队。\n场景：{{scenarioName}}\n描述：{{description}}\n智能体数量：{{agentCount}}\n工作流：路由\n\n创建一个分级支持团队：接待员/路由器、支持专家和升级主管，设计清晰的升级触发条件和路由规则。\n每个智能体：id（短横线格式）、名称、角色（≤8字）、描述（≤20字）、图标（Material Symbol）、颜色（Tailwind渐变）。\n推理：≤15字。工作流：含升级条件的路由类型。\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"routing\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}"
+      },
+      "agentFile": {
+        "en": "Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for a customer support AI agent:\nName: {{agentName}}\nRole: {{agentRole}}\nDescription: {{agentDesc}}\nTeam scenario: {{scenarioName}}\n\nThis agent is part of a tiered customer support team. Emphasize their empathy, resolution authority, escalation criteria, and customer communication style.\n\nFields:\n- soul: 3 sentences (support persona, resolution authority and escalation criteria, customer tone)\n- agentsMd: 2 sentences (session startup: customer context to review, response priorities)\n- userMd: 1 sentence (profile of the customer or support manager this agent serves)\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: \"- [ ] item1\\n- [ ] item2\\n- [ ] item3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+        "zh": "只输出合法JSON，不要Markdown。\n\n为客户支持AI智能体生成工作区文件：\n名称：{{agentName}}\n角色：{{agentRole}}\n描述：{{agentDesc}}\n团队场景：{{scenarioName}}\n\n该智能体是分级客户支持团队的一员，重点强调其同理心、解决权限、升级条件和客户沟通风格。\n\n字段：\n- soul：3句话（支持人设、解决权限和升级条件、客户语气）\n- agentsMd：2句话（会话启动：审查客户上下文，响应优先级）\n- userMd：1句话（该智能体服务的客户或支持经理画像）\n- identityMd：\"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat：\"- [ ] 事项1\\n- [ ] 事项2\\n- [ ] 事项3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}"
+      }
+    }
   },
   "skills": [
     {
