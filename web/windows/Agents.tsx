@@ -402,17 +402,28 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const buildAiGenFallbackPrompt = useCallback((fileName: string) => {
     const agentName = identity?.name || selectedId || '';
     const agentRole = identity?.role || '';
-    const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    const agentDesc = identity?.description || '';
+    const isZh = language === 'zh' || language === 'zh-TW';
+    const langHint = isZh ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
     const fileKey = fileName.replace('.md', '').toLowerCase();
-    const fileHints: Record<string, string> = {
-      soul: 'Write a SOUL.md persona file: 3 paragraphs covering identity/personality, core responsibilities, and working style.',
-      agents: 'Write an AGENTS.md session startup file: what context to load on start, what outputs to produce, collaboration style.',
-      user: 'Write a USER.md profile file: describe the human user this agent serves — their role, preferences, communication style.',
-      identity: 'Write an IDENTITY.md file in format: Name: X | Creature: X | Vibe: X | Emoji: X',
-      heartbeat: 'Write a HEARTBEAT.md checklist: 5 recurring tasks as markdown checkboxes (- [ ] item).',
+    const fileHints: Record<string, string> = isZh ? {
+      soul: `写一份 SOUL.md 人设文件（Markdown，3-5段，第一人称）。\n涵盖：\n- 核心身份认同与职业哲学（工作风格、质量标准、价值观）\n- 专业领域专长与该智能体负责的具体决策范围\n- 在团队中的协作方式：产出什么、依赖谁、解除哪些阻碍\n- "完成"的定义：质量标准与验收条件\n- 一句指导性原则或个人座右铭`,
+      agents: `写一份 AGENTS.md 会话启动指南（Markdown格式）。\n包含：\n- 会话开始时首先加载哪些上下文、文件或历史记录\n- 本次会话的主要目标与预期交付物\n- 与哪些团队成员协作、依赖关系与交接方式\n- 输出格式要求与质量标准\n- 需要遵守的约束条件或注意事项`,
+      user: `写一份 USER.md 用户画像文件（Markdown格式）。\n包含：\n- 该智能体服务的用户/负责人的角色背景与决策上下文\n- 他们如何使用该智能体的产出（战略决策、执行落地、审查把关等）\n- 沟通偏好（异步文档、摘要汇报、详细数据等）\n- 对该智能体最看重的能力与期望\n- 对他们来说"高质量交付"意味着什么`,
+      identity: `写一行 IDENTITY.md，严格格式：Name: X | Creature: X | Vibe: X | Emoji: X\n选择一种能体现该智能体个性的动物，2-4词的氛围描述，以及一个合适的emoji。`,
+      heartbeat: `写一份 HEARTBEAT.md 任务清单（Markdown复选框格式）。\n要求：\n- 5-7个周期性日常/会话任务\n- 每项任务具体、可执行，格式：- [ ] 任务描述\n- 任务应真实反映该智能体的职责范围\n- 不要标题，不要其他文字，只输出复选框列表`,
+    } : {
+      soul: `Write a SOUL.md persona file in Markdown (3–5 paragraphs, first person).\nCover:\n- Core identity and professional philosophy (working style, quality bar, values)\n- Domain expertise and the specific decisions this agent owns\n- How they collaborate in the team: what they produce, who they depend on, what they unblock\n- Definition of done: quality standards and acceptance criteria\n- A guiding engineering/professional principle or personal motto`,
+      agents: `Write an AGENTS.md session-startup guide in Markdown.\nInclude:\n- What context, files, or prior history to load first at session start\n- Primary goal and expected deliverables for this session\n- Collaboration touchpoints: which teammates, handoff format, dependencies\n- Output format requirements and quality standards\n- Constraints or important notes to keep in mind`,
+      user: `Write a USER.md profile file in Markdown.\nInclude:\n- Role and background of the human/stakeholder this agent serves\n- How they consume this agent's outputs (strategic decisions, execution, review)\n- Communication preferences (async docs, summary reports, raw data, etc.)\n- What they value most from this agent and their expectations\n- What "high quality delivery" means to them`,
+      identity: `Write a single-line IDENTITY.md in this exact format: Name: X | Creature: X | Vibe: X | Emoji: X\nPick a creature that fits the agent's personality, a 2–4 word vibe, and a fitting emoji.`,
+      heartbeat: `Write a HEARTBEAT.md task checklist in Markdown.\nRequirements:\n- 5–7 recurring daily/session tasks\n- Each task is specific and actionable, format: - [ ] task description\n- Tasks must reflect this agent's actual responsibilities\n- No headings, no extra text — only the checkbox list`,
     };
-    const hint = fileHints[fileKey] || `Write content for ${fileName}.`;
-    return `Generate ${fileName} content for agent "${agentName}".\nRole: ${agentRole}\nLanguage: ${langHint}\n\n${hint}`;
+    const hint = fileHints[fileKey] || (isZh ? `为 ${fileName} 生成高质量的 Markdown 内容。` : `Generate high-quality Markdown content for ${fileName}.`);
+    const header = isZh
+      ? `为智能体 "${agentName}" 生成 ${fileName} 文件内容。\n角色：${agentRole}${agentDesc ? `\n描述：${agentDesc}` : ''}\n语言：中文\n\n`
+      : `Generate ${fileName} content for agent "${agentName}".\nRole: ${agentRole}${agentDesc ? `\nDescription: ${agentDesc}` : ''}\nLanguage: ${langHint}\n\n`;
+    return header + hint;
   }, [identity, selectedId, language]);
 
   // Open AI generate panel — loads template list, starts with generic prompt (no auto-select)
