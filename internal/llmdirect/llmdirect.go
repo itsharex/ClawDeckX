@@ -24,6 +24,7 @@ type ProviderConfig struct {
 	APIKey     string
 	API        string // "openai-completions" etc.
 	ModelID    string // without provider prefix
+	MaxTokens  int    // from model config; 0 = use caller default
 }
 
 // openclawJSON is a minimal parse of ~/.openclaw/openclaw.json.
@@ -34,7 +35,8 @@ type openclawJSON struct {
 			APIKey  string `json:"apiKey"`
 			API     string `json:"api"`
 			Models  []struct {
-				ID string `json:"id"`
+				ID        string `json:"id"`
+				MaxTokens int    `json:"maxTokens"`
 			} `json:"models"`
 		} `json:"providers"`
 	} `json:"models"`
@@ -85,13 +87,20 @@ func ResolveProvider(configDir, modelRef string) (*ProviderConfig, error) {
 		if p.BaseURL == "" || p.APIKey == "" {
 			return nil, fmt.Errorf("llmdirect: provider %q missing baseUrl or apiKey", providerID)
 		}
-		return &ProviderConfig{
+		pc := &ProviderConfig{
 			ProviderID: providerID,
 			BaseURL:    strings.TrimRight(p.BaseURL, "/"),
 			APIKey:     p.APIKey,
 			API:        p.API,
 			ModelID:    modelID,
-		}, nil
+		}
+		for _, m := range p.Models {
+			if m.ID == modelID {
+				pc.MaxTokens = m.MaxTokens
+				break
+			}
+		}
+		return pc, nil
 	}
 
 	// No provider prefix — search all providers for this modelID
@@ -104,6 +113,7 @@ func ResolveProvider(configDir, modelRef string) (*ProviderConfig, error) {
 					APIKey:     p.APIKey,
 					API:        p.API,
 					ModelID:    modelID,
+					MaxTokens:  m.MaxTokens,
 				}, nil
 			}
 		}
@@ -120,9 +130,9 @@ type Message struct {
 
 // StreamChunk is a delta token received from the SSE stream.
 type StreamChunk struct {
-	Token  string
-	Done   bool
-	Error  error
+	Token string
+	Done  bool
+	Error error
 }
 
 // StreamCompletion sends a streaming chat completion request and yields chunks
@@ -140,6 +150,10 @@ func StreamCompletion(ctx context.Context, cfg *ProviderConfig, messages []Messa
 }
 
 func doStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxTokens int, ch chan<- StreamChunk) error {
+	// Use model's configured maxTokens when caller passes 0 or a smaller value.
+	if cfg.MaxTokens > 0 && (maxTokens <= 0 || maxTokens < cfg.MaxTokens) {
+		maxTokens = cfg.MaxTokens
+	}
 	if maxTokens <= 0 {
 		maxTokens = 8192
 	}
@@ -177,7 +191,7 @@ func doStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxT
 
 	// Parse SSE stream: "data: {...}\n\n"
 	scanner := bufio.NewScanner(resp.Body)
-	scanner.Buffer(make([]byte, 1024*64), 1024*64)
+	scanner.Buffer(make([]byte, 1024*512), 1024*512)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {
@@ -238,4 +252,62 @@ func Complete(ctx context.Context, cfg *ProviderConfig, messages []Message, maxT
 		sb.WriteString(chunk.Token)
 	}
 	return sb.String(), nil
+}
+
+// CompleteNonStream sends a single non-streaming request (stream:false) and returns the full text.
+// Faster for short outputs; avoids SSE framing overhead.
+func CompleteNonStream(ctx context.Context, cfg *ProviderConfig, messages []Message, maxTokens int) (string, error) {
+	if maxTokens <= 0 {
+		if cfg.MaxTokens > 0 {
+			maxTokens = cfg.MaxTokens
+		} else {
+			maxTokens = 4096
+		}
+	}
+
+	body := map[string]interface{}{
+		"model":      cfg.ModelID,
+		"messages":   messages,
+		"stream":     false,
+		"max_tokens": maxTokens,
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: marshal request: %w", err)
+	}
+
+	url := cfg.BaseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("llmdirect: http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		limitedBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("llmdirect: LLM returned HTTP %d: %s", resp.StatusCode, string(limitedBody))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("llmdirect: decode response: %w", err)
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("llmdirect: no choices in response")
+	}
+	return result.Choices[0].Message.Content, nil
 }

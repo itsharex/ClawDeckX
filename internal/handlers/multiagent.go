@@ -603,76 +603,45 @@ func (h *MultiAgentHandler) runGenerateTask(task *genTask, req GenerateRequest) 
 		langHint = "Korean"
 	}
 
-	prompt := fmt.Sprintf(`You are an AI system architect. Analyze the following scenario and generate a multi-agent team configuration in strict JSON format.
+	// Keep prompt compact to stay within max_tokens limits.
+	// soul/agentsMd/userMd are capped at 3-4 sentences; identityMd is one line.
+	prompt := fmt.Sprintf(`You are an AI system architect. Generate a multi-agent team for the scenario below. Output ONLY valid JSON — no markdown fences, no text outside the JSON.
 
-Scenario Name: %s
-Scenario Description: %s
-Team Size: %s agents
-Workflow Type: %s
-Output Language for agent names/roles/descriptions: %s
+Scenario: %s
+Description: %s
+Team size: %s agents
+Workflow: %s
+Language for names/roles/descriptions: %s
 
-Requirements:
-1. Generate %s specialized AI agents appropriate for this scenario
-2. Each agent should have a distinct role with clear responsibilities
-3. Design a workflow that shows how agents collaborate
-4. Generate detailed SOUL.md content for each agent (their persona, responsibilities, working style)
-5. Generate AGENTS.md content for each agent (workspace startup instructions: which files to read, memory rules, red lines, group chat rules, heartbeat behavior — tailored to this agent's role)
-6. Generate USER.md content for each agent (profile of the human/team member this agent primarily serves — name placeholder, context about what this role needs from the user, preferences)
-7. Generate IDENTITY.md content for each agent (Name, Creature, Vibe, Emoji fields — fit the agent's personality)
-8. Generate HEARTBEAT.md checklist items for each agent
-9. Use lowercase kebab-case for agent IDs (e.g., "project-manager", "backend-dev")
-10. Choose appropriate Material Symbols icon names for each agent
-11. Choose appropriate Tailwind color classes (e.g., "from-blue-500 to-cyan-500")
+Rules:
+- id: lowercase kebab-case
+- icon: Material Symbols name
+- color: Tailwind gradient e.g. "from-blue-500 to-cyan-500"
+- soul: 3-4 sentences — persona, key responsibilities, working style
+- agentsMd: 3-4 sentences — workspace startup instructions for this agent
+- userMd: 2-3 sentences — profile of the human this agent primarily serves
+- identityMd: one line "Name: X | Creature: X | Vibe: X | Emoji: X"
+- heartbeat: exactly 3 items "- [ ] ..."
+- reasoning: 2 sentences max
+- workflow: one step per agent
 
-Respond ONLY with a JSON object in this exact structure (no markdown, no explanation outside JSON):
-{
-  "reasoning": "Brief explanation of why you chose these agents and this workflow",
-  "template": {
-    "id": "kebab-case-id-based-on-scenario-name",
-    "name": "Human-readable team name",
-    "description": "Team purpose description",
-    "agents": [
-      {
-        "id": "agent-id",
-        "name": "Agent Display Name",
-        "role": "One-line role description",
-        "description": "Detailed description of agent responsibilities",
-        "icon": "material_symbol_name",
-        "color": "from-blue-500 to-cyan-500",
-        "soul": "Full SOUL.md content in markdown — persona, responsibilities, working style",
-        "agentsMd": "Full AGENTS.md content — workspace startup instructions tailored to this agent",
-        "userMd": "Full USER.md content — profile template for the human this agent serves",
-        "identityMd": "Full IDENTITY.md content — Name/Creature/Vibe/Emoji for this agent",
-        "heartbeat": "- [ ] Task 1\n- [ ] Task 2"
-      }
-    ],
-    "workflow": {
-      "type": "%s",
-      "description": "How agents collaborate",
-      "steps": [
-        {
-          "agent": "agent-id",
-          "action": "What this agent does in this step"
-        }
-      ]
-    }
-  }
-}`, req.ScenarioName, req.Description, agentCountHint, req.WorkflowType, langHint, agentCountHint, req.WorkflowType)
+Output %s agents. JSON schema:
+{"reasoning":"...","template":{"id":"...","name":"...","description":"...","agents":[{"id":"...","name":"...","role":"...","description":"...","icon":"...","color":"...","soul":"...","agentsMd":"...","userMd":"...","identityMd":"...","heartbeat":"- [ ] ...\n- [ ] ...\n- [ ] ..."}],"workflow":{"type":"%s","description":"...","steps":[{"agent":"...","action":"..."}]}}}`,
+		req.ScenarioName, req.Description, agentCountHint, req.WorkflowType, langHint, agentCountHint, req.WorkflowType)
 
 	broadcast(genTaskRunning, "sending", elapsed(), nil, "", "")
 
 	var rawContent string
 
 	if req.DirectLLM {
-		// ── Direct LLM path: read openclaw.json, call provider API directly ──────
-		// Bypasses agent session machinery, so no tool execution occurs.
+		// ── Direct LLM path (two-step) ─────────────────────────────────────────
+		// Step 1: core structure only (small output, always completes within token limit).
+		// Step 2: per-agent markdown enrichment via individual non-streaming calls.
 		providerCfg, err := llmdirect.ResolveProvider(h.configPath, req.ModelID)
 		if err != nil {
 			broadcast(genTaskFailed, "error", elapsed(), nil, "LLM_PROVIDER_FAILED", err.Error())
 			return
 		}
-
-		broadcast(genTaskRunning, "thinking", elapsed(), nil, "", "")
 
 		ctx, cancelCtx := context.WithTimeout(context.Background(), 600*time.Second)
 		defer cancelCtx()
@@ -684,12 +653,19 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 			}
 		}()
 
-		messages := []llmdirect.Message{{Role: "user", Content: prompt}}
-		var tokenBuf strings.Builder
+		// ── Step 1: core structure ──────────────────────────────────────────────
+		broadcast(genTaskRunning, "thinking", elapsed(), nil, "", "")
+
+		step1Prompt := fmt.Sprintf(
+			"Output ONLY valid JSON, no markdown.\n\nScenario: %s\nDescription: %s\nAgents: %s\nWorkflow: %s\nLanguage: %s\n\nFor each agent: id (kebab-case), name, role (≤8 words), description (≤20 words), icon (Material Symbol), color (Tailwind gradient e.g. from-blue-500 to-cyan-500). reasoning: ≤15 words. workflow: one step per agent.\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"%s\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}",
+			req.ScenarioName, req.Description, agentCountHint, req.WorkflowType, langHint, req.WorkflowType,
+		)
+
+		var step1Buf strings.Builder
 		tokenCount := 0
 		lastProgress := time.Now()
 
-		for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, messages, 8192) {
+		for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: step1Prompt}}, 2048) {
 			if chunk.Error != nil {
 				errMsg := chunk.Error.Error()
 				errCode := "LLM_STREAM_FAILED"
@@ -703,9 +679,8 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 			if chunk.Done {
 				break
 			}
-			tokenBuf.WriteString(chunk.Token)
+			step1Buf.WriteString(chunk.Token)
 			tokenCount++
-			// Push streaming token via WS every ~50 tokens or 2s.
 			if tokenCount%50 == 0 || time.Since(lastProgress) > 2*time.Second {
 				lastProgress = time.Now()
 				if h.wsHub != nil {
@@ -719,7 +694,154 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 				}
 			}
 		}
-		rawContent = tokenBuf.String()
+
+		step1Raw := strings.TrimSpace(step1Buf.String())
+		// Strip markdown fences if model wraps in ```json ... ```
+		if strings.HasPrefix(step1Raw, "```") {
+			if nl := strings.Index(step1Raw, "\n"); nl > 0 {
+				step1Raw = step1Raw[nl+1:]
+			}
+			if end := strings.LastIndex(step1Raw, "```"); end > 0 {
+				step1Raw = step1Raw[:end]
+			}
+			step1Raw = strings.TrimSpace(step1Raw)
+		}
+
+		// Parse Step 1 result into the shared GenerateResult structure
+		var step1Result struct {
+			Reasoning string `json:"reasoning"`
+			Template  struct {
+				ID          string `json:"id"`
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				Agents      []struct {
+					ID          string `json:"id"`
+					Name        string `json:"name"`
+					Role        string `json:"role"`
+					Description string `json:"description"`
+					Icon        string `json:"icon"`
+					Color       string `json:"color"`
+				} `json:"agents"`
+				Workflow struct {
+					Type        string `json:"type"`
+					Description string `json:"description"`
+					Steps       []struct {
+						Agent  string `json:"agent"`
+						Action string `json:"action"`
+					} `json:"steps"`
+				} `json:"workflow"`
+			} `json:"template"`
+		}
+		if err := json.Unmarshal([]byte(step1Raw), &step1Result); err != nil {
+			broadcast(genTaskFailed, "error", elapsed(), nil, "LLM_PARSE_FAILED",
+				fmt.Sprintf("step1 JSON parse failed: %v", err))
+			return
+		}
+
+		// ── Step 2: per-agent markdown enrichment (non-streaming) ──────────────
+		broadcast(genTaskRunning, "parsing", elapsed(), nil, "", "")
+
+		type agentMarkdown struct {
+			Soul       string `json:"soul"`
+			AgentsMd   string `json:"agentsMd"`
+			UserMd     string `json:"userMd"`
+			IdentityMd string `json:"identityMd"`
+			Heartbeat  string `json:"heartbeat"`
+		}
+		agentExtras := make(map[string]agentMarkdown, len(step1Result.Template.Agents))
+
+		for i, ag := range step1Result.Template.Agents {
+			select {
+			case <-ctx.Done():
+				broadcast(genTaskFailed, "error", elapsed(), nil, "CANCELED", "generation canceled")
+				return
+			default:
+			}
+
+			enrichPrompt := fmt.Sprintf(
+				"Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: %s\nRole: %s\nDescription: %s\nScenario: %s\nLanguage: %s\n\nFields:\n- soul: 3 sentences (persona, responsibilities, working style)\n- agentsMd: 2 sentences (workspace startup instructions)\n- userMd: 1 sentence (profile of the human this agent serves)\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: \"- [ ] item1\\n- [ ] item2\\n- [ ] item3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+				ag.Name, ag.Role, ag.Description, req.ScenarioName, langHint,
+			)
+
+			enrichText, err := llmdirect.CompleteNonStream(ctx, providerCfg,
+				[]llmdirect.Message{{Role: "user", Content: enrichPrompt}}, 1024)
+			if err != nil {
+				// Non-fatal: use empty values if enrichment fails
+				logger.Log.Warn().Str("agentId", ag.ID).Err(err).Msg("llmdirect enrichment failed")
+				agentExtras[ag.ID] = agentMarkdown{}
+				continue
+			}
+
+			enrichText = strings.TrimSpace(enrichText)
+			if strings.HasPrefix(enrichText, "```") {
+				if nl := strings.Index(enrichText, "\n"); nl > 0 {
+					enrichText = enrichText[nl+1:]
+				}
+				if end := strings.LastIndex(enrichText, "```"); end > 0 {
+					enrichText = enrichText[:end]
+				}
+				enrichText = strings.TrimSpace(enrichText)
+			}
+
+			var extra agentMarkdown
+			if err := json.Unmarshal([]byte(enrichText), &extra); err != nil {
+				logger.Log.Warn().Str("agentId", ag.ID).Err(err).Msg("llmdirect enrichment parse failed")
+			} else {
+				agentExtras[ag.ID] = extra
+			}
+
+			// Push progress after each agent enrichment
+			if h.wsHub != nil {
+				h.wsHub.Broadcast("gw_event", "gen_task", map[string]interface{}{
+					"taskId":   task.ID,
+					"status":   string(genTaskRunning),
+					"phase":    "parsing",
+					"elapsed":  elapsed(),
+					"progress": fmt.Sprintf("%d/%d", i+1, len(step1Result.Template.Agents)),
+				})
+			}
+		}
+
+		// ── Merge Step 1 + Step 2 into final JSON ──────────────────────────────
+		type mergedAgent struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Role        string `json:"role"`
+			Description string `json:"description"`
+			Icon        string `json:"icon"`
+			Color       string `json:"color"`
+			Soul        string `json:"soul"`
+			AgentsMd    string `json:"agentsMd"`
+			UserMd      string `json:"userMd"`
+			IdentityMd  string `json:"identityMd"`
+			Heartbeat   string `json:"heartbeat"`
+		}
+		mergedAgents := make([]mergedAgent, 0, len(step1Result.Template.Agents))
+		for _, ag := range step1Result.Template.Agents {
+			ex := agentExtras[ag.ID]
+			mergedAgents = append(mergedAgents, mergedAgent{
+				ID: ag.ID, Name: ag.Name, Role: ag.Role,
+				Description: ag.Description, Icon: ag.Icon, Color: ag.Color,
+				Soul: ex.Soul, AgentsMd: ex.AgentsMd, UserMd: ex.UserMd,
+				IdentityMd: ex.IdentityMd, Heartbeat: ex.Heartbeat,
+			})
+		}
+		merged := map[string]interface{}{
+			"reasoning": step1Result.Reasoning,
+			"template": map[string]interface{}{
+				"id":          step1Result.Template.ID,
+				"name":        step1Result.Template.Name,
+				"description": step1Result.Template.Description,
+				"agents":      mergedAgents,
+				"workflow":    step1Result.Template.Workflow,
+			},
+		}
+		mergedBytes, err := json.Marshal(merged)
+		if err != nil {
+			broadcast(genTaskFailed, "error", elapsed(), nil, "MERGE_FAILED", err.Error())
+			return
+		}
+		rawContent = string(mergedBytes)
 
 	} else {
 		// ── Agent session path (default): route through OpenClaw gateway ─────────
