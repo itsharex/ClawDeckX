@@ -427,8 +427,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
       setAiGenTemplates(templates.filter(t =>
-        (t.content.prompts?.files || t.content.prompts?.agentFile) &&
-        t.metadata?.scope !== 'multi-agent'
+        t.content.prompts?.files || t.content.prompts?.agentFile
       ));
     } catch { /* templates optional */ }
   }, [fileActive, selectedId, language, buildAiGenFallbackPrompt]);
@@ -1638,7 +1637,12 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                   className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60"
                                   options={[
                                     { value: '', label: a.aiGenNoTemplate || '— Generic prompt —' },
-                                    ...aiGenTemplates.map(tpl => ({ value: tpl.id, label: tpl.metadata?.name || tpl.id })),
+                                    ...aiGenTemplates.map(tpl => ({
+                                      value: tpl.id,
+                                      label: tpl.metadata?.scope === 'multi-agent'
+                                        ? `[${a.aiGenScopeMulti || '多'}] ${tpl.metadata?.name || tpl.id}`
+                                        : tpl.metadata?.name || tpl.id,
+                                    })),
                                   ]}
                                 />
                               </div>

@@ -99,6 +99,7 @@
     "aiGenRunning": "Генерация…",
     "aiGenTemplate": "Шаблон",
     "aiGenNoTemplate": "— Общий промпт —",
+    "aiGenScopeMulti": "·Мульти",
     "confirmSave": "Подтвердить сохранение",
     "confirmSaveMsg": "Сохранить изменения в {file}? Текущее содержимое файла агента будет перезаписано.",
     "fileLoadFailed": "Не удалось загрузить файл",

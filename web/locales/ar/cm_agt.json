@@ -99,6 +99,7 @@
     "aiGenRunning": "جاري التوليد…",
     "aiGenTemplate": "قالب",
     "aiGenNoTemplate": "— مطالبة عامة —",
+    "aiGenScopeMulti": "·متعدد",
     "confirmSave": "تأكيد الحفظ",
     "confirmSaveMsg": "حفظ التغييرات على {file}؟ سيتم استبدال محتوى الملف الحالي.",
     "fileLoadFailed": "فشل تحميل الملف",

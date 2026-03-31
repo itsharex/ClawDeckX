@@ -99,6 +99,7 @@
     "aiGenRunning": "Generando…",
     "aiGenTemplate": "Plantilla",
     "aiGenNoTemplate": "— Prompt genérico —",
+    "aiGenScopeMulti": "·Multi",
     "confirmSave": "Confirmar guardado",
     "confirmSaveMsg": "¿Guardar cambios en {file}? Esto sobrescribirá el contenido actual del archivo del agente.",
     "fileLoadFailed": "Error al cargar archivo",
