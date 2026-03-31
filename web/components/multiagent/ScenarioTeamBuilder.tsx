@@ -1,5 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
-const GenerationWizard = lazy(() => import('./GenerationWizard'));
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Language } from '../../types';
 import { getTranslation } from '../../locales';
 import {
@@ -8,6 +7,8 @@ import {
   MultiAgentDeployRequest,
   gwApi,
   GenTask,
+  WizardStep1Request,
+  WizardStep2Request,
 } from '../../services/api';
 import { useToast } from '../Toast';
 import { resolveTemplateColor } from '../../utils/templateColors';
@@ -383,8 +384,20 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
   }, [scenarioName, description, buildPrompt]);
 
   const handleConfirmWizard = useCallback(() => {
-    setStep('wizard');
     setError(null);
+    setStep('wizard');
+    // Defer so wizard state is mounted; read from ref to avoid closure stale value
+    setTimeout(() => {
+      if (wzStep1ResultRef.current) {
+        setWzPhase('step2');
+      } else {
+        setWzPhase('step1');
+        setWzStep1Stream('');
+        setWzStep1Error(null);
+        wzStep1BufRef.current = '';
+        wzStartStep1Ref.current?.();
+      }
+    }, 0);
   }, []);
 
   const handleConfirmGenerate = useCallback(async () => {
@@ -508,6 +521,203 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
     return colors[type] || 'bg-slate-500/10 text-slate-500 border-slate-500/20';
   };
 
+  // ── Inline wizard state ───────────────────────────────────────────────────
+  type WzPhase = 'step1' | 'step2';
+  type WzAgentStatus = 'pending' | 'running' | 'done' | 'skipped' | 'error';
+  interface WzAgentState {
+    id: string; name: string; role: string; description: string; icon: string; color: string;
+    status: WzAgentStatus;
+    streamBuf: string;
+    soul: string; agentsMd: string; userMd: string; identityMd: string; heartbeat: string;
+    error?: string;
+    customPrompt?: string;
+    expanded: boolean;
+    showPrompt: boolean;
+  }
+
+  const [wzPhase, setWzPhase] = useState<WzPhase>('step1');
+  // Step1
+  const [wzStep1Stream, setWzStep1Stream] = useState('');
+  const [wzStep1Running, setWzStep1Running] = useState(false);
+  const [wzStep1Error, setWzStep1Error] = useState<string | null>(null);
+  const [wzStep1Result, setWzStep1Result] = useState<any>(null); // cached parsed JSON
+  const wzStep1ResultRef = useRef<any>(null); // mirror for reading in callbacks before state settles
+  const wzStep1AbortRef = useRef<AbortController | null>(null);
+  const wzStep1BufRef = useRef('');
+  const wzStep1RafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Step2
+  const [wzAgents, setWzAgents] = useState<WzAgentState[]>([]);
+  const [wzStep2Running, setWzStep2Running] = useState(false);
+  const wzStep2AbortRef = useRef<AbortController | null>(null);
+  const wzStep2ActiveIdxRef = useRef(0);
+  // Stable ref to the start-step1 function so handleConfirmWizard can auto-invoke it
+  const wzStartStep1Ref = useRef<(() => void) | null>(null);
+
+  const wzLangHint = language === 'zh' || language === 'zh-TW' ? 'Chinese'
+    : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+
+  // Step1: start/stop
+  const wzHandleStep1Start = useCallback(() => {
+    wzStep1AbortRef.current?.abort();
+    wzStep1BufRef.current = '';
+    if (wzStep1RafRef.current !== null) { clearTimeout(wzStep1RafRef.current); wzStep1RafRef.current = null; }
+    setWzStep1Stream('');
+    setWzStep1Error(null);
+    setWzStep1Running(true);
+    setWzStep1Result(null);
+
+    const req: WizardStep1Request = {
+      scenarioName: scenarioName.trim(),
+      description: description.trim(),
+      teamSize,
+      workflowType,
+      language,
+      modelId: selectedModel || undefined,
+      customPrompt: editablePrompt || undefined,
+    };
+
+    wzStep1AbortRef.current = multiAgentApi.wizardStep1(
+      req,
+      (token) => {
+        wzStep1BufRef.current += token;
+        if (wzStep1RafRef.current === null) {
+          wzStep1RafRef.current = setTimeout(() => {
+            setWzStep1Stream(wzStep1BufRef.current);
+            wzStep1RafRef.current = null;
+          }, 30);
+        }
+      },
+      (doneData) => {
+        setWzStep1Running(false);
+        wzStep1ResultRef.current = doneData;
+        setWzStep1Result(doneData);
+        const agentList: any[] = doneData.parsed?.template?.agents ?? [];
+        setWzAgents(agentList.map((a: any) => {
+          const core = { id: a.id ?? '', name: a.name ?? '', role: a.role ?? '', description: a.description ?? '', icon: a.icon ?? 'person', color: a.color ?? 'from-blue-500 to-cyan-500' };
+          return { ...core, status: 'pending' as WzAgentStatus, streamBuf: '', soul: '', agentsMd: '', userMd: '', identityMd: '', heartbeat: '', expanded: false, showPrompt: false,
+            customPrompt: `Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: ${core.name}\nRole: ${core.role}\nDescription: ${core.description}\nScenario: ${scenarioName}\nLanguage: ${wzLangHint}\n\nFields:\n- soul: 3 sentences\n- agentsMd: 2 sentences\n- userMd: 1 sentence\n- identityMd: "Name: X | Creature: X | Vibe: X | Emoji: X"\n- heartbeat: "- [ ] item1\\n- [ ] item2\\n- [ ] item3"\n\n{"soul":"","agentsMd":"","userMd":"","identityMd":"","heartbeat":""}`,
+          };
+        }));
+        setWzPhase('step2');
+      },
+      (code, msg) => {
+        setWzStep1Running(false);
+        setWzStep1Error(`${code}: ${msg}`);
+      },
+    );
+  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, editablePrompt, wzLangHint]);
+
+  // Register auto-start ref so handleConfirmWizard can call it after state flush
+  useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
+
+  const wzHandleStep1Stop = useCallback(() => {
+    wzStep1AbortRef.current?.abort();
+    setWzStep1Running(false);
+  }, []);
+
+  // Step2: run a single agent by index
+  const wzRunAgent = useCallback((idx: number, agents: WzAgentState[]) => {
+    const agent = agents[idx];
+    if (!agent) return;
+    wzStep2AbortRef.current?.abort();
+    wzStep2ActiveIdxRef.current = idx;
+    setWzStep2Running(true);
+    setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'running', streamBuf: '', error: undefined } : a));
+
+    const req: WizardStep2Request = {
+      agentId: agent.id, agentName: agent.name, agentRole: agent.role, agentDesc: agent.description,
+      scenarioName: scenarioName.trim(), language,
+      modelId: selectedModel || undefined,
+      customPrompt: agent.customPrompt,
+    };
+
+    wzStep2AbortRef.current = multiAgentApi.wizardStep2(
+      req,
+      (_token, _agentId) => {
+        setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, streamBuf: a.streamBuf + _token } : a));
+      },
+      (doneData) => {
+        setWzAgents(prev => {
+          const next = prev.map((a, i) => i === idx ? {
+            ...a, status: 'done' as WzAgentStatus, streamBuf: '',
+            soul: doneData.soul ?? '', agentsMd: doneData.agentsMd ?? '',
+            userMd: doneData.userMd ?? '', identityMd: doneData.identityMd ?? '',
+            heartbeat: doneData.heartbeat ?? '',
+          } : a);
+          // Auto-advance to next pending
+          const nextIdx = next.findIndex((a, i) => i > idx && a.status === 'pending');
+          if (nextIdx >= 0) {
+            setTimeout(() => wzRunAgent(nextIdx, next), 200);
+          } else {
+            setWzStep2Running(false);
+          }
+          return next;
+        });
+      },
+      (code, msg) => {
+        setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'error', error: `${code}: ${msg}` } : a));
+        setWzStep2Running(false);
+      },
+    );
+  }, [scenarioName, language, selectedModel]);
+
+  const wzHandleGenerateAll = useCallback(() => {
+    const firstIdx = wzAgents.findIndex(a => a.status === 'pending');
+    if (firstIdx >= 0) wzRunAgent(firstIdx, wzAgents);
+  }, [wzAgents, wzRunAgent]);
+
+  const wzHandleStop = useCallback(() => {
+    wzStep2AbortRef.current?.abort();
+    setWzStep2Running(false);
+    setWzAgents(prev => prev.map(a => a.status === 'running' ? { ...a, status: 'error', error: 'Stopped by user' } : a));
+  }, []);
+
+  const wzHandleSkip = useCallback((idx: number) => {
+    if (wzStep2Running && wzStep2ActiveIdxRef.current === idx) {
+      wzStep2AbortRef.current?.abort();
+      setWzStep2Running(false);
+    }
+    setWzAgents(prev => {
+      const next = prev.map((a, i) => i === idx ? { ...a, status: 'skipped' as WzAgentStatus } : a);
+      if (wzStep2Running && wzStep2ActiveIdxRef.current === idx) {
+        const nextIdx = next.findIndex((a, i) => i > idx && a.status === 'pending');
+        if (nextIdx >= 0) setTimeout(() => wzRunAgent(nextIdx, next), 100);
+      }
+      return next;
+    });
+  }, [wzStep2Running, wzRunAgent]);
+
+  const wzHandleFinish = useCallback(() => {
+    if (!wzStep1Result) return;
+    const parsed = wzStep1Result.parsed ?? {};
+    const result: MultiAgentGenerateResult = {
+      reasoning: parsed.reasoning ?? '',
+      template: {
+        id: parsed.template?.id ?? '',
+        name: parsed.template?.name ?? scenarioName,
+        description: parsed.template?.description ?? description,
+        agents: wzAgents.map(a => ({
+          id: a.id, name: a.name, role: a.role, description: a.description,
+          icon: a.icon, color: a.color,
+          soul: a.soul, agentsMd: a.agentsMd, userMd: a.userMd,
+          identityMd: a.identityMd, heartbeat: a.heartbeat,
+        })),
+        workflow: parsed.template?.workflow ?? { type: workflowType, description: '', steps: [] },
+      },
+    };
+    setGenerateResult(result);
+    setEditedAgents({});
+    setStep('preview');
+  }, [wzStep1Result, wzAgents, scenarioName, description, workflowType]);
+
+  // Cleanup wizard SSE on unmount or leaving wizard step
+  useEffect(() => {
+    if (step !== 'wizard') {
+      wzStep1AbortRef.current?.abort();
+      wzStep2AbortRef.current?.abort();
+    }
+  }, [step]);
+
   const selectedModelLabel = modelOptions.find(o => o.value === selectedModel)?.label;
 
   return (
@@ -563,13 +773,14 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
               onClick={
                 step === 'edit-agent' ? () => setStep('preview')
                 : step === 'prompt-review' ? () => setStep('input')
+                : step === 'wizard' ? () => setStep('prompt-review')
                 : step === 'generating' && genTaskId ? () => { setMinimized(true); onClose(); }
                 : onClose
               }
               className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-colors"
             >
               <span className="material-symbols-outlined text-[18px] text-slate-400">
-                {step === 'edit-agent' || step === 'prompt-review' ? 'arrow_back'
+                {step === 'edit-agent' || step === 'prompt-review' || step === 'wizard' ? 'arrow_back'
                   : step === 'generating' && genTaskId ? 'minimize'
                   : 'close'}
               </span>
@@ -1125,29 +1336,322 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 
           {/* ══ Step: Wizard ══ */}
           {step === 'wizard' && (
-            <Suspense fallback={
-              <div className="flex items-center justify-center py-16">
-                <span className="material-symbols-outlined text-[28px] text-violet-400 animate-spin" style={{ animationDuration: '1.5s' }}>progress_activity</span>
+            <div className="flex flex-col">
+              {/* Phase tabs */}
+              <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
+                {(['step1', 'step2'] as const).map((p, i) => {
+                  const isActive = wzPhase === p;
+                  const isDone = p === 'step1' && wzPhase === 'step2';
+                  return (
+                    <React.Fragment key={p}>
+                      {i > 0 && <span className="w-5 h-px bg-slate-200 dark:bg-white/10 shrink-0" />}
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                        isDone ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
+                        : isActive ? 'bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-400'
+                        : 'bg-slate-100 dark:bg-white/5 border-transparent text-slate-400 dark:text-white/25'
+                      }`}>
+                        <span className="material-symbols-outlined text-[11px]">
+                          {isDone ? 'check_circle' : i === 0 ? 'account_tree' : 'auto_awesome'}
+                        </span>
+                        {p === 'step1' ? (stb.wzPhase1 || 'Team Structure') : (stb.wzPhase2 || 'Agent Files')}
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
               </div>
-            }>
-              <GenerationWizard
-                language={language}
-                params={{
-                  scenarioName: scenarioName.trim(),
-                  description: description.trim(),
-                  teamSize,
-                  workflowType,
-                  language,
-                  modelId: selectedModel || undefined,
-                }}
-                onDone={(result) => {
-                  setGenerateResult(result);
-                  setEditedAgents({});
-                  setStep('preview');
-                }}
-                onCancel={() => setStep('prompt-review')}
-              />
-            </Suspense>
+
+              {/* ── Phase 1: Stream core structure ── */}
+              {wzPhase === 'step1' && (
+                <div className="p-4 space-y-3">
+                  {/* Status + controls */}
+                  <div className="flex items-center gap-2">
+                    {wzStep1Running
+                      ? <span className="material-symbols-outlined text-[17px] text-violet-500 animate-spin" style={{ animationDuration: '1.5s' }}>progress_activity</span>
+                      : wzStep1Error ? <span className="material-symbols-outlined text-[17px] text-red-500">error</span>
+                      : wzStep1Result ? <span className="material-symbols-outlined text-[17px] text-green-500">check_circle</span>
+                      : <span className="material-symbols-outlined text-[17px] text-slate-300 dark:text-white/15">radio_button_unchecked</span>
+                    }
+                    <p className="text-[12px] font-bold text-slate-700 dark:text-white/80 flex-1 min-w-0">
+                      {wzStep1Running ? (stb.wzStep1Running || 'Generating team structure…')
+                        : wzStep1Error ? (stb.wzStep1Error || 'Generation failed')
+                        : wzStep1Result ? (stb.wzStep1Done || 'Structure ready — click Next to continue')
+                        : (stb.wzStep1Waiting || 'Ready to generate')}
+                    </p>
+                    {wzStep1Running ? (
+                      <button onClick={wzHandleStep1Stop} className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-colors flex items-center gap-1 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">stop</span>
+                        {stb.wzStop || 'Stop'}
+                      </button>
+                    ) : (
+                      <button onClick={wzHandleStep1Start} className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/20 transition-colors flex items-center gap-1 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">{wzStep1Result ? 'refresh' : 'play_arrow'}</span>
+                        {wzStep1Result ? (stb.wzRegenerate || 'Regenerate') : (stb.wzStart || 'Start')}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Error */}
+                  {wzStep1Error && (
+                    <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                      <p className="text-[11px] text-red-600 dark:text-red-400 font-mono break-all">{wzStep1Error}</p>
+                    </div>
+                  )}
+
+                  {/* Live stream */}
+                  {(wzStep1Stream || wzStep1Running) && (
+                    <div className="rounded-xl bg-slate-900/70 dark:bg-black/50 border border-violet-500/15 overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-violet-500/10">
+                        {wzStep1Running && (
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-75" />
+                            <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                          </span>
+                        )}
+                        <span className="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                        <span className="ms-auto text-[9px] text-slate-500 dark:text-white/20 font-mono">{wzStep1Stream.length} chars</span>
+                      </div>
+                      <div className="px-2.5 py-2 max-h-[180px] overflow-y-auto">
+                        <pre className="text-[10px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all">
+                          {wzStep1Stream || ' '}
+                          {wzStep1Running && <span className="inline-block w-1.5 h-3 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt editor — reuses editablePrompt from prompt-review */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">{stb.promptLabel || 'AI Prompt'}</span>
+                      <button onClick={() => setEditablePrompt(buildPrompt())} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
+                        <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                        {stb.promptReset || 'Reset'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={editablePrompt}
+                      onChange={e => setEditablePrompt(e.target.value)}
+                      rows={6}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  {/* Next button */}
+                  {wzStep1Result && (
+                    <button
+                      onClick={() => setWzPhase('step2')}
+                      className="w-full py-2 rounded-xl bg-violet-500 hover:bg-violet-600 text-white text-[12px] font-bold flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+                      {stb.wzNextToAgentFiles || 'Next: Generate Agent Files'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ── Phase 2: Per-agent file generation ── */}
+              {wzPhase === 'step2' && (
+                <div className="p-4 space-y-3">
+                  {/* Summary + progress */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-slate-700 dark:text-white/80">{stb.wzStep2Title || 'Generate agent workspace files'}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">
+                        {wzAgents.filter(a => a.status === 'done' || a.status === 'skipped').length}/{wzAgents.length} {stb.wzDone || 'done'}
+                        {wzAgents.some(a => a.status === 'error') && (
+                          <span className="ms-2 text-red-500">{wzAgents.filter(a => a.status === 'error').length} {stb.wzErrors || 'errors'}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="w-20 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shrink-0">
+                      <div className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                        style={{ width: `${wzAgents.length ? (wzAgents.filter(a => a.status === 'done' || a.status === 'skipped').length / wzAgents.length) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Action row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
+                      <button onClick={wzHandleGenerateAll} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">play_arrow</span>
+                        {stb.wzGenerateAll || 'Generate all'}
+                      </button>
+                    )}
+                    {wzStep2Running && (
+                      <button onClick={wzHandleStop} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">stop</span>
+                        {stb.wzStop || 'Stop'}
+                      </button>
+                    )}
+                    <button onClick={() => setWzPhase('step1')} className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center gap-1 transition-colors">
+                      <span className="material-symbols-outlined text-[12px]">arrow_back</span>
+                      {stb.back || 'Back'}
+                    </button>
+                    {wzAgents.every(a => a.status !== 'pending' && a.status !== 'running') && (
+                      <button onClick={wzHandleFinish} className="ms-auto px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-500 hover:bg-green-600 text-white flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">check</span>
+                        {stb.wzFinish || 'Continue to preview'}
+                      </button>
+                    )}
+                    {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
+                      <button onClick={wzHandleFinish} className="ms-auto px-2.5 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/50 border border-dashed border-slate-200 dark:border-white/10 transition-colors">
+                        {stb.wzSkipFiles || 'Skip files & continue'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Agent cards */}
+                  <div className="space-y-2">
+                    {wzAgents.map((agent, idx) => {
+                      const isActive = wzStep2Running && wzStep2ActiveIdxRef.current === idx && agent.status === 'running';
+                      const colorStyle = resolveTemplateColor(agent.color);
+                      const statusIcon = agent.status === 'done' ? 'check_circle'
+                        : agent.status === 'error' ? 'error'
+                        : agent.status === 'skipped' ? 'skip_next'
+                        : agent.status === 'running' ? 'progress_activity'
+                        : 'radio_button_unchecked';
+                      const statusColor = agent.status === 'done' ? 'text-green-500'
+                        : agent.status === 'error' ? 'text-red-500'
+                        : agent.status === 'skipped' ? 'text-slate-400 dark:text-white/25'
+                        : agent.status === 'running' ? 'text-violet-500'
+                        : 'text-slate-300 dark:text-white/15';
+
+                      return (
+                        <div key={agent.id} className={`rounded-xl border overflow-hidden transition-all ${isActive ? 'border-violet-500/40 shadow-sm shadow-violet-500/10' : 'border-slate-200 dark:border-white/10'}`}>
+                          {/* Header row */}
+                          <div className="flex items-center gap-2.5 p-2.5 bg-white dark:bg-white/[0.02]">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={colorStyle}>
+                              <span className="material-symbols-outlined text-white text-[15px]">{agent.icon}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-bold text-slate-700 dark:text-white/80 truncate">{agent.name}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-white/30 truncate">{agent.role}</p>
+                            </div>
+                            {/* Status icon */}
+                            <span className={`material-symbols-outlined text-[16px] shrink-0 ${statusColor} ${isActive ? 'animate-spin' : ''}`}
+                              style={isActive ? { animationDuration: '1.5s' } : {}}>{statusIcon}</span>
+                            {/* Controls */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {/* ▶ Start — only for pending agents, when not running globally */}
+                              {agent.status === 'pending' && !wzStep2Running && (
+                                <button
+                                  onClick={() => wzRunAgent(idx, wzAgents)}
+                                  title={stb.wzStartAgent || 'Start this agent'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-violet-500/10 text-violet-500 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[15px]">play_arrow</span>
+                                </button>
+                              )}
+                              {/* 🔄 Retry — for error/done agents */}
+                              {(agent.status === 'error' || agent.status === 'done') && !wzStep2Running && (
+                                <button
+                                  onClick={() => {
+                                    setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'pending', error: undefined } : a));
+                                    setTimeout(() => wzRunAgent(idx, wzAgents.map((a, i) => i === idx ? { ...a, status: 'pending' } : a)), 0);
+                                  }}
+                                  title={stb.wzRetry || 'Retry'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-violet-500/10 text-violet-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">refresh</span>
+                                </button>
+                              )}
+                              {/* ⏭ Skip */}
+                              {agent.status !== 'skipped' && agent.status !== 'done' && (
+                                <button
+                                  onClick={() => wzHandleSkip(idx)}
+                                  title={stb.wzSkip || 'Skip'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">skip_next</span>
+                                </button>
+                              )}
+                              {/* Re-include skipped */}
+                              {agent.status === 'skipped' && (
+                                <button
+                                  onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'pending' } : a))}
+                                  title={stb.wzInclude || 'Include'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                                </button>
+                              )}
+                              {/* Expand */}
+                              <button
+                                onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, expanded: !a.expanded } : a))}
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">{agent.expanded ? 'expand_less' : 'expand_more'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {agent.expanded && (
+                            <div className="border-t border-slate-100 dark:border-white/[0.05] bg-slate-50 dark:bg-white/[0.01] p-2.5 space-y-2">
+                              {/* Live stream */}
+                              {agent.status === 'running' && agent.streamBuf && (
+                                <div className="rounded-lg bg-slate-900/70 border border-violet-500/15 overflow-hidden">
+                                  <div className="flex items-center gap-1.5 px-2 py-1 border-b border-violet-500/10">
+                                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                      <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-75" />
+                                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                                    </span>
+                                    <span className="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                                  </div>
+                                  <pre className="px-2 py-1.5 text-[9px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all max-h-[100px] overflow-y-auto">
+                                    {agent.streamBuf}<span className="inline-block w-1.5 h-2.5 bg-violet-400 animate-pulse ml-0.5 align-middle" />
+                                  </pre>
+                                </div>
+                              )}
+                              {/* Done: file previews */}
+                              {agent.status === 'done' && (
+                                <div className="space-y-1.5">
+                                  {(['soul', 'agentsMd', 'userMd', 'identityMd', 'heartbeat'] as const).map(key => {
+                                    const labels: Record<string, string> = { soul: 'SOUL.md', agentsMd: 'AGENTS.md', userMd: 'USER.md', identityMd: 'IDENTITY.md', heartbeat: 'HEARTBEAT.md' };
+                                    const val = agent[key];
+                                    if (!val) return null;
+                                    return (
+                                      <div key={key} className="rounded-lg border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
+                                        <div className="flex items-center gap-1.5 px-2 py-1 border-b border-slate-100 dark:border-white/[0.04]">
+                                          <span className="material-symbols-outlined text-[11px] text-slate-400">description</span>
+                                          <span className="text-[9px] font-bold text-slate-500 dark:text-white/40 font-mono">{labels[key]}</span>
+                                        </div>
+                                        <p className="px-2 py-1.5 text-[10px] text-slate-500 dark:text-white/40 line-clamp-2 font-mono leading-relaxed">{val}</p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {/* Error */}
+                              {agent.status === 'error' && <p className="text-[10px] text-red-500 font-mono break-all">{agent.error}</p>}
+                              {/* Prompt editor */}
+                              <div>
+                                <button
+                                  onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, showPrompt: !a.showPrompt } : a))}
+                                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/50 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">edit</span>
+                                  {stb.wzEditPrompt || 'Edit prompt'}
+                                </button>
+                                {agent.showPrompt && (
+                                  <textarea
+                                    value={agent.customPrompt ?? ''}
+                                    onChange={e => { const v = e.target.value; setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, customPrompt: v } : a)); }}
+                                    className="mt-1.5 w-full h-28 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[9px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                                    spellCheck={false}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ══ Step: Preview ══ */}
@@ -1392,6 +1896,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
             onClick={
               step === 'edit-agent' ? () => setStep('preview')
               : step === 'prompt-review' ? () => setStep('input')
+              : step === 'wizard' ? () => setStep('prompt-review')
               : step === 'generating' && genTaskId
                 ? () => { setMinimized(true); onClose(); }
                 : onClose
@@ -1400,6 +1905,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
           >
             {step === 'edit-agent' ? (stb.backToPreview || 'Back')
               : step === 'prompt-review' ? (stb.back || 'Back')
+              : step === 'wizard' ? (stb.back || 'Back')
               : step === 'generating' && genTaskId ? (stb.minimizeBtn || 'Minimize')
               : (stb.cancel || 'Cancel')}
           </button>
