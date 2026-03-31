@@ -210,6 +210,10 @@ class TemplateManagerV2 {
   private knowledgeCache = new Map<string, KnowledgeItem[]>();
   private manifestCache: TemplateManifest | null = null;
 
+  clearMultiAgentCache(): void {
+    this.multiAgentCache.clear();
+  }
+
   /**
    * Pre-fetch manifest for GitHub sources (shared across category loads).
    * This ensures only 1 manifest request per sync cycle.
@@ -322,6 +326,7 @@ class TemplateManagerV2 {
 
         if (source.type === 'local') {
           templates = await this.loadLocalMultiAgent();
+          if (templates.length === 0) throw new Error('Local multi-agent templates returned empty');
         } else if (source.type === 'cdn') {
           const index = await cdnLoader.loadIndex(source, 'multi-agent');
           templates = await Promise.all(
@@ -343,7 +348,7 @@ class TemplateManagerV2 {
       }
     );
 
-    if (!result.data) {
+    if (!result.data || result.data.length === 0) {
       throw result.error || new Error('Failed to load multi-agent templates');
     }
 
@@ -486,25 +491,35 @@ class TemplateManagerV2 {
   }
 
   private async loadLocalMultiAgent(): Promise<MultiAgentTemplate[]> {
-    const loaders: Record<string, () => Promise<any>> = {
-      '_default': () => import('../../templates/official/multi-agent/_default.json'),
-      'content-factory': () => import('../../templates/official/multi-agent/content-factory.json'),
-      'research-team': () => import('../../templates/official/multi-agent/research-team.json'),
-      'devops-team': () => import('../../templates/official/multi-agent/devops-team.json'),
-      'customer-support': () => import('../../templates/official/multi-agent/customer-support.json'),
-      'data-pipeline': () => import('../../templates/official/multi-agent/data-pipeline.json'),
-    };
+    const loaders: Array<[string, () => Promise<any>]> = [
+      ['_default', () => import('../../templates/official/multi-agent/_default.json')],
+      ['content-factory', () => import('../../templates/official/multi-agent/content-factory.json')],
+      ['research-team', () => import('../../templates/official/multi-agent/research-team.json')],
+      ['devops-team', () => import('../../templates/official/multi-agent/devops-team.json')],
+      ['customer-support', () => import('../../templates/official/multi-agent/customer-support.json')],
+      ['data-pipeline', () => import('../../templates/official/multi-agent/data-pipeline.json')],
+    ];
 
     const results = await Promise.allSettled(
-      Object.entries(loaders).map(async ([_id, loader]) => {
-        const module = await loader();
-        return module.default || module;
+      loaders.map(async ([id, loader]) => {
+        try {
+          const module = await loader();
+          const tpl = module.default || module;
+          if (!tpl || !tpl.id) throw new Error(`Template ${id} missing id field`);
+          return tpl as MultiAgentTemplate;
+        } catch (err) {
+          console.warn(`[TemplateManager] Failed to load local multi-agent template '${id}':`, err);
+          throw err;
+        }
       })
     );
 
-    return results
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+    const loaded = results
+      .filter((r): r is PromiseFulfilledResult<MultiAgentTemplate> => r.status === 'fulfilled')
       .map(r => r.value);
+
+    console.log(`[TemplateManager] Loaded ${loaded.length}/${loaders.length} local multi-agent templates:`, loaded.map(t => t.id));
+    return loaded;
   }
 
   private async loadLocalAgents(): Promise<AgentTemplate[]> {

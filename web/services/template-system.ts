@@ -342,6 +342,10 @@ class TemplateSystem {
     return templateManagerV2.loadMultiAgentTemplates(language);
   }
 
+  clearMultiAgentCache(): void {
+    templateManagerV2.clearMultiAgentCache();
+  }
+
   // =========================================================================
   // Agent预设（直接访问）
   // =========================================================================

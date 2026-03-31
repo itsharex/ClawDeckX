@@ -382,6 +382,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const handlePreparePrompt = useCallback(async () => {
     if (!scenarioName.trim() || !description.trim()) return;
     setError(null);
+    // Bust stale empty cache so template re-load always retries
+    templateSystem.clearMultiAgentCache();
     // Navigate to wizard immediately so UI feels responsive
     setStep('wizard');
     setTimeout(() => {
