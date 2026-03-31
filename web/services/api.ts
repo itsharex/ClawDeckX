@@ -1351,6 +1351,9 @@ export interface MultiAgentDeployRequest {
       icon?: string;
       color?: string;
       soul?: string;
+      agentsMd?: string;
+      userMd?: string;
+      identityMd?: string;
       heartbeat?: string;
       tools?: string;
       skills?: string[];
@@ -1425,6 +1428,9 @@ export interface MultiAgentGenerateResult {
       icon?: string;
       color?: string;
       soul?: string;
+      agentsMd?: string;
+      userMd?: string;
+      identityMd?: string;
       heartbeat?: string;
     }>;
     workflow: {

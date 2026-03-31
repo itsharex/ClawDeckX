@@ -48,8 +48,11 @@ const MultiAgentDeployWizard: React.FC<MultiAgentDeployWizardProps> = ({
           description: agent.description,
           icon: agent.icon,
           color: agent.color,
-          soul: `# ${agent.name}\n\n**Role:** ${agent.role}\n\n${agent.description || ''}`,
-          heartbeat: template.content.workflow.steps
+          soul: agent.soul || `# ${agent.name}\n\n**Role:** ${agent.role}\n\n${agent.description || ''}`,
+          agentsMd: agent.agentsMd,
+          userMd: agent.userMd,
+          identityMd: agent.identityMd,
+          heartbeat: agent.heartbeat || template.content.workflow.steps
             .filter(s => s.agent === agent.id || s.agents?.includes(agent.id))
             .map((s, i) => `- [ ] Step ${i + 1}: ${s.action}`)
             .join('\n'),

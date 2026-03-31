@@ -67,6 +67,11 @@ export interface TemplateAgent {
   color?: string;
   soulSnippet?: string;
   description?: string;
+  soul?: string;
+  agentsMd?: string;
+  userMd?: string;
+  identityMd?: string;
+  heartbeat?: string;
 }
 
 export interface TemplateWorkflow {
