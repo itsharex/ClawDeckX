@@ -145,6 +145,31 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     templateSystem.getAllTemplates(language).then(setFileTemplates).catch(() => { /* templates optional */ });
   }, [language]);
 
+  // Re-apply selected template prompt when: file changes, panel opens, template selection changes, OR templates finish loading
+  useEffect(() => {
+    if (!aiGenOpen || !fileActive) return;
+    if (!aiGenSelectedTplId) {
+      setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
+    const tpl = aiGenTemplates.find(t => t.id === aiGenSelectedTplId);
+    if (!tpl?.content.prompts) {
+      // Templates not loaded yet — keep current prompt, will re-run when aiGenTemplates updates
+      return;
+    }
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
+    const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
+    const fileKeyMap: Record<string, string> = { agents: 'agents', soul: 'soul', user: 'user', identity: 'identity', heartbeat: 'heartbeat' };
+    const mappedKey = fileKeyMap[fileActive.replace('.md', '').toLowerCase()];
+    const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
+    const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
+    if (resolved) setAiGenPrompt(resolved);
+    else setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+  }, [fileActive, aiGenOpen, aiGenSelectedTplId, aiGenTemplates, identity, selectedId]); // identity/selectedId: re-apply when agent data loads
+
   // Subscribe to shared Manager WS for agent chat streaming events
   useEffect(() => {
     setWsConnecting(true);
@@ -383,9 +408,10 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
 
   /** Build a generic fallback prompt for the given file type */
   const buildAiGenFallbackPrompt = useCallback((fileName: string) => {
-    const agentName = (selectedId ? identity[selectedId]?.name : null) || selected?.name || selectedId || '';
-    const agentRole = selected?.role || '';
-    const agentDesc = selected?.description || '';
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
     const isZh = language === 'zh' || language === 'zh-TW';
     const langHint = isZh ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
     const fileKey = fileName.replace('.md', '').toLowerCase();
@@ -404,35 +430,10 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     };
     const hint = fileHints[fileKey] || (isZh ? `为 ${fileName} 生成高质量的 Markdown 内容。` : `Generate high-quality Markdown content for ${fileName}.`);
     const header = isZh
-      ? `为智能体 "${agentName}" 生成 ${fileName} 文件内容。\n角色：${agentRole}${agentDesc ? `\n描述：${agentDesc}` : ''}\n语言：中文\n\n`
-      : `Generate ${fileName} content for agent "${agentName}".\nRole: ${agentRole}${agentDesc ? `\nDescription: ${agentDesc}` : ''}\nLanguage: ${langHint}\n\n`;
+      ? `为智能体 "${agentName}" 生成 ${fileName} 文件内容。${agentRole ? `\n角色：${agentRole}` : ''}${agentDesc ? `\n描述：${agentDesc}` : ''}\n语言：中文\n\n`
+      : `Generate ${fileName} content for agent "${agentName}".${agentRole ? `\nRole: ${agentRole}` : ''}${agentDesc ? `\nDescription: ${agentDesc}` : ''}\nLanguage: ${langHint}\n\n`;
     return header + hint;
-  }, [identity, selectedId, selected, language]);
-
-  // Re-apply selected template prompt when: file changes, panel opens, template selection changes, OR templates finish loading
-  // (must be declared after `selected` and `buildAiGenFallbackPrompt` to avoid hoisting errors)
-  useEffect(() => {
-    if (!aiGenOpen || !fileActive) return;
-    if (!aiGenSelectedTplId) {
-      setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
-      return;
-    }
-    const tpl = aiGenTemplates.find(t => t.id === aiGenSelectedTplId);
-    if (!tpl?.content.prompts) {
-      // Templates not loaded yet — keep current prompt, will re-run when aiGenTemplates updates
-      return;
-    }
-    const agentName = (selectedId ? identity[selectedId]?.name : null) || selected?.name || selectedId || '';
-    const agentRole = selected?.role || '';
-    const agentDesc = selected?.description || '';
-    const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
-    const fileKeyMap: Record<string, string> = { agents: 'agents', soul: 'soul', user: 'user', identity: 'identity', heartbeat: 'heartbeat' };
-    const mappedKey = fileKeyMap[fileActive.replace('.md', '').toLowerCase()];
-    const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
-    const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
-    if (resolved) setAiGenPrompt(resolved);
-    else setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
-  }, [fileActive, aiGenOpen, aiGenSelectedTplId, aiGenTemplates, selected, identity, selectedId, language, buildAiGenFallbackPrompt]); // aiGenTemplates in deps: re-apply when load completes
+  }, [identity, selectedId, language]);
 
   // Open AI generate panel — loads template list, starts with generic prompt (no auto-select)
   const openAiGen = useCallback(async () => {
@@ -470,9 +471,10 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
       return;
     }
-    const agentName = (selectedId ? identity[selectedId]?.name : null) || selected?.name || selectedId || '';
-    const agentRole = selected?.role || '';
-    const agentDesc = selected?.description || '';
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
     const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
     // Map filename → files key
     const fileKeyMap: Record<string, string> = { 'agents': 'agents', 'soul': 'soul', 'user': 'user', 'identity': 'identity', 'heartbeat': 'heartbeat' };
