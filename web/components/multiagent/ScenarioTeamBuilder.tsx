@@ -612,6 +612,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const wzStep1RafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Step2
   const [wzAgents, setWzAgents] = useState<WzAgentState[]>([]);
+  const wzAgentsRef = useRef<WzAgentState[]>([]); // mirrors wzAgents for use in async callbacks
   const [wzStep2Running, setWzStep2Running] = useState(false);
   const wzStep2AbortRef = useRef<AbortController | null>(null);
   const wzStep2ActiveIdxRef = useRef(0);
@@ -721,6 +722,9 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     setWzStep1Running(false);
   }, []);
 
+  // Stable ref so the done callback always calls the latest version (avoids stale closure in setTimeout)
+  const wzRunAgentRef = useRef<(idx: number, agents: WzAgentState[], singleOnly?: boolean) => void>(() => {});
+
   // Step2: run a single agent by index. Pass singleOnly=true to prevent auto-chaining to next pending agent.
   const wzRunAgent = useCallback((idx: number, agents: WzAgentState[], singleOnly = false) => {
     const agent = agents[idx];
@@ -743,22 +747,26 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, streamBuf: a.streamBuf + _token, tokenCount: (a.tokenCount ?? 0) + _token.length } : a));
       },
       (doneData) => {
-        setWzAgents(prev => {
-          const next = prev.map((a, i) => i === idx ? {
-            ...a, status: 'done' as WzAgentStatus, streamBuf: '',
-            soul: doneData.soul ?? '', agentsMd: doneData.agentsMd ?? '',
-            userMd: doneData.userMd ?? '', identityMd: doneData.identityMd ?? '',
-            heartbeat: doneData.heartbeat ?? '',
-          } : a);
-          // Auto-advance to next pending (only when running in batch mode)
-          const nextIdx = singleOnly ? -1 : next.findIndex((a, i) => i > idx && a.status === 'pending');
+        // Build the updated agents list
+        const updatedAgents = wzAgentsRef.current.map((a, i) => i === idx ? {
+          ...a, status: 'done' as WzAgentStatus, streamBuf: '',
+          soul: doneData.soul ?? '', agentsMd: doneData.agentsMd ?? '',
+          userMd: doneData.userMd ?? '', identityMd: doneData.identityMd ?? '',
+          heartbeat: doneData.heartbeat ?? '',
+        } : a);
+        wzAgentsRef.current = updatedAgents;
+        setWzAgents(updatedAgents);
+        // Auto-advance to next pending agent
+        if (!singleOnly) {
+          const nextIdx = updatedAgents.findIndex((a, i) => i > idx && a.status === 'pending');
           if (nextIdx >= 0) {
-            setTimeout(() => wzRunAgent(nextIdx, next), 200);
+            setTimeout(() => wzRunAgentRef.current(nextIdx, wzAgentsRef.current), 200);
           } else {
             setWzStep2Running(false);
           }
-          return next;
-        });
+        } else {
+          setWzStep2Running(false);
+        }
       },
       (code, msg) => {
         setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'error', error: `${code}: ${msg}` } : a));
@@ -766,6 +774,10 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       },
     );
   }, [scenarioName, language, selectedModel]);
+  wzRunAgentRef.current = wzRunAgent;
+  // Keep wzAgentsRef in sync so async callbacks always see the latest state
+  // (this runs synchronously on every render, before any effect fires)
+  wzAgentsRef.current = wzAgents;
 
   const wzHandleGenerateAll = useCallback(() => {
     const firstIdx = wzAgents.findIndex(a => a.status === 'pending');
