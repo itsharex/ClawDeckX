@@ -1,20 +1,18 @@
 ﻿## What's Changed
 
+### ✨ New Features / 新功能
+
+- add generation mode toggle (agent session vs direct LLM)
+- bypass agent session with direct LLM streaming via llmdirect
+- async AI team generation with background task + WS push
+- add AI team generation and scenario builder
+
 ### 🐛 Bug Fixes / 修复
 
-- preload device pairing counts
-- refresh history token on auth failure
-- make code block copy button reliably clickable
-- keep code block copy button visible during copied/failed feedback
-- add 3-attempt retry for ClawHub and SkillHub CLI install
-- add git push retry logic with 3 attempts and exit on failure
-
-### 📦 Build & Deploy / 构建部署
-
-- optimize arm64 smoke test for QEMU slowness
-- replace softprops/action-gh-release with gh CLI
+- two-step direct LLM generation to avoid max_tokens truncation
+- resolve connectLoop storm and invalid-handshake on restart
 
 ---
-**Full Changelog**: [v0.0.35...v0.0.36](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.35...v0.0.36)
+**Full Changelog**: [v0.0.36...v0.0.37](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.36...v0.0.37)
 
 
