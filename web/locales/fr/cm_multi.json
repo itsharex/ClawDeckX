@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "Par défaut",
+    "promptSourceEdited": "Modifié",
     "title": "Multi-Agent",
     "subtitle": "Déployez des workflows de collaboration multi-agents pour une automatisation complexe",
     "diffMedium": "Moyen",

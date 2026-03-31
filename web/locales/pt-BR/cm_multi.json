@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "Padrão",
+    "promptSourceEdited": "Editado",
     "title": "Multi-Agente",
     "subtitle": "Implantar fluxos de colaboração multi-agente para automação complexa",
     "diffMedium": "Médio",

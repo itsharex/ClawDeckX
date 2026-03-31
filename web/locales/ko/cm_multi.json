@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "기본값",
+    "promptSourceEdited": "편집됨",
     "title": "멀티 에이전트",
     "subtitle": "복잡한 자동화를 위한 멀티 에이전트 협업 워크플로 배포",
     "diffMedium": "보통",

@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "デフォルト",
+    "promptSourceEdited": "編集済み",
     "title": "マルチエージェント",
     "subtitle": "マルチエージェント協調ワークフローを展開し、複雑な自動化を実現",
     "diffMedium": "中級",

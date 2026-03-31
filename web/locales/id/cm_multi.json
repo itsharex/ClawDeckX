@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "Default",
+    "promptSourceEdited": "Diedit",
     "title": "Multi-Agen",
     "subtitle": "Deploy alur kerja kolaborasi multi-agen untuk otomasi kompleks",
     "diffMedium": "Sedang",

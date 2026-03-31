@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "預設",
+    "promptSourceEdited": "已編輯",
     "title": "多代理協作",
     "subtitle": "部署多代理協作工作流，實現複雜任務自動化",
     "diffMedium": "中等",

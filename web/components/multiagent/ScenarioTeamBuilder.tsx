@@ -359,7 +359,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           workflowType: tpl.workflowType,
           workflowDescription: getWorkflowDescription(tpl.workflowType, language),
         });
-        if (step1) setWzStep1Prompt(step1);
+        if (step1) { setWzStep1Prompt(step1); setWzPromptSource(matched.metadata?.name || tpl.multiAgentTemplateId || null); }
         // Store agentFile prompt template for later per-agent use
         const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
         wzAgentFilePromptRef.current = matched.content.prompts.agentFile?.[agentFileLang]
@@ -380,7 +380,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
             workflowType: tpl.workflowType,
             workflowDescription: getWorkflowDescription(tpl.workflowType, language),
           });
-          if (resolved) setWzStep1Prompt(resolved);
+          if (resolved) { setWzStep1Prompt(resolved); setWzPromptSource(null); }
         }
         // Load agentFile prompt template from default for step2
         const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
@@ -393,6 +393,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
   const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
   const [wzPromptUserEdited, setWzPromptUserEdited] = useState(false); // true = user manually edited, don't auto-regenerate
+  const [wzPromptSource, setWzPromptSource] = useState<string | null>(null); // null = default, string = template name
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
   const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
@@ -663,6 +664,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   useEffect(() => {
     if (wzPromptUserEdited) return;
     setWzStep1Prompt('');
+    setWzPromptSource(null);
   }, [teamSize, workflowType, scenarioName, description]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Retry prompt load when wizard step1 is active but prompt still empty (async race on first open)
@@ -1373,15 +1375,30 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   {/* Prompt editor — shares wzStep1Prompt with prompt-review step */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">{stb.promptLabel || 'AI Prompt'}</span>
-                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); }} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                        {stb.promptLabel || 'AI Prompt'}
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-md ${
+                          wzPromptUserEdited
+                            ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400'
+                            : wzPromptSource
+                              ? 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
+                              : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30'
+                        }`}>
+                          {wzPromptUserEdited
+                            ? (stb.promptSourceEdited || 'Edited')
+                            : wzPromptSource
+                              ? wzPromptSource
+                              : (stb.promptSourceDefault || 'Default')}
+                        </span>
+                      </span>
+                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
                         <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                         {stb.promptReset || 'Reset'}
                       </button>
                     </div>
                     <textarea
                       value={wzStep1Prompt}
-                      onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); }}
+                      onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); setWzPromptSource(stb.promptSourceEdited || 'Edited'); }}
                       rows={6}
                       placeholder="Leave empty to use the default compact prompt (recommended)"
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"

@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "افتراضي",
+    "promptSourceEdited": "تم التعديل",
     "title": "تعدد الوكلاء",
     "subtitle": "نشر مسارات عمل تعاونية متعددة الوكلاء للأتمتة المعقدة",
     "diffMedium": "متوسط",

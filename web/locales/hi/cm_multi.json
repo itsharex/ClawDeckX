@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "डिफ़ॉल्ट",
+    "promptSourceEdited": "संपादित",
     "title": "मल्टी-एजेंट",
     "subtitle": "जटिल स्वचालन के लिए मल्टी-एजेंट सहयोग वर्कफ़्लो तैनात करें",
     "diffMedium": "मध्यम",

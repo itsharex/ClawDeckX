@@ -1,5 +1,7 @@
 {
   "multiAgent": {
+    "promptSourceDefault": "По умолчанию",
+    "promptSourceEdited": "Изменено",
     "title": "Мультиагент",
     "subtitle": "Развёртывание многоагентных рабочих процессов для сложной автоматизации",
     "diffMedium": "Средний",
