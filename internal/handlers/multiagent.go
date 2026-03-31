@@ -2018,8 +2018,55 @@ func (h *MultiAgentHandler) GenerateWizardStep2(w http.ResponseWriter, r *http.R
 
 	prompt := req.CustomPrompt
 	if prompt == "" {
-		prompt = fmt.Sprintf(
-			"Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: %s\nRole: %s\nDescription: %s\nScenario: %s\nLanguage: %s\n\nFields:\n- soul: 3 sentences (persona, responsibilities, working style)\n- agentsMd: 2 sentences (workspace startup instructions)\n- userMd: 1 sentence (profile of the human this agent serves)\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: \"- [ ] item1\\n- [ ] item2\\n- [ ] item3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+		prompt = fmt.Sprintf(`Output ONLY valid JSON. No markdown fences, no explanation.
+
+You are writing OpenClaw agent workspace files for a multi-agent system.
+Agent name: %s
+Agent role: %s
+Agent description: %s
+Scenario / team name: %s
+Write all content in: %s
+
+FILE SPECIFICATIONS — follow these exactly:
+
+SOUL.md — Persona, tone, and boundaries. Loaded every session.
+  - Write in first person as the agent.
+  - Cover: who this agent is, what they care about, their working principles, their communication style.
+  - 3–5 short paragraphs. Use markdown headers (## Core Truths, ## Boundaries, ## Vibe).
+  - Be specific to this agent's role, NOT generic AI platitudes.
+
+AGENTS.md — Operating instructions and memory rules. Loaded every session.
+  - Starts with "## Session Startup" listing files to read on wake-up (SOUL.md, USER.md, memory/YYYY-MM-DD.md).
+  - Includes "## Red Lines" (things this agent must never do).
+  - Includes role-specific rules and priorities for this agent's domain.
+  - Use markdown headers and bullet lists.
+
+USER.md — Profile of the human this agent serves. Loaded every session.
+  - Use the standard template format:
+    - **Name:**
+    - **What to call them:**
+    - **Pronouns:** (optional)
+    - **Timezone:**
+    - **Notes:**
+  - Add a "## Context" section describing what this agent should learn about the user over time (relevant to the agent's role).
+  - Leave field values blank — the agent will fill them in from real interactions.
+
+IDENTITY.md — The agent's name, creature, vibe, and emoji. Created during bootstrap.
+  - Use the standard format exactly:
+    - **Name:** (a fitting name for this role)
+    - **Creature:** (AI? specialist? advisor? something fitting)
+    - **Vibe:** (how this agent comes across — sharp? warm? precise? creative?)
+    - **Emoji:** (one emoji that fits this agent's personality)
+  - Do NOT add extra fields.
+
+HEARTBEAT.md — Short periodic checklist for background proactive work. Keep minimal to avoid token burn.
+  - Format: markdown checklist items "- [ ] task"
+  - 2–4 items MAX. Each item must be actionable and specific to this agent's role.
+  - Example items: check for pending tasks, review recent outputs, flag blockers.
+  - If nothing makes sense for this role, output a single comment line: "# No periodic tasks for this agent"
+
+Return JSON with these exact keys. Values are full markdown file contents (escape newlines as \n):
+{"soul":"","agentsMd":"","userMd":"","identityMd":"","heartbeat":""}`,
 			req.AgentName, req.AgentRole, req.AgentDesc, req.ScenarioName, langHint,
 		)
 	}

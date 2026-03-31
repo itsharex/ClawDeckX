@@ -9,13 +9,23 @@
     "difficulty": "hard",
     "icon": "cloud",
     "color": "from-orange-500 to-red-500",
-    "tags": ["devops", "incident", "infrastructure", "automation"],
+    "tags": [
+      "devops",
+      "incident",
+      "infrastructure",
+      "automation"
+    ],
     "author": "ClawDeckX Team",
     "scope": "multi-agent"
   },
   "requirements": {
-    "skills": ["shell"],
-    "channels": ["telegram", "slack"]
+    "skills": [
+      "shell"
+    ],
+    "channels": [
+      "telegram",
+      "slack"
+    ]
   },
   "content": {
     "agents": [
@@ -56,10 +66,27 @@
       "type": "event-driven",
       "description": "Incident response workflow",
       "steps": [
-        { "agent": "monitor", "action": "Detect and alert on issues", "trigger": "anomaly" },
-        { "agent": "responder", "action": "Triage and initial response" },
-        { "agents": ["engineer", "communicator"], "action": "Fix and communicate", "parallel": true },
-        { "agent": "engineer", "action": "Post-incident review" }
+        {
+          "agent": "monitor",
+          "action": "Detect and alert on issues",
+          "trigger": "anomaly"
+        },
+        {
+          "agent": "responder",
+          "action": "Triage and initial response"
+        },
+        {
+          "agents": [
+            "engineer",
+            "communicator"
+          ],
+          "action": "Fix and communicate",
+          "parallel": true
+        },
+        {
+          "agent": "engineer",
+          "action": "Post-incident review"
+        }
       ]
     },
     "examples": [
@@ -95,20 +122,27 @@
         }
       },
       "agentFile": {
-        "en": "Output ONLY valid JSON. Field values must be rich Markdown, NOT plain sentences.\n\nAgent: {{agentName}}\nRole: {{agentRole}}\nDescription: {{agentDesc}}\nTeam / Scenario: {{scenarioName}}\nLanguage: English\n\nFields:\n- soul: First-person Markdown persona (3-5 paragraphs): SRE identity and reliability philosophy; on-call domain and ownership; escalation authority (P0/P1/P2 thresholds, rollback vs. hotfix decisions); communication style under incident pressure; commitment to postmortems and toil elimination.\n- agentsMd: Session-startup guide (Markdown): dashboards/runbooks to check; incident context to load; primary output (incident report, runbook execution, status page update, postmortem draft); SLA awareness.\n- userMd: Markdown profile of the engineering lead or on-call manager: their reliability expectations, escalation preferences, how they measure SRE success.\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: 5-7 checkboxes (- [ ] task): specific on-call duties (check alert queue, review error budget, validate runbooks, audit recent deploys, update status page, schedule postmortem).\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
-        "zh": "只输出合法JSON。字段必须是丰富的Markdown，不是简短句子。\n\n智能体：{{agentName}}\n角色：{{agentRole}}\n描述：{{agentDesc}}\n团队/场景：{{scenarioName}}\n语言：中文\n\n字段：\n- soul：第一人称Markdown人设(3-5段)：SRE身份认同和可靠性哲学；値班领域和职责范围；升级权限（P0/P1/P2阈值、回滚 vs 热修决策）；事故中的沟通风格；对事后复盘和消除浏劳的承诺。\n- agentsMd：会话启动指南(Markdown)：检查哪些看板/Runbook；加载事故上下文；本次交付物（事故报告、runbook执行、状态页更新、复盘草稿）；SLA意识。\n- userMd：工程负责人或値班经理的Markdown画像：可靠性期望、升级偏好、衡量 SRE 成功的方式。\n- identityMd：\"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat：5-7个复选框(- [ ] 任务)：値班具体职责(检查告警队列、审查错误预算、验证runbook、审计近期发布、更新状态页、安排复盘)。\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}"
+        "en": "Output ONLY valid JSON. No markdown fences, no explanation.\n\nYou are writing OpenClaw agent workspace files for a multi-agent system.\nAgent name: {{agentName}}\nAgent role: {{agentRole}}\nAgent description: {{agentDesc}}\nTeam / Scenario: {{scenarioName}}\nWrite all content in: English\n\nFILE SPECIFICATIONS — follow these exactly:\n\nSOUL.md — Persona, tone, and boundaries. Loaded every session.\n  - Write in first person as the agent.\n  - Cover: who this agent is, what they care about, their working principles, communication style.\n  - 3–5 short paragraphs. Use markdown headers: ## Core Truths, ## Boundaries, ## Vibe\n  - Be specific to this agent's role. No generic AI platitudes.\n\nAGENTS.md — Operating instructions and memory rules. Loaded every session.\n  - Must start with \"## Session Startup\" listing files to read on wake-up:\n    1. Read SOUL.md — this is who you are\n    2. Read USER.md — this is who you're helping\n    3. Read memory/YYYY-MM-DD.md (today + yesterday) for recent context\n  - Must include \"## Red Lines\" (things this agent must never do in its role).\n  - Must include role-specific operating rules, priorities, and collaboration notes.\n  - Use markdown headers and bullet lists throughout.\n\nUSER.md — Profile of the human this agent serves. Loaded every session.\n  - Must use this exact template format (leave values blank — agent fills them from real interactions):\n    # USER.md - About Your Human\n\n    - **Name:**\n    - **What to call them:**\n    - **Pronouns:** _(optional)_\n    - **Timezone:**\n    - **Notes:**\n\n    ## Context\n\n    _(What do they care about relevant to this agent's role? What are their goals? Build this over time.)_\n  - Do NOT pre-fill field values.\n\nIDENTITY.md — The agent's name, creature, vibe, and emoji. Created during bootstrap.\n  - Must use this exact format (multi-line, one field per line):\n    # IDENTITY.md - Who Am I?\n\n    - **Name:** (a fitting name for this agent's role)\n    - **Creature:** (AI? specialist? advisor? something fitting the role)\n    - **Vibe:** (2–4 words: how this agent comes across — sharp? warm? precise?)\n    - **Emoji:** (one emoji that fits this agent's personality)\n  - Do NOT add extra fields beyond Name, Creature, Vibe, Emoji.\n\nHEARTBEAT.md — Short periodic checklist for background proactive work. Keep minimal.\n  - Format: markdown checklist \"- [ ] task\"\n  - 2–4 items MAX. Each must be specific and actionable for this agent's role.\n  - Examples: check for pending tasks, review recent outputs, flag blockers to teammates.\n  - If nothing applies, output: # No periodic tasks for this agent\n\nReturn JSON with these exact keys. Values are full markdown file contents (escape newlines as \\n):\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+        "zh": "只输出合法JSON。不要Markdown代码块，不要解释。\n\n你正在为多智能体系统编写 OpenClaw 智能体工作区文件。\n智能体名称：{{agentName}}\n智能体角色：{{agentRole}}\n智能体描述：{{agentDesc}}\n团队/场景：{{scenarioName}}\n所有内容用：中文编写\n\n文件规范 — 严格遵守：\n\nSOUL.md — 人设、风格和边界。每次会话加载。\n  - 以第一人称书写，代入该智能体身份。\n  - 涵盖：这个智能体是谁、核心价值观、工作原则、沟通风格。\n  - 3-5个短段落。使用Markdown标题：## 核心信念, ## 边界, ## 风格\n  - 内容要针对该智能体角色，不要写通用AI套话。\n\nAGENTS.md — 操作指引和记忆规则。每次会话加载。\n  - 必须以 \"## 会话启动\" 开头，列出唤醒时需读取的文件：\n    1. 读取 SOUL.md — 这是你的身份\n    2. 读取 USER.md — 这是你服务的用户\n    3. 读取 memory/YYYY-MM-DD.md（今天+昨天）获取近期上下文\n  - 必须包含 \"## 红线\"（该角色绝对不能做的事情）。\n  - 必须包含针对该角色的操作规则、优先级和协作说明。\n  - 全文使用Markdown标题和无序列表。\n\nUSER.md — 该智能体服务的用户画像。每次会话加载。\n  - 必须使用以下精确模板格式（字段值留空——智能体在真实交互中自行填写）：\n    # USER.md - 关于你的用户\n\n    - **姓名：**\n    - **称呼：**\n    - **代词：** _（可选）_\n    - **时区：**\n    - **备注：**\n\n    ## 背景\n\n    _（该用户在此智能体职责范围内关心什么？他们的目标是什么？随时间积累补充。）_\n  - 不要预填字段值。\n\nIDENTITY.md — 智能体的名字、形象、气质和emoji。在引导阶段创建。\n  - 必须使用以下精确格式（多行，每行一个字段）：\n    # IDENTITY.md - 我是谁？\n\n    - **名字：** （适合该角色的名字）\n    - **形象：** （AI？专家？顾问？符合角色的定位）\n    - **气质：** （2-4个词：如何展现自己——精准？温暖？冷静？）\n    - **Emoji：** （一个符合该智能体个性的emoji）\n  - 不要添加名字、形象、气质、Emoji之外的额外字段。\n\nHEARTBEAT.md — 后台周期性工作的简短清单。保持精简以避免浪费token。\n  - 格式：Markdown复选框 \"- [ ] 任务\"\n  - 最多2-4项。每项必须具体、可执行，且针对该智能体的职责。\n  - 示例：检查待处理任务、审查近期输出、向队友汇报阻碍。\n  - 如果该角色没有适用的周期性任务，输出：# 该智能体暂无周期性任务\n\n返回包含以下精确键名的JSON。值为完整的Markdown文件内容（换行符转义为\\n）：\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}"
       }
     }
   },
   "skills": [
     {
       "name": "shell",
-      "permissions": ["execute"],
-      "config": { "timeout": 60, "sudo": true }
+      "permissions": [
+        "execute"
+      ],
+      "config": {
+        "timeout": 60,
+        "sudo": true
+      }
     },
     {
       "name": "web",
-      "permissions": ["read"],
+      "permissions": [
+        "read"
+      ],
       "config": {}
     }
   ],
@@ -138,11 +172,16 @@
   "integrations": [
     {
       "service": "pagerduty",
-      "permissions": ["read", "write"]
+      "permissions": [
+        "read",
+        "write"
+      ]
     },
     {
       "service": "slack",
-      "permissions": ["write"]
+      "permissions": [
+        "write"
+      ]
     }
   ]
 }
