@@ -359,6 +359,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   }, [stb, language]);
 
   const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
+  const [wzPromptUserEdited, setWzPromptUserEdited] = useState(false); // true = user manually edited, don't auto-regenerate
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
   const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
@@ -623,6 +624,12 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
   // Register auto-start ref so handleConfirmWizard can call it after state flush
   useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
+
+  // Auto-clear prompt when key params change (if not user-edited), so it gets regenerated fresh
+  useEffect(() => {
+    if (wzPromptUserEdited) return;
+    setWzStep1Prompt('');
+  }, [teamSize, workflowType, scenarioName, description]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Retry prompt load when wizard step1 is active but prompt still empty (async race on first open)
   useEffect(() => {
@@ -1364,14 +1371,14 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">{stb.promptLabel || 'AI Prompt'}</span>
-                      <button onClick={() => setWzStep1Prompt('')} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
+                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); }} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
                         <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                         {stb.promptReset || 'Reset'}
                       </button>
                     </div>
                     <textarea
                       value={wzStep1Prompt}
-                      onChange={e => setWzStep1Prompt(e.target.value)}
+                      onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); }}
                       rows={6}
                       placeholder="Leave empty to use the default compact prompt (recommended)"
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
