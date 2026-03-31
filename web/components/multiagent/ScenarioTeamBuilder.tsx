@@ -99,9 +99,9 @@ function getWorkflowDescription(wfType: string, language: string): string {
 }
 
 const TEAM_SIZES = [
-  { value: 'small', range: '3-4', icon: 'group' },
-  { value: 'medium', range: '5-7', icon: 'groups' },
-  { value: 'large', range: '8-10', icon: 'diversity_3' },
+  { value: 'small', range: '2-3', icon: 'group' },
+  { value: 'medium', range: '4-6', icon: 'groups' },
+  { value: 'large', range: '7-10', icon: 'diversity_3' },
 ] as const;
 
 const ElapsedTimer: React.FC<{ startedAt: number; className?: string }> = ({ startedAt, className }) => {
@@ -367,7 +367,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     setWzPromptUserEdited(false);
     // Load template prompts if linked
     if (tpl.multiAgentTemplateId) {
-      const agentCount = tpl.teamSize === 'small' ? '3-4' : tpl.teamSize === 'large' ? '8-10' : '5-7';
+      const agentCount = tpl.teamSize === 'small' ? '2-3' : tpl.teamSize === 'large' ? '7-10' : '4-6';
       templateSystem.getMultiAgentTemplates(language).then(templates => {
         const matched = templates.find(t => t.id === tpl.multiAgentTemplateId);
         if (!matched?.content.prompts) return;
@@ -388,7 +388,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
       }).catch(() => { applyingTemplateRef.current = false; });
     } else {
       // No linked template — load generic default prompt + agentFile
-      const agentCount = tpl.teamSize === 'small' ? '3 to 4' : tpl.teamSize === 'large' ? '8 to 10' : '5 to 7';
+      const agentCount = tpl.teamSize === 'small' ? '2 to 3' : tpl.teamSize === 'large' ? '7 to 10' : '4 to 6';
       templateSystem.getMultiAgentTemplates(language).then(templates => {
         const def = templates.find(t => t.id === 'default');
         if (!def) return;
@@ -419,7 +419,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
   const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
-    const agentCount = size === 'small' ? '3 to 4' : size === 'large' ? '8 to 10' : '5 to 7';
+    const agentCount = size === 'small' ? '2 to 3' : size === 'large' ? '7 to 10' : '4 to 6';
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
       const def = templates.find(t => t.id === 'default');
@@ -698,7 +698,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   useEffect(() => {
     if (step !== 'wizard' || wzPhase !== 'step1' || wzStep1Prompt || wzStep1Running) return;
     const tplId = currentTemplateIdRef.current;
-    const agentCount = teamSize === 'small' ? '3-4' : teamSize === 'large' ? '8-10' : '5-7';
+    const agentCount = teamSize === 'small' ? '2-3' : teamSize === 'large' ? '7-10' : '4-6';
     templateSystem.getMultiAgentTemplates(language).then(templates => {
       const tpl = tplId ? templates.find(t => t.id === tplId) : templates.find(t => t.id === 'default');
       const promptObj = tpl?.content.prompts?.step1 ?? templates.find(t => t.id === 'default')?.content.prompts?.step1;
