@@ -1291,12 +1291,12 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   return (
                     <React.Fragment key={p}>
                       {i > 0 && <span className="w-5 h-px bg-slate-200 dark:bg-white/10 shrink-0" />}
-                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
                         isDone ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
                         : isActive ? 'bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-400'
                         : 'bg-slate-100 dark:bg-white/5 border-transparent text-slate-400 dark:text-white/25'
                       }`}>
-                        <span className="material-symbols-outlined text-[11px]">
+                        <span className="material-symbols-outlined text-[13px]">
                           {isDone ? 'check_circle' : i === 0 ? 'account_tree' : 'auto_awesome'}
                         </span>
                         {p === 'step1' ? (stb.wzPhase1 || 'Team Structure') : (stb.wzPhase2 || 'Agent Files')}
@@ -1313,20 +1313,20 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
                       <span className="material-symbols-outlined text-[11px] text-violet-500">edit_note</span>
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-white/70 max-w-[120px] truncate">{scenarioName}</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-white/70 max-w-[120px] truncate">{scenarioName}</span>
                     </div>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
                       <span className="material-symbols-outlined text-[11px] text-violet-500">{TEAM_SIZES.find(s => s.value === teamSize)?.icon || 'groups'}</span>
-                      <span className="text-[10px] text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
+                      <span className="text-xs text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
                     </div>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
                       <span className="material-symbols-outlined text-[11px] text-violet-500">{WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}</span>
-                      <span className="text-[10px] text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
+                      <span className="text-xs text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
                     </div>
                     {selectedModelLabel && (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
                         <span className="material-symbols-outlined text-[11px] text-violet-500">memory</span>
-                        <span className="text-[10px] text-slate-600 dark:text-white/60 max-w-[100px] truncate">{selectedModelLabel}</span>
+                        <span className="text-xs text-slate-600 dark:text-white/60 max-w-[100px] truncate">{selectedModelLabel}</span>
                       </div>
                     )}
                   </div>
@@ -1338,20 +1338,20 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                       : wzStep1Result ? <span className="material-symbols-outlined text-[17px] text-green-500">check_circle</span>
                       : <span className="material-symbols-outlined text-[17px] text-slate-300 dark:text-white/15">radio_button_unchecked</span>
                     }
-                    <p className="text-[12px] font-bold text-slate-700 dark:text-white/80 flex-1 min-w-0">
+                    <p className="text-[13px] font-bold text-slate-700 dark:text-white/80 flex-1 min-w-0">
                       {wzStep1Running ? (stb.wzStep1Running || 'Generating team structure…')
                         : wzStep1Error ? (stb.wzStep1Error || 'Generation failed')
                         : wzStep1Result ? (stb.wzStep1Done || 'Structure ready — click Next to continue')
                         : (stb.wzStep1Waiting || 'Ready to generate')}
                     </p>
                     {wzStep1Running && (
-                      <button onClick={wzHandleStep1Stop} className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-colors flex items-center gap-1 shrink-0">
+                      <button onClick={wzHandleStep1Stop} className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-colors flex items-center gap-1 shrink-0">
                         <span className="material-symbols-outlined text-[12px]">stop</span>
                         {stb.wzStop || 'Stop'}
                       </button>
                     )}
                     {!wzStep1Running && wzStep1Result && (
-                      <button onClick={wzHandleStep1Start} className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/20 transition-colors flex items-center gap-1 shrink-0">
+                      <button onClick={wzHandleStep1Start} className="px-2.5 py-1 rounded-lg text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/20 transition-colors flex items-center gap-1 shrink-0">
                         <span className="material-symbols-outlined text-[12px]">refresh</span>
                         {stb.wzRegenerate || 'Regenerate'}
                       </button>
@@ -1361,7 +1361,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   {/* Error */}
                   {wzStep1Error && (
                     <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
-                      <p className="text-[11px] text-red-600 dark:text-red-400 font-mono break-all">{wzStep1Error}</p>
+                      <p className="text-xs text-red-600 dark:text-red-400 font-mono break-all">{wzStep1Error}</p>
                     </div>
                   )}
 
@@ -1375,11 +1375,11 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                             <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
                           </span>
                         )}
-                        <span className="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
-                        <span className="ms-auto text-[9px] text-slate-500 dark:text-white/20 font-mono">{wzStep1Stream.length} chars</span>
+                        <span className="text-[10px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                        <span className="ms-auto text-[10px] text-slate-500 dark:text-white/20 font-mono">{wzStep1Stream.length} chars</span>
                       </div>
                       <div className="px-2.5 py-2 max-h-[180px] overflow-y-auto">
-                        <pre className="text-[10px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all">
+                        <pre className="text-xs font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all">
                           {wzStep1Stream || ' '}
                           {wzStep1Running && <span className="inline-block w-1.5 h-3 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
                         </pre>
@@ -1390,9 +1390,9 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   {/* Prompt editor — shares wzStep1Prompt with prompt-review step */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1.5">
                         {stb.promptLabel || 'AI Prompt'}
-                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-md ${
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
                           wzPromptUserEdited
                             ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400'
                             : wzPromptSource
@@ -1406,7 +1406,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                               : (stb.promptSourceDefault || 'Default')}
                         </span>
                       </span>
-                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }} className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-500 transition-colors">
+                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-500 transition-colors">
                         <span className="material-symbols-outlined text-[12px]">restart_alt</span>
                         {stb.promptReset || 'Reset'}
                       </button>
@@ -1416,7 +1416,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                       onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); setWzPromptSource(stb.promptSourceEdited || 'Edited'); }}
                       rows={6}
                       placeholder="Leave empty to use the default compact prompt (recommended)"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[10px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
                       spellCheck={false}
                     />
                   </div>
@@ -1430,11 +1430,11 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   {/* Summary + progress */}
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-bold text-slate-700 dark:text-white/80">{stb.wzStep2Title || 'Generate agent workspace files'}</p>
-                      <p className="text-[10px] text-slate-400 dark:text-white/30 mt-0.5">
+                      <p className="text-[13px] font-bold text-slate-700 dark:text-white/80">{stb.wzStep2Title || 'Generate agent workspace files'}</p>
+                      <p className="text-xs text-slate-400 dark:text-white/30 mt-0.5">
                         {wzAgents.filter(a => a.status === 'done' || a.status === 'skipped').length}/{wzAgents.length} {stb.wzDone || 'done'}
                         {wzAgents.some(a => a.status === 'error') && (
-                          <span className="ms-2 text-red-500">{wzAgents.filter(a => a.status === 'error').length} {stb.wzErrors || 'errors'}</span>
+                          <span className="ms-2 text-red-500 text-xs">{wzAgents.filter(a => a.status === 'error').length} {stb.wzErrors || 'errors'}</span>
                         )}
                       </p>
                     </div>
@@ -1447,25 +1447,25 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   {/* Action row */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
-                      <button onClick={wzHandleGenerateAll} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1.5 transition-colors">
+                      <button onClick={wzHandleGenerateAll} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1.5 transition-colors">
                         <span className="material-symbols-outlined text-[13px]">play_arrow</span>
                         {stb.wzGenerateAll || 'Generate all'}
                       </button>
                     )}
                     {wzStep2Running && (
-                      <button onClick={wzHandleStop} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center gap-1.5 transition-colors">
+                      <button onClick={wzHandleStop} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center gap-1.5 transition-colors">
                         <span className="material-symbols-outlined text-[13px]">stop</span>
                         {stb.wzStop || 'Stop'}
                       </button>
                     )}
                     {wzAgents.every(a => a.status !== 'pending' && a.status !== 'running') && (
-                      <button onClick={wzHandleFinish} className="ms-auto px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-500 hover:bg-green-600 text-white flex items-center gap-1.5 transition-colors">
+                      <button onClick={wzHandleFinish} className="ms-auto px-3 py-1.5 rounded-lg text-xs font-bold bg-green-500 hover:bg-green-600 text-white flex items-center gap-1.5 transition-colors">
                         <span className="material-symbols-outlined text-[13px]">check</span>
                         {stb.wzFinish || 'Continue to preview'}
                       </button>
                     )}
                     {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
-                      <button onClick={wzHandleFinish} className="ms-auto px-2.5 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/50 border border-dashed border-slate-200 dark:border-white/10 transition-colors">
+                      <button onClick={wzHandleFinish} className="ms-auto px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white/50 border border-dashed border-slate-200 dark:border-white/10 transition-colors">
                         {stb.wzSkipFiles || 'Skip files & continue'}
                       </button>
                     )}
@@ -1495,8 +1495,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                               <span className="material-symbols-outlined text-white text-[15px]">{agent.icon}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-bold text-slate-700 dark:text-white/80 truncate">{agent.name}</p>
-                              <p className="text-[10px] text-slate-400 dark:text-white/30 truncate">{agent.role}</p>
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-white/80 truncate">{agent.name}</p>
+                              <p className="text-[11px] text-slate-400 dark:text-white/30 truncate">{agent.role}</p>
                             </div>
                             {/* Status icon */}
                             <span className={`material-symbols-outlined text-[16px] shrink-0 ${statusColor} ${isActive ? 'animate-spin' : ''}`}
@@ -1567,9 +1567,9 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                       <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-75" />
                                       <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
                                     </span>
-                                    <span className="text-[9px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                                    <span className="text-[10px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
                                   </div>
-                                  <pre className="px-2 py-1.5 text-[9px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all max-h-[100px] overflow-y-auto">
+                                  <pre className="px-2 py-1.5 text-[10px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all max-h-[100px] overflow-y-auto">
                                     {agent.streamBuf}<span className="inline-block w-1.5 h-2.5 bg-violet-400 animate-pulse ml-0.5 align-middle" />
                                   </pre>
                                 </div>
@@ -1585,21 +1585,21 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                       <div key={key} className="rounded-lg border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
                                         <div className="flex items-center gap-1.5 px-2 py-1 border-b border-slate-100 dark:border-white/[0.04]">
                                           <span className="material-symbols-outlined text-[11px] text-slate-400">description</span>
-                                          <span className="text-[9px] font-bold text-slate-500 dark:text-white/40 font-mono">{labels[key]}</span>
+                                          <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 font-mono">{labels[key]}</span>
                                         </div>
-                                        <p className="px-2 py-1.5 text-[10px] text-slate-500 dark:text-white/40 line-clamp-2 font-mono leading-relaxed">{val}</p>
+                                        <p className="px-2 py-1.5 text-xs text-slate-500 dark:text-white/40 line-clamp-2 font-mono leading-relaxed">{val}</p>
                                       </div>
                                     );
                                   })}
                                 </div>
                               )}
                               {/* Error */}
-                              {agent.status === 'error' && <p className="text-[10px] text-red-500 font-mono break-all">{agent.error}</p>}
+                              {agent.status === 'error' && <p className="text-xs text-red-500 font-mono break-all">{agent.error}</p>}
                               {/* Prompt editor */}
                               <div>
                                 <button
                                   onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, showPrompt: !a.showPrompt } : a))}
-                                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white/50 transition-colors"
+                                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white/50 transition-colors"
                                 >
                                   <span className="material-symbols-outlined text-[12px]">edit</span>
                                   {stb.wzEditPrompt || 'Edit prompt'}
@@ -1608,7 +1608,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                   <textarea
                                     value={agent.customPrompt ?? ''}
                                     onChange={e => { const v = e.target.value; setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, customPrompt: v } : a)); }}
-                                    className="mt-1.5 w-full h-28 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[9px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                                    className="mt-1.5 w-full h-28 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[10px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
                                     spellCheck={false}
                                   />
                                 )}
