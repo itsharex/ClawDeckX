@@ -846,7 +846,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
               className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-colors"
             >
               <span className="material-symbols-outlined text-[18px] text-slate-400">
-                {step === 'edit-agent' || step === 'wizard' ? 'arrow_back'
+                {step === 'edit-agent' ? 'arrow_back'
                   : step === 'generating' && genTaskId ? 'minimize'
                   : 'close'}
               </span>
@@ -1420,10 +1420,6 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                         {stb.wzStop || 'Stop'}
                       </button>
                     )}
-                    <button onClick={() => setWzPhase('step1')} className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center gap-1 transition-colors">
-                      <span className="material-symbols-outlined text-[12px]">arrow_back</span>
-                      {stb.back || 'Back'}
-                    </button>
                     {wzAgents.every(a => a.status !== 'pending' && a.status !== 'running') && (
                       <button onClick={wzHandleFinish} className="ms-auto px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-500 hover:bg-green-600 text-white flex items-center gap-1.5 transition-colors">
                         <span className="material-symbols-outlined text-[13px]">check</span>
