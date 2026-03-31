@@ -97,6 +97,8 @@
     "aiGenStop": "停止",
     "aiGenApply": "ファイルに適用",
     "aiGenRunning": "生成中…",
+    "aiGenTemplate": "テンプレート",
+    "aiGenNoTemplate": "— 汎用プロンプト —",
     "confirmSave": "保存確認",
     "confirmSaveMsg": "{file} への変更を保存しますか？エージェントの現在のファイル内容が上書きされます。",
     "fileLoadFailed": "ファイルの読込に失敗しました",

@@ -97,6 +97,8 @@
     "aiGenStop": "停止",
     "aiGenApply": "应用到文件",
     "aiGenRunning": "生成中…",
+    "aiGenTemplate": "模板",
+    "aiGenNoTemplate": "— 通用提示词 —",
     "confirmSave": "确认保存",
     "confirmSaveMsg": "确定要保存对 {file} 的修改吗？此操作将覆盖代理的当前文件内容。",
     "fileLoadFailed": "加载文件失败",

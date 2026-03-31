@@ -97,6 +97,8 @@
     "aiGenStop": "Detener",
     "aiGenApply": "Aplicar al archivo",
     "aiGenRunning": "Generando…",
+    "aiGenTemplate": "Plantilla",
+    "aiGenNoTemplate": "— Prompt genérico —",
     "confirmSave": "Confirmar guardado",
     "confirmSaveMsg": "¿Guardar cambios en {file}? Esto sobrescribirá el contenido actual del archivo del agente.",
     "fileLoadFailed": "Error al cargar archivo",

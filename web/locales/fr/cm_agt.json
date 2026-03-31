@@ -97,6 +97,8 @@
     "aiGenStop": "Arrêter",
     "aiGenApply": "Appliquer au fichier",
     "aiGenRunning": "Génération…",
+    "aiGenTemplate": "Modèle",
+    "aiGenNoTemplate": "— Invite générique —",
     "confirmSave": "Confirmer l'enregistrement",
     "confirmSaveMsg": "Enregistrer les modifications de {file} ? Cela écrasera le contenu actuel du fichier de l'agent.",
     "fileLoadFailed": "Échec du chargement du fichier",

@@ -6,7 +6,7 @@ import { gwApi, workspaceMemoryApi, MemoryFileEntry, multiAgentApi, WizardStep2R
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { fmtAgoCompact } from '../utils/time';
 import { subscribeManagerWS } from '../services/manager-ws';
-import { templateSystem, WorkspaceTemplate, resolveTemplatePrompt } from '../services/template-system';
+import { templateSystem, WorkspaceTemplate, resolveTemplatePrompt, MultiAgentTemplate } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -131,6 +131,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [aiGenRunning, setAiGenRunning] = useState(false);
   const [aiGenStream, setAiGenStream] = useState('');
   const [aiGenResult, setAiGenResult] = useState<string | null>(null);
+  const [aiGenTemplates, setAiGenTemplates] = useState<MultiAgentTemplate[]>([]);
+  const [aiGenSelectedTplId, setAiGenSelectedTplId] = useState<string>('');
   const aiGenAbortRef = useRef<AbortController | null>(null);
   const aiGenBufRef = useRef('');
   const aiGenRafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -379,45 +381,59 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     setFileSaving(false);
   }, [selectedId, fileActive, fileDrafts, a]);
 
-  // Open AI generate panel for the current file
+  /** Build a generic fallback prompt for the given file type */
+  const buildAiGenFallbackPrompt = useCallback((fileName: string) => {
+    const agentName = identity?.name || selectedId || '';
+    const agentRole = identity?.role || '';
+    const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    const fileKey = fileName.replace('.md', '').toLowerCase();
+    const fileHints: Record<string, string> = {
+      soul: 'Write a SOUL.md persona file: 3 paragraphs covering identity/personality, core responsibilities, and working style.',
+      agents: 'Write an AGENTS.md session startup file: what context to load on start, what outputs to produce, collaboration style.',
+      user: 'Write a USER.md profile file: describe the human user this agent serves — their role, preferences, communication style.',
+      identity: 'Write an IDENTITY.md file in format: Name: X | Creature: X | Vibe: X | Emoji: X',
+      heartbeat: 'Write a HEARTBEAT.md checklist: 5 recurring tasks as markdown checkboxes (- [ ] item).',
+    };
+    const hint = fileHints[fileKey] || `Write content for ${fileName}.`;
+    return `Generate ${fileName} content for agent "${agentName}".\nRole: ${agentRole}\nLanguage: ${langHint}\n\n${hint}`;
+  }, [identity, selectedId, language]);
+
+  // Open AI generate panel — loads template list, starts with generic prompt (no auto-select)
   const openAiGen = useCallback(async () => {
     if (!fileActive || !selectedId) return;
     setAiGenResult(null);
     setAiGenStream('');
+    setAiGenSelectedTplId('');
+    setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
     setAiGenOpen(true);
-    // Build a default prompt based on the file type and current agent identity
-    const agentName = identity?.name || selectedId;
-    const agentRole = identity?.role || '';
-    const agentDesc = identity?.description || '';
-    const fileKey = fileActive.replace('.md', '').toLowerCase();
-    // Try to find a matching multi-agent template prompt for this agent's scenario
-    let resolved: string | undefined;
+    // Load multi-agent templates for the picker (fire-and-forget)
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
-      // Look for a template whose name partially matches the agent's scenario context
-      // Try each template's agentFile prompt as the base
-      const first = templates[0];
-      if (first?.content.prompts?.agentFile) {
-        resolved = resolveTemplatePrompt(first.content.prompts.agentFile, language, {
-          agentName, agentRole, agentDesc, scenarioName: agentRole,
-        });
-      }
-    } catch { /* ignore */ }
-    // Fallback: build a generic prompt tuned to the specific file
-    if (!resolved) {
-      const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
-      const fileHints: Record<string, string> = {
-        'soul': 'Write a SOUL.md persona file: 3 paragraphs covering identity/personality, core responsibilities, and working style.',
-        'agents': 'Write an AGENTS.md session startup file: what context to load on start, what outputs to produce, collaboration style.',
-        'user': 'Write a USER.md profile file: describe the human user this agent serves — their role, preferences, communication style.',
-        'identity': 'Write an IDENTITY.md file in format: Name: X | Creature: X | Vibe: X | Emoji: X',
-        'heartbeat': 'Write a HEARTBEAT.md checklist: 5 recurring tasks as markdown checkboxes (- [ ] item).',
-      };
-      const hint = fileHints[fileKey] || `Write content for ${fileActive}.`;
-      resolved = `Generate ${fileActive} content for agent "${agentName}".\nRole: ${agentRole}\nLanguage: ${langHint}\n\n${hint}`;
+      setAiGenTemplates(templates.filter(t => t.content.prompts?.agentFile));
+    } catch { /* templates optional */ }
+  }, [fileActive, selectedId, language, buildAiGenFallbackPrompt]);
+
+  /** Called when user picks a template from the dropdown — resolves agentFile prompt */
+  const handleAiGenSelectTemplate = useCallback((tplId: string) => {
+    setAiGenSelectedTplId(tplId);
+    if (!tplId) {
+      // Revert to generic fallback
+      if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
     }
-    setAiGenPrompt(resolved);
-  }, [fileActive, selectedId, identity, language]);
+    const tpl = aiGenTemplates.find(t => t.id === tplId);
+    if (!tpl?.content.prompts?.agentFile) return;
+    const agentName = identity?.name || selectedId || '';
+    const agentRole = identity?.role || '';
+    const agentDesc = identity?.description || '';
+    const resolved = resolveTemplatePrompt(tpl.content.prompts.agentFile, language, {
+      agentName,
+      agentRole,
+      agentDesc,
+      scenarioName: agentRole || agentName,
+    });
+    if (resolved) setAiGenPrompt(resolved);
+  }, [aiGenTemplates, fileActive, identity, selectedId, language, buildAiGenFallbackPrompt]);
 
   const handleAiGenRun = useCallback(() => {
     if (!fileActive || !selectedId || aiGenRunning) return;
@@ -1587,10 +1603,31 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                 <span className="material-symbols-outlined text-[14px]">close</span>
                               </button>
                             </div>
+                            {/* Template picker */}
+                            {aiGenTemplates.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 dark:text-white/40 shrink-0">
+                                  {a.aiGenTemplate || 'Template'}
+                                </span>
+                                <select
+                                  value={aiGenSelectedTplId}
+                                  onChange={e => handleAiGenSelectTemplate(e.target.value)}
+                                  disabled={aiGenRunning}
+                                  className="flex-1 px-2 py-1 rounded-lg bg-white dark:bg-white/[0.05] border border-violet-400/20 text-[10px] text-slate-700 dark:text-white/70 focus:outline-none focus:ring-1 focus:ring-violet-500/30 disabled:opacity-50 cursor-pointer"
+                                >
+                                  <option value="">{a.aiGenNoTemplate || '— Generic prompt —'}</option>
+                                  {aiGenTemplates.map(tpl => (
+                                    <option key={tpl.id} value={tpl.id}>
+                                      {tpl.metadata?.name || tpl.id}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
                             <textarea
                               value={aiGenPrompt}
                               onChange={e => setAiGenPrompt(e.target.value)}
-                              rows={4}
+                              rows={5}
                               disabled={aiGenRunning}
                               className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-white/[0.03] border border-violet-400/20 text-[11px] font-mono text-slate-700 dark:text-white/70 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500/30 disabled:opacity-60"
                             />

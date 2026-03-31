@@ -97,6 +97,8 @@
     "aiGenStop": "रोकें",
     "aiGenApply": "फ़ाइल में लागू करें",
     "aiGenRunning": "उत्पन्न हो रहा है…",
+    "aiGenTemplate": "टेम्पलेट",
+    "aiGenNoTemplate": "— सामान्य प्रॉम्प्ट —",
     "confirmSave": "सहेजने की पुष्टि करें",
     "confirmSaveMsg": "{file} में परिवर्तन सहेजें? यह एजेंट की वर्तमान फाइल सामग्री को ओवरराइट करेगा।",
     "fileLoadFailed": "फाइल लोड करने में विफल",
