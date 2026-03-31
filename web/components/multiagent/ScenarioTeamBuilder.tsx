@@ -360,43 +360,36 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
   const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
 
-  /** Auto-load step1 prompt whenever scenario params or linked template change. */
-  useEffect(() => {
-    if (!scenarioName.trim() && !description.trim()) return;
-    const agentCount = teamSize === 'small' ? '3 to 4' : teamSize === 'large' ? '8 to 10' : '5 to 7';
-    templateSystem.getMultiAgentTemplates(language).then(templates => {
-      // If a linked template is active, use its step1 prompt
-      const linkedId = SCENARIO_TEMPLATES.find(
-        t => (stb[t.nameKey] || t.name) === scenarioName
-      )?.multiAgentTemplateId;
-      const tplId = linkedId || '_default';
-      const tpl = templates.find(t => t.id === tplId) ?? templates.find(t => t.id === '_default');
-      if (!tpl?.content.prompts?.step1) return;
-      const resolved = resolveTemplatePrompt(tpl.content.prompts.step1, language, {
-        scenarioName: scenarioName.trim(),
-        description: description.trim(),
-        agentCount,
-        workflowType,
-      });
-      if (resolved) setWzStep1Prompt(resolved);
-    }).catch(() => { /* prompts optional */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenarioName, description, teamSize, workflowType, language]);
+  /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
+  const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
+    const agentCount = size === 'small' ? '3 to 4' : size === 'large' ? '8 to 10' : '5 to 7';
+    try {
+      const templates = await templateSystem.getMultiAgentTemplates(language);
+      const def = templates.find(t => t.id === '_default');
+      if (def?.content.prompts?.step1) {
+        const resolved = resolveTemplatePrompt(def.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: wfType,
+        });
+        if (resolved) return resolved;
+      }
+    } catch { /* fall through */ }
+    return ''; // backend will use its built-in default
+  }, [language]);
 
-  const handlePreparePrompt = useCallback(() => {
+  const handlePreparePrompt = useCallback(async () => {
     if (!scenarioName.trim() || !description.trim()) return;
     setError(null);
-    if (directLlm) {
-      handleConfirmWizard();
-    } else {
-      handleConfirmGenerate();
+    // Pre-fill prompt if not yet set
+    if (!wzStep1Prompt) {
+      const prompt = await buildDefaultStep1Prompt(scenarioName.trim(), description.trim(), teamSize, workflowType);
+      if (prompt) setWzStep1Prompt(prompt);
     }
-  }, [scenarioName, description, directLlm]);
-
-  const handleConfirmWizard = useCallback(() => {
+    // Go directly to wizard — no intermediate prompt-review step
     setError(null);
     setStep('wizard');
-    // Defer so wizard state is mounted; read from ref to avoid closure stale value
     setTimeout(() => {
       if (wzStep1ResultRef.current) {
         setWzPhase('step2');
@@ -405,10 +398,11 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         setWzStep1Stream('');
         setWzStep1Error(null);
         wzStep1BufRef.current = '';
-        // Do not auto-start — user clicks Start manually
       }
     }, 0);
-  }, []);
+  }, [scenarioName, description, teamSize, workflowType, wzStep1Prompt, buildDefaultStep1Prompt]);
+
+  const handleConfirmWizard = handlePreparePrompt;
 
   const handleConfirmGenerate = useCallback(async () => {
     setStep('generating');
@@ -773,8 +767,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
             {/* Step indicator */}
             {step === 'input' && (
               <div className="hidden sm:flex items-center gap-1">
-                {(['input', 'preview'] as const).map((s, i) => {
-                  const order: BuilderStep[] = ['input', 'generating', 'preview', 'edit-agent'];
+                {(['input', 'wizard', 'preview'] as const).map((s, i) => {
+                  const order: BuilderStep[] = ['input', 'generating', 'wizard', 'preview', 'edit-agent'];
                   const done = order.indexOf(step) > order.indexOf(s);
                   const active = step === s;
                   return (
@@ -782,7 +776,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold transition-all ${
                         active ? 'bg-violet-500 text-white' : done ? 'bg-violet-500/30 text-violet-400' : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30'
                       }`}>{i + 1}</div>
-                      {i < 1 && <div className="w-3 h-px bg-slate-200 dark:bg-white/10" />}
+                      {i < 2 && <div className="w-3 h-px bg-slate-200 dark:bg-white/10" />}
                     </React.Fragment>
                   );
                 })}
@@ -1075,145 +1069,6 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* ── AI Prompt (inline, auto-filled) ── */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">
-                    {stb.promptLabel || 'AI Prompt'}
-                  </label>
-                  <button
-                    onClick={() => setWzStep1Prompt('')}
-                    className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-white/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[12px]">restart_alt</span>
-                    {stb.promptReset || 'Reset'}
-                  </button>
-                </div>
-                <textarea
-                  value={wzStep1Prompt}
-                  onChange={e => setWzStep1Prompt(e.target.value)}
-                  rows={8}
-                  placeholder={stb.promptPlaceholder || 'Leave empty to use the built-in default prompt (recommended). Paste a custom prompt here to override.'}
-                  className="w-full px-3 py-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 resize-none leading-relaxed transition-all placeholder:text-slate-300 dark:placeholder:text-white/15"
-                />
-                <p className="text-[10px] text-slate-400 dark:text-white/25 mt-1.5 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">info</span>
-                  {stb.promptHint || 'You can freely edit this prompt before sending it to the AI.'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ══ Step: Prompt Review (removed — merged into input step) ══ */}
-          {false && (
-            <div className="p-5 space-y-3">
-              {error && (error === '__gateway__' ? (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/25 p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5 text-red-500">wifi_off</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-bold text-red-600 dark:text-red-400">
-                        {stb.genErrGateway || 'Gateway disconnected'}
-                      </p>
-                      <p className="text-[11px] text-red-500/80 dark:text-red-400/70 mt-0.5">
-                        {stb.genErrGatewayDesc || 'The gateway connection was lost. Check gateway status and retry.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <button
-                      onClick={handleConfirmGenerate}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/20 hover:bg-red-500/30 text-red-600 dark:text-red-400 transition-colors flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">refresh</span>
-                      {stb.retryGenerate || 'Retry'}
-                    </button>
-                    <span className="text-[10px] text-red-500/60">
-                      {stb.genErrGatewayTip || 'Check that the gateway is running and reconnect'}
-                    </span>
-                  </div>
-                </div>
-              ) : error === '__timeout__' ? (
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5 text-amber-500">schedule</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-bold text-amber-600 dark:text-amber-400">
-                        {stb.timeoutTitle || 'AI is taking longer than expected'}
-                      </p>
-                      <p className="text-[11px] text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-                        {stb.timeoutDesc || 'The AI may still be generating. Try again — a faster model or a shorter description may help.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <button
-                      onClick={handleConfirmGenerate}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 transition-colors flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">refresh</span>
-                      {stb.retryGenerate || 'Retry'}
-                    </button>
-                    <span className="text-[10px] text-amber-500/60">
-                      {stb.timeoutTip || 'Tip: Try switching to a faster model above'}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-[11px] text-red-600 dark:text-red-400 flex items-start gap-2">
-                  <span className="material-symbols-outlined text-[15px] shrink-0 mt-0.5">error</span>
-                  <span className="flex-1 min-w-0 break-words">{error}</span>
-                </div>
-              ))}
-              {/* Summary chips */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">edit_note</span>
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-white/70 max-w-[140px] truncate">{scenarioName}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">{TEAM_SIZES.find(s => s.value === teamSize)?.icon || 'groups'}</span>
-                  <span className="text-[11px] text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">{WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}</span>
-                  <span className="text-[11px] text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
-                </div>
-                {selectedModelLabel && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                    <span className="material-symbols-outlined text-[13px] text-violet-500">memory</span>
-                    <span className="text-[11px] text-slate-600 dark:text-white/60 max-w-[120px] truncate">{selectedModelLabel}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Editable prompt */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">
-                    {stb.promptLabel || 'AI Prompt'}
-                  </label>
-                  <button
-                    onClick={() => setWzStep1Prompt('')}
-                    className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-white/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[12px]">restart_alt</span>
-                    {stb.promptReset || 'Reset'}
-                  </button>
-                </div>
-                <textarea
-                  value={wzStep1Prompt}
-                  onChange={e => setWzStep1Prompt(e.target.value)}
-                  rows={14}
-                  placeholder={stb.promptPlaceholder || 'Leave empty to use the built-in default prompt (recommended). Paste a custom prompt here to override.'}
-                  className="w-full px-3 py-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 resize-none leading-relaxed transition-all placeholder:text-slate-300 dark:placeholder:text-white/15"
-                />
-                <p className="text-[10px] text-slate-400 dark:text-white/25 mt-1.5 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">info</span>
-                  {stb.promptHint || 'You can freely edit this prompt before sending it to the AI.'}
-                </p>
-              </div>
             </div>
           )}
 
@@ -1945,7 +1800,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
               : step === 'wizard' ? () => setStep('input')
               : step === 'generating' && genTaskId
                 ? () => { setMinimized(true); onClose(); }
-                : onClose
+              : onClose
             }
             className="px-4 py-2 rounded-lg text-[11px] font-bold text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
           >
@@ -1958,12 +1813,12 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           <div className="flex items-center gap-2">
             {step === 'input' && (
               <button
-                onClick={handlePreparePrompt}
+                onClick={directLlm ? handlePreparePrompt : handleConfirmGenerate}
                 disabled={!scenarioName.trim() || !description.trim()}
                 className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
               >
                 <span className="material-symbols-outlined text-[16px]">{directLlm ? 'auto_fix_high' : 'auto_awesome'}</span>
-                {directLlm ? (stb.generateWizardBtn || 'Generate (Step-by-Step)') : (stb.generateBtn || 'Generate Team with AI')}
+                {directLlm ? (stb.generateWizardBtn || '生成团队') : (stb.generateBtn || 'Generate Team with AI')}
               </button>
             )}
             {step === 'preview' && generateResult && (
