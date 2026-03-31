@@ -1925,7 +1925,7 @@ func (h *MultiAgentHandler) GenerateWizardStep1(w http.ResponseWriter, r *http.R
 		)
 	}
 
-	ctx, pingStep1 := activityContext(r.Context(), 120*time.Second, 30*time.Minute)
+	ctx, pingStep1 := activityContext(r.Context(), 120*time.Second, 10*time.Minute)
 
 	var buf strings.Builder
 	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 2048) {
@@ -2021,7 +2021,7 @@ func (h *MultiAgentHandler) GenerateWizardStep2(w http.ResponseWriter, r *http.R
 		)
 	}
 
-	ctx, pingStep2 := activityContext(r.Context(), 120*time.Second, 30*time.Minute)
+	ctx, pingStep2 := activityContext(r.Context(), 120*time.Second, 10*time.Minute)
 
 	var buf strings.Builder
 	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 4096) {
