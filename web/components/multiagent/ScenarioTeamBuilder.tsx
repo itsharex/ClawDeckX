@@ -403,6 +403,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
   const [wzPromptUserEdited, setWzPromptUserEdited] = useState(false); // true = user manually edited, don't auto-regenerate
   const [wzPromptSource, setWzPromptSource] = useState<string | null>(null); // null = default, string = template name
+  const [wzPromptExpanded, setWzPromptExpanded] = useState(true); // collapsed/expanded state for prompt editor
 
   /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
   const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
@@ -1390,7 +1391,11 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
 
                   {/* Prompt editor — shares wzStep1Prompt with prompt-review step */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setWzPromptExpanded(v => !v)}
+                      className="w-full flex items-center justify-between mb-1 group"
+                    >
                       <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1.5">
                         {stb.promptLabel || 'AI Prompt'}
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
@@ -1407,19 +1412,34 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                               : (stb.promptSourceDefault || 'Default')}
                         </span>
                       </span>
-                      <button onClick={() => { setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-500 transition-colors">
-                        <span className="material-symbols-outlined text-[12px]">restart_alt</span>
-                        {stb.promptReset || 'Reset'}
-                      </button>
-                    </div>
-                    <textarea
-                      value={wzStep1Prompt}
-                      onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); setWzPromptSource(stb.promptSourceEdited || 'Edited'); }}
-                      rows={6}
-                      placeholder="Leave empty to use the default compact prompt (recommended)"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-none leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
-                      spellCheck={false}
-                    />
+                      <div className="flex items-center gap-2">
+                        {wzPromptExpanded && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={e => { e.stopPropagation(); setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); } }}
+                            className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-500 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                            {stb.promptReset || 'Reset'}
+                          </span>
+                        )}
+                        <span className="material-symbols-outlined text-[14px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white/50 transition-colors">
+                          {wzPromptExpanded ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </div>
+                    </button>
+                    {wzPromptExpanded && (
+                      <textarea
+                        value={wzStep1Prompt}
+                        onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); setWzPromptSource(stb.promptSourceEdited || 'Edited'); }}
+                        placeholder="Leave empty to use the default compact prompt (recommended)"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
+                        style={{ minHeight: '96px', maxHeight: '480px' }}
+                        spellCheck={false}
+                      />
+                    )}
                   </div>
 
                 </div>
@@ -1609,7 +1629,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                                   <textarea
                                     value={agent.customPrompt ?? ''}
                                     onChange={e => { const v = e.target.value; setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, customPrompt: v } : a)); }}
-                                    className="mt-1.5 w-full h-28 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[10px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                                    className="mt-1.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[10px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                                    style={{ minHeight: '80px', maxHeight: '400px' }}
                                     spellCheck={false}
                                   />
                                 )}
