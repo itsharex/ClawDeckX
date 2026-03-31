@@ -341,17 +341,56 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           ?? null;
       }).catch(() => { /* prompts optional */ });
     } else {
-      // No linked template — clear to use backend defaults
-      setWzStep1Prompt('');
+      // No linked template — load generic _default prompt
       wzAgentFilePromptRef.current = null;
+      const agentCount = tpl.teamSize === 'small' ? '3 to 4' : tpl.teamSize === 'large' ? '8 to 10' : '5 to 7';
+      templateSystem.getMultiAgentTemplates(language).then(templates => {
+        const def = templates.find(t => t.id === '_default');
+        if (!def?.content.prompts?.step1) return;
+        const resolved = resolveTemplatePrompt(def.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: tpl.workflowType,
+        });
+        if (resolved) setWzStep1Prompt(resolved);
+      }).catch(() => { /* prompts optional */ });
     }
   }, [stb, language]);
 
-  const handlePreparePrompt = useCallback(() => {
+  const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
+
+  /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
+  const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
+    const agentCount = size === 'small' ? '3 to 4' : size === 'large' ? '8 to 10' : '5 to 7';
+    try {
+      const templates = await templateSystem.getMultiAgentTemplates(language);
+      const def = templates.find(t => t.id === '_default');
+      if (def?.content.prompts?.step1) {
+        const resolved = resolveTemplatePrompt(def.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: wfType,
+        });
+        if (resolved) return resolved;
+      }
+    } catch { /* fall through */ }
+    // Hard fallback matching Go default exactly
+    const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    return `Output ONLY valid JSON, no markdown.\n\nScenario: ${name}\nDescription: ${desc}\nAgents: ${agentCount}\nWorkflow: ${wfType}\nLanguage: ${langHint}\n\nFor each agent: id (kebab-case), name, role (\u22648 words), description (\u226420 words), icon (Material Symbol), color (Tailwind gradient e.g. from-blue-500 to-cyan-500). reasoning: \u226415 words. workflow: one step per agent.\n\n{"reasoning":"","template":{"id":"","name":"","description":"","agents":[{"id":"","name":"","role":"","description":"","icon":"","color":""}],"workflow":{"type":"${wfType}","description":"","steps":[{"agent":"","action":""}]}}}`;
+  }, [language]);
+
+  const handlePreparePrompt = useCallback(async () => {
     if (!scenarioName.trim() || !description.trim()) return;
     setError(null);
+    // Always pre-fill with resolved prompt so user can see and edit it
+    if (!wzStep1Prompt) {
+      const prompt = await buildDefaultStep1Prompt(scenarioName.trim(), description.trim(), teamSize, workflowType);
+      setWzStep1Prompt(prompt);
+    }
     setStep('prompt-review');
-  }, [scenarioName, description]);
+  }, [scenarioName, description, teamSize, workflowType, wzStep1Prompt, buildDefaultStep1Prompt]);
 
   const handleConfirmWizard = useCallback(() => {
     setError(null);
@@ -512,7 +551,6 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [wzStep1Error, setWzStep1Error] = useState<string | null>(null);
   const [wzStep1Result, setWzStep1Result] = useState<any>(null); // cached parsed JSON
   const wzStep1ResultRef = useRef<any>(null); // mirror for reading in callbacks before state settles
-  const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
   const wzStep1AbortRef = useRef<AbortController | null>(null);
   const wzStep1BufRef = useRef('');
   const wzStep1RafRef = useRef<ReturnType<typeof setTimeout> | null>(null);

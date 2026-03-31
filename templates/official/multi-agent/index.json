@@ -2,6 +2,7 @@
   "category": "multi-agent",
   "version": "1.0.0",
   "templates": [
+    "_default.json",
     "content-factory.json",
     "research-team.json",
     "devops-team.json",
