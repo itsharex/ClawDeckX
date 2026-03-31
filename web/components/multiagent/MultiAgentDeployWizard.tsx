@@ -37,8 +37,13 @@ const MultiAgentDeployWizard: React.FC<MultiAgentDeployWizardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agentFileEdits, setAgentFileEdits] = useState<AgentFileEdits>({});
-  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
-  const [expandedFiles, setExpandedFiles] = useState<Record<string, FileKey | null>>({});
+  const firstAgentId = template.content.agents[0]?.id ?? null;
+  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>(
+    firstAgentId ? { [firstAgentId]: true } : {}
+  );
+  const [expandedFiles, setExpandedFiles] = useState<Record<string, FileKey | null>>(
+    firstAgentId ? { [firstAgentId]: 'soul' } : {}
+  );
 
   // Build deployment request
   const buildDeployRequest = useCallback((): MultiAgentDeployRequest => {
@@ -351,6 +356,11 @@ const MultiAgentDeployWizard: React.FC<MultiAgentDeployWizardProps> = ({
                   {md.skipExisting || 'Skip if agent already exists'}
                 </label>
               </div>
+              <p className="text-[10px] text-slate-400 dark:text-white/30 -mt-1 ms-6">
+                {skipExisting
+                  ? (md.skipExistingHintOn || 'Existing agents will be left unchanged')
+                  : (md.skipExistingHintOff || 'Existing agents will be recreated and their workspace files overwritten')}
+              </p>
 
               {previewResult && (
                 <div className="rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
