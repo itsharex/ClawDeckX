@@ -145,11 +145,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     templateSystem.getAllTemplates(language).then(setFileTemplates).catch(() => { /* templates optional */ });
   }, [language]);
 
-  // When user switches files while AI gen panel is open + a template is selected, re-resolve the prompt
+  // Re-apply selected template prompt when: file changes, panel opens, template selection changes, OR templates finish loading
   useEffect(() => {
-    if (!aiGenOpen || !aiGenSelectedTplId || !fileActive) return;
+    if (!aiGenOpen || !fileActive) return;
+    if (!aiGenSelectedTplId) {
+      setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
     const tpl = aiGenTemplates.find(t => t.id === aiGenSelectedTplId);
-    if (!tpl?.content.prompts) return;
+    if (!tpl?.content.prompts) {
+      // Templates not loaded yet — keep current prompt, will re-run when aiGenTemplates updates
+      return;
+    }
     const agentName = identity?.name || selectedId || '';
     const agentRole = identity?.role || '';
     const agentDesc = identity?.description || '';
@@ -160,7 +167,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
     if (resolved) setAiGenPrompt(resolved);
     else setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
-  }, [fileActive, aiGenOpen, aiGenSelectedTplId]);
+  }, [fileActive, aiGenOpen, aiGenSelectedTplId, aiGenTemplates]); // aiGenTemplates in deps: re-apply when load completes
 
   // Subscribe to shared Manager WS for agent chat streaming events
   useEffect(() => {
@@ -451,7 +458,17 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
       return;
     }
     const tpl = aiGenTemplates.find(t => t.id === tplId);
-    if (!tpl?.content.prompts) return;
+    console.debug('[AiGen] selectTemplate', tplId, 'templates loaded:', aiGenTemplates.length, 'found:', !!tpl);
+    if (!tpl) {
+      // Templates not yet loaded — selection will be re-applied by the useEffect below once they arrive
+      console.debug('[AiGen] template list empty, will retry when loaded');
+      return;
+    }
+    if (!tpl.content.prompts) {
+      console.debug('[AiGen] template has no prompts, using fallback');
+      if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
     const agentName = identity?.name || selectedId || '';
     const agentRole = identity?.role || '';
     const agentDesc = identity?.description || '';
@@ -461,7 +478,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     const mappedKey = fileActive ? fileKeyMap[fileActive.replace('.md', '').toLowerCase()] : undefined;
     // Prefer prompts.files[key], fall back to prompts.agentFile
     const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
+    console.debug('[AiGen] perFilePrompts:', !!perFilePrompts, 'agentFile:', !!tpl.content.prompts.agentFile, 'language:', language);
     const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
+    console.debug('[AiGen] resolved length:', resolved?.length ?? 0);
     if (resolved) setAiGenPrompt(resolved);
     else if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
   }, [aiGenTemplates, fileActive, identity, selectedId, language, buildAiGenFallbackPrompt]);
@@ -1658,6 +1677,20 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                 />
                               </div>
                             )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-white/30 uppercase tracking-wider">
+                                {a.aiGenPromptLabel || 'Prompt'}
+                              </span>
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
+                                aiGenSelectedTplId
+                                  ? 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
+                                  : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30'
+                              }`}>
+                                {aiGenSelectedTplId
+                                  ? (aiGenTemplates.find(t => t.id === aiGenSelectedTplId)?.metadata?.name ?? aiGenSelectedTplId)
+                                  : (a.aiGenPromptSourceDefault || 'Generic')}
+                              </span>
+                            </div>
                             <textarea
                               value={aiGenPrompt}
                               onChange={e => setAiGenPrompt(e.target.value)}
