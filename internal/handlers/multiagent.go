@@ -1789,3 +1789,247 @@ sessions_spawn(task="your task description", agentId="subagent-id")
 
 	return nil
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Wizard SSE helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+// writeSSE writes a single SSE event to w and flushes.
+func writeSSE(w http.ResponseWriter, event, data string) {
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func writeSSEJSON(w http.ResponseWriter, event string, v interface{}) {
+	b, _ := json.Marshal(v)
+	writeSSE(w, event, string(b))
+}
+
+// stripFences removes ```json / ``` markdown fences from LLM output.
+func stripFences(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		if nl := strings.Index(s, "\n"); nl > 0 {
+			s = s[nl+1:]
+		}
+		if end := strings.LastIndex(s, "```"); end > 0 {
+			s = s[:end]
+		}
+		s = strings.TrimSpace(s)
+	}
+	return s
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GenerateWizardStep1 — SSE stream: core team structure (no markdown files)
+// ────────────────────────────────────────────────────────────────────────────
+
+// WizardStep1Request is the body for the wizard step-1 SSE endpoint.
+type WizardStep1Request struct {
+	ScenarioName string `json:"scenarioName"`
+	Description  string `json:"description"`
+	TeamSize     string `json:"teamSize"`
+	WorkflowType string `json:"workflowType"`
+	Language     string `json:"language"`
+	ModelID      string `json:"modelId,omitempty"`
+	// CustomPrompt overrides the default prompt when non-empty.
+	CustomPrompt string `json:"customPrompt,omitempty"`
+}
+
+// GenerateWizardStep1 streams the core team structure (id/name/role/description/icon/color/workflow)
+// via SSE. Events: token (each streamed token), done (parsed JSON), error.
+func (h *MultiAgentHandler) GenerateWizardStep1(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	var req WizardStep1Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSSEJSON(w, "error", map[string]string{"code": "BAD_REQUEST", "msg": err.Error()})
+		return
+	}
+	if req.ScenarioName == "" || req.Description == "" {
+		writeSSEJSON(w, "error", map[string]string{"code": "BAD_REQUEST", "msg": "scenarioName and description are required"})
+		return
+	}
+
+	providerCfg, err := llmdirect.ResolveProvider(h.configPath, req.ModelID)
+	if err != nil {
+		writeSSEJSON(w, "error", map[string]string{"code": "LLM_PROVIDER_FAILED", "msg": err.Error()})
+		return
+	}
+
+	langHint := "English"
+	switch req.Language {
+	case "zh", "zh-TW":
+		langHint = "Chinese"
+	case "ja":
+		langHint = "Japanese"
+	case "ko":
+		langHint = "Korean"
+	}
+
+	agentCountHint := "5 to 7"
+	switch req.TeamSize {
+	case "small":
+		agentCountHint = "3 to 4"
+	case "large":
+		agentCountHint = "8 to 10"
+	}
+
+	prompt := req.CustomPrompt
+	if prompt == "" {
+		prompt = fmt.Sprintf(
+			"Output ONLY valid JSON, no markdown.\n\nScenario: %s\nDescription: %s\nAgents: %s\nWorkflow: %s\nLanguage: %s\n\nFor each agent: id (kebab-case), name, role (≤8 words), description (≤20 words), icon (Material Symbol), color (Tailwind gradient e.g. from-blue-500 to-cyan-500). reasoning: ≤15 words. workflow: one step per agent.\n\n{\"reasoning\":\"\",\"template\":{\"id\":\"\",\"name\":\"\",\"description\":\"\",\"agents\":[{\"id\":\"\",\"name\":\"\",\"role\":\"\",\"description\":\"\",\"icon\":\"\",\"color\":\"\"}],\"workflow\":{\"type\":\"%s\",\"description\":\"\",\"steps\":[{\"agent\":\"\",\"action\":\"\"}]}}}",
+			req.ScenarioName, req.Description, agentCountHint, req.WorkflowType, langHint, req.WorkflowType,
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	defer cancel()
+
+	var buf strings.Builder
+	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 2048) {
+		if chunk.Error != nil {
+			code := "LLM_STREAM_FAILED"
+			msg := chunk.Error.Error()
+			if strings.Contains(msg, "context") {
+				code = "TIMEOUT"
+				msg = "Generation timed out or was canceled"
+			}
+			writeSSEJSON(w, "error", map[string]string{"code": code, "msg": msg})
+			return
+		}
+		if chunk.Done {
+			break
+		}
+		buf.WriteString(chunk.Token)
+		writeSSEJSON(w, "token", map[string]string{"token": chunk.Token})
+	}
+
+	raw := stripFences(buf.String())
+
+	// Validate JSON
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		writeSSEJSON(w, "error", map[string]string{
+			"code": "JSON_PARSE_FAILED",
+			"msg":  fmt.Sprintf("JSON parse failed: %v", err),
+			"raw":  raw,
+		})
+		return
+	}
+
+	writeSSEJSON(w, "done", map[string]interface{}{"json": raw, "parsed": parsed})
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// GenerateWizardStep2 — SSE stream: markdown files for a single agent
+// ────────────────────────────────────────────────────────────────────────────
+
+// WizardStep2Request is the body for the wizard step-2 SSE endpoint.
+type WizardStep2Request struct {
+	AgentID      string `json:"agentId"`
+	AgentName    string `json:"agentName"`
+	AgentRole    string `json:"agentRole"`
+	AgentDesc    string `json:"agentDesc"`
+	ScenarioName string `json:"scenarioName"`
+	Language     string `json:"language"`
+	ModelID      string `json:"modelId,omitempty"`
+	// CustomPrompt overrides the default prompt when non-empty.
+	CustomPrompt string `json:"customPrompt,omitempty"`
+}
+
+// GenerateWizardStep2 streams the markdown file content for a single agent via SSE.
+// Events: token, done (with soul/agentsMd/userMd/identityMd/heartbeat fields), error.
+func (h *MultiAgentHandler) GenerateWizardStep2(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	var req WizardStep2Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSSEJSON(w, "error", map[string]string{"code": "BAD_REQUEST", "msg": err.Error()})
+		return
+	}
+	if req.AgentID == "" || req.AgentName == "" {
+		writeSSEJSON(w, "error", map[string]string{"code": "BAD_REQUEST", "msg": "agentId and agentName are required"})
+		return
+	}
+
+	providerCfg, err := llmdirect.ResolveProvider(h.configPath, req.ModelID)
+	if err != nil {
+		writeSSEJSON(w, "error", map[string]string{"code": "LLM_PROVIDER_FAILED", "msg": err.Error()})
+		return
+	}
+
+	langHint := "English"
+	switch req.Language {
+	case "zh", "zh-TW":
+		langHint = "Chinese"
+	case "ja":
+		langHint = "Japanese"
+	case "ko":
+		langHint = "Korean"
+	}
+
+	prompt := req.CustomPrompt
+	if prompt == "" {
+		prompt = fmt.Sprintf(
+			"Output ONLY valid JSON, no markdown.\n\nGenerate workspace files for AI agent:\nName: %s\nRole: %s\nDescription: %s\nScenario: %s\nLanguage: %s\n\nFields:\n- soul: 3 sentences (persona, responsibilities, working style)\n- agentsMd: 2 sentences (workspace startup instructions)\n- userMd: 1 sentence (profile of the human this agent serves)\n- identityMd: \"Name: X | Creature: X | Vibe: X | Emoji: X\"\n- heartbeat: \"- [ ] item1\\n- [ ] item2\\n- [ ] item3\"\n\n{\"soul\":\"\",\"agentsMd\":\"\",\"userMd\":\"\",\"identityMd\":\"\",\"heartbeat\":\"\"}",
+			req.AgentName, req.AgentRole, req.AgentDesc, req.ScenarioName, langHint,
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	var buf strings.Builder
+	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 1024) {
+		if chunk.Error != nil {
+			code := "LLM_STREAM_FAILED"
+			msg := chunk.Error.Error()
+			if strings.Contains(msg, "context") {
+				code = "TIMEOUT"
+				msg = "Generation timed out or was canceled"
+			}
+			writeSSEJSON(w, "error", map[string]string{"code": code, "msg": msg})
+			return
+		}
+		if chunk.Done {
+			break
+		}
+		buf.WriteString(chunk.Token)
+		writeSSEJSON(w, "token", map[string]string{"token": chunk.Token, "agentId": req.AgentID})
+	}
+
+	raw := stripFences(buf.String())
+
+	var result struct {
+		Soul       string `json:"soul"`
+		AgentsMd   string `json:"agentsMd"`
+		UserMd     string `json:"userMd"`
+		IdentityMd string `json:"identityMd"`
+		Heartbeat  string `json:"heartbeat"`
+	}
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		// Non-fatal: send what we have as raw text in soul field
+		writeSSEJSON(w, "done", map[string]interface{}{
+			"agentId":    req.AgentID,
+			"soul":       raw,
+			"parseError": err.Error(),
+		})
+		return
+	}
+
+	writeSSEJSON(w, "done", map[string]interface{}{
+		"agentId":    req.AgentID,
+		"soul":       result.Soul,
+		"agentsMd":   result.AgentsMd,
+		"userMd":     result.UserMd,
+		"identityMd": result.IdentityMd,
+		"heartbeat":  result.Heartbeat,
+	})
+}

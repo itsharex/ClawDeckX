@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
+const GenerationWizard = lazy(() => import('./GenerationWizard'));
 import { Language } from '../../types';
 import { getTranslation } from '../../locales';
 import {
@@ -23,7 +24,7 @@ interface ScenarioTeamBuilderProps {
   completedResult?: MultiAgentGenerateResult;
 }
 
-type BuilderStep = 'input' | 'prompt-review' | 'generating' | 'preview' | 'edit-agent';
+type BuilderStep = 'input' | 'prompt-review' | 'generating' | 'wizard' | 'preview' | 'edit-agent';
 
 interface AgentEdit {
   id: string;
@@ -380,6 +381,11 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
     setError(null);
     setStep('prompt-review');
   }, [scenarioName, description, buildPrompt]);
+
+  const handleConfirmWizard = useCallback(() => {
+    setStep('wizard');
+    setError(null);
+  }, []);
 
   const handleConfirmGenerate = useCallback(async () => {
     setStep('generating');
@@ -1117,6 +1123,33 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
           })()}
 
 
+          {/* ══ Step: Wizard ══ */}
+          {step === 'wizard' && (
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-16">
+                <span className="material-symbols-outlined text-[28px] text-violet-400 animate-spin" style={{ animationDuration: '1.5s' }}>progress_activity</span>
+              </div>
+            }>
+              <GenerationWizard
+                language={language}
+                params={{
+                  scenarioName: scenarioName.trim(),
+                  description: description.trim(),
+                  teamSize,
+                  workflowType,
+                  language,
+                  modelId: selectedModel || undefined,
+                }}
+                onDone={(result) => {
+                  setGenerateResult(result);
+                  setEditedAgents({});
+                  setStep('preview');
+                }}
+                onCancel={() => setStep('prompt-review')}
+              />
+            </Suspense>
+          )}
+
           {/* ══ Step: Preview ══ */}
           {step === 'preview' && generateResult && (
             <div className="p-5 space-y-4">
@@ -1384,12 +1417,12 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
             )}
             {step === 'prompt-review' && (
               <button
-                onClick={handleConfirmGenerate}
+                onClick={directLlm ? handleConfirmWizard : handleConfirmGenerate}
                 disabled={!editablePrompt.trim()}
                 className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
               >
-                <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                {stb.generateBtn || 'Generate Team with AI'}
+                <span className="material-symbols-outlined text-[16px]">{directLlm ? 'auto_fix_high' : 'auto_awesome'}</span>
+                {directLlm ? (stb.generateWizardBtn || 'Generate (Step-by-Step)') : (stb.generateBtn || 'Generate Team with AI')}
               </button>
             )}
             {step === 'preview' && generateResult && (
