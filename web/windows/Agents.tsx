@@ -1610,18 +1610,17 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                 <span className="text-[10px] text-slate-500 dark:text-white/40 shrink-0">
                                   {a.aiGenTemplate || 'Template'}
                                 </span>
-                                <div className="flex-1">
-                                  <CustomSelect
-                                    value={aiGenSelectedTplId}
-                                    onChange={handleAiGenSelectTemplate}
-                                    disabled={aiGenRunning}
-                                    placeholder={a.aiGenNoTemplate || '— Generic prompt —'}
-                                    options={[
-                                      { value: '', label: a.aiGenNoTemplate || '— Generic prompt —' },
-                                      ...aiGenTemplates.map(tpl => ({ value: tpl.id, label: tpl.metadata?.name || tpl.id })),
-                                    ]}
-                                  />
-                                </div>
+                                <CustomSelect
+                                  value={aiGenSelectedTplId}
+                                  onChange={handleAiGenSelectTemplate}
+                                  disabled={aiGenRunning}
+                                  placeholder={a.aiGenNoTemplate || '— Generic prompt —'}
+                                  className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60"
+                                  options={[
+                                    { value: '', label: a.aiGenNoTemplate || '— Generic prompt —' },
+                                    ...aiGenTemplates.map(tpl => ({ value: tpl.id, label: tpl.metadata?.name || tpl.id })),
+                                  ]}
+                                />
                               </div>
                             )}
                             <textarea
