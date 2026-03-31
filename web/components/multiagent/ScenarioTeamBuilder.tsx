@@ -335,6 +335,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const applyingTemplateRef = useRef(false);
+
   const handleApplyTemplate = useCallback((tpl: ScenarioTemplate) => {
     const name = stb[tpl.nameKey] || tpl.name;
     const desc = stb[tpl.descKey] || tpl.desc;
@@ -346,6 +348,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     // Clear cached step1 result so next wizard run is fresh with new prompts
     wzStep1ResultRef.current = null;
     setWzStep1Result(null);
+    // Mark that we're applying a template so the auto-clear useEffect skips
+    applyingTemplateRef.current = true;
     // Load template prompts if linked
     if (tpl.multiAgentTemplateId) {
       const agentCount = tpl.teamSize === 'small' ? '3-4' : tpl.teamSize === 'large' ? '8-10' : '5-7';
@@ -365,7 +369,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         wzAgentFilePromptRef.current = matched.content.prompts.agentFile?.[agentFileLang]
           ?? matched.content.prompts.agentFile?.['en']
           ?? null;
-      }).catch(() => { /* prompts optional */ });
+        applyingTemplateRef.current = false;
+      }).catch(() => { applyingTemplateRef.current = false; });
     } else {
       // No linked template — load generic default prompt + agentFile
       const agentCount = tpl.teamSize === 'small' ? '3 to 4' : tpl.teamSize === 'large' ? '8 to 10' : '5 to 7';
@@ -387,7 +392,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
         wzAgentFilePromptRef.current = def.content.prompts?.agentFile?.[agentFileLang]
           ?? def.content.prompts?.agentFile?.['en']
           ?? null;
-      }).catch(() => { wzAgentFilePromptRef.current = null; });
+        applyingTemplateRef.current = false;
+      }).catch(() => { wzAgentFilePromptRef.current = null; applyingTemplateRef.current = false; });
     }
   }, [stb, language]);
 
@@ -661,8 +667,10 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
 
   // Auto-clear prompt when key params change (if not user-edited), so it gets regenerated fresh
+  // Skip when a template is being applied — the template's own async loader sets the prompt.
   useEffect(() => {
     if (wzPromptUserEdited) return;
+    if (applyingTemplateRef.current) return;
     setWzStep1Prompt('');
     setWzPromptSource(null);
   }, [teamSize, workflowType, scenarioName, description]); // eslint-disable-line react-hooks/exhaustive-deps
