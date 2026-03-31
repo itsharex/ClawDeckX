@@ -409,30 +409,31 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     // Load multi-agent templates for the picker (fire-and-forget)
     try {
       const templates = await templateSystem.getMultiAgentTemplates(language);
-      setAiGenTemplates(templates.filter(t => t.content.prompts?.agentFile));
+      setAiGenTemplates(templates.filter(t => t.content.prompts?.files || t.content.prompts?.agentFile));
     } catch { /* templates optional */ }
   }, [fileActive, selectedId, language, buildAiGenFallbackPrompt]);
 
-  /** Called when user picks a template from the dropdown — resolves agentFile prompt */
+  /** Called when user picks a template from the dropdown — resolves per-file prompt */
   const handleAiGenSelectTemplate = useCallback((tplId: string) => {
     setAiGenSelectedTplId(tplId);
     if (!tplId) {
-      // Revert to generic fallback
       if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
       return;
     }
     const tpl = aiGenTemplates.find(t => t.id === tplId);
-    if (!tpl?.content.prompts?.agentFile) return;
+    if (!tpl?.content.prompts) return;
     const agentName = identity?.name || selectedId || '';
     const agentRole = identity?.role || '';
     const agentDesc = identity?.description || '';
-    const resolved = resolveTemplatePrompt(tpl.content.prompts.agentFile, language, {
-      agentName,
-      agentRole,
-      agentDesc,
-      scenarioName: agentRole || agentName,
-    });
+    const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
+    // Map filename → files key
+    const fileKeyMap: Record<string, string> = { 'agents': 'agents', 'soul': 'soul', 'user': 'user', 'identity': 'identity', 'heartbeat': 'heartbeat' };
+    const mappedKey = fileActive ? fileKeyMap[fileActive.replace('.md', '').toLowerCase()] : undefined;
+    // Prefer prompts.files[key], fall back to prompts.agentFile
+    const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
+    const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
     if (resolved) setAiGenPrompt(resolved);
+    else if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
   }, [aiGenTemplates, fileActive, identity, selectedId, language, buildAiGenFallbackPrompt]);
 
   const handleAiGenRun = useCallback(() => {

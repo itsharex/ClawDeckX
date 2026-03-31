@@ -102,8 +102,16 @@ export interface ScenarioTemplate {
 export interface MultiAgentTemplatePrompts {
   /** Prompt for wizard step1 (team structure). Keys: 'en', 'zh'. Supports {{scenarioName}}, {{description}}, {{agentCount}}, {{workflowType}}. */
   step1?: Record<string, string>;
-  /** Prompt for per-agent file generation. Keys: 'en', 'zh'. Supports {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}. */
+  /** Prompt for per-agent file generation (all files combined as JSON). Keys: 'en', 'zh'. Supports {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}. */
   agentFile?: Record<string, string>;
+  /** Per-file prompts for AI writing individual agent workspace files. Keys: soul, agents, user, identity, heartbeat. Each value is keyed by language (en, zh). */
+  files?: {
+    soul?: Record<string, string>;
+    agents?: Record<string, string>;
+    user?: Record<string, string>;
+    identity?: Record<string, string>;
+    heartbeat?: Record<string, string>;
+  };
 }
 
 export interface MultiAgentTemplate {
