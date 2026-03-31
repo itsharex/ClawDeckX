@@ -352,14 +352,11 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     // Mark that we're applying a template so the auto-clear useEffect skips
     applyingTemplateRef.current = true;
     currentTemplateIdRef.current = tpl.multiAgentTemplateId ?? null;
-    console.debug('[STB] handleApplyTemplate', { id: tpl.multiAgentTemplateId, name: tpl.name });
     // Load template prompts if linked
     if (tpl.multiAgentTemplateId) {
       const agentCount = tpl.teamSize === 'small' ? '3-4' : tpl.teamSize === 'large' ? '8-10' : '5-7';
       templateSystem.getMultiAgentTemplates(language).then(templates => {
-        console.debug('[STB] loaded templates', templates.map(t => t.id));
         const matched = templates.find(t => t.id === tpl.multiAgentTemplateId);
-        console.debug('[STB] matched', matched?.id, 'prompts?', !!matched?.content.prompts);
         if (!matched?.content.prompts) return;
         const step1 = resolveTemplatePrompt(matched.content.prompts.step1, language, {
           scenarioName: name,
@@ -368,7 +365,6 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           workflowType: tpl.workflowType,
           workflowDescription: getWorkflowDescription(tpl.workflowType, language),
         });
-        console.debug('[STB] step1 resolved:', step1?.slice(0, 80));
         if (step1) { setWzStep1Prompt(step1); setWzPromptSource(matched.metadata?.name || tpl.multiAgentTemplateId || null); }
         // Store agentFile prompt template for later per-agent use
         const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
@@ -376,7 +372,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
           ?? matched.content.prompts.agentFile?.['en']
           ?? null;
         applyingTemplateRef.current = false;
-      }).catch((e) => { console.error('[STB] template load error', e); applyingTemplateRef.current = false; });
+      }).catch(() => { applyingTemplateRef.current = false; });
     } else {
       // No linked template — load generic default prompt + agentFile
       const agentCount = tpl.teamSize === 'small' ? '3 to 4' : tpl.teamSize === 'large' ? '8 to 10' : '5 to 7';

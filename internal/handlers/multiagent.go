@@ -1983,11 +1983,11 @@ func (h *MultiAgentHandler) GenerateWizardStep2(w http.ResponseWriter, r *http.R
 		)
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
 	defer cancel()
 
 	var buf strings.Builder
-	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 1024) {
+	for chunk := range llmdirect.StreamCompletion(ctx, providerCfg, []llmdirect.Message{{Role: "user", Content: prompt}}, 4096) {
 		if chunk.Error != nil {
 			code := "LLM_STREAM_FAILED"
 			msg := chunk.Error.Error()
