@@ -352,6 +352,8 @@
     "wzRetry": "إعادة المحاولة",
     "wzSkip": "تخطي",
     "wzInclude": "تضمين",
+    "wzEditPrompt": "تعديل الطلب",
+    "wzStoppedByUser": "أوقفه المستخدم",
     "generateWizardBtn": "إنشاء (خطوة بخطوة)",
     "nextBtn": "التالي",
     "back": "رجوع",

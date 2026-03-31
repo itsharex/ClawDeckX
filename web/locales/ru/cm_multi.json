@@ -352,6 +352,8 @@
     "wzRetry": "Повторить",
     "wzSkip": "Пропустить",
     "wzInclude": "Включить",
+    "wzEditPrompt": "Редактировать запрос",
+    "wzStoppedByUser": "Остановлено пользователем",
     "generateWizardBtn": "Пошаговая генерация",
     "nextBtn": "Далее",
     "back": "Назад",

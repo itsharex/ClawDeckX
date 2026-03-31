@@ -352,6 +352,8 @@
     "wzRetry": "पुनः प्रयास",
     "wzSkip": "छोड़ें",
     "wzInclude": "शामिल करें",
+    "wzEditPrompt": "प्रॉम्प्ट संपादित करें",
+    "wzStoppedByUser": "उपयोगकर्ता ने रोका",
     "generateWizardBtn": "चरणबद्ध बनाएं",
     "nextBtn": "अगला",
     "back": "वापस",

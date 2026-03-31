@@ -352,6 +352,8 @@
     "wzRetry": "再試行",
     "wzSkip": "スキップ",
     "wzInclude": "含める",
+    "wzEditPrompt": "プロンプトを編集",
+    "wzStoppedByUser": "ユーザーが停止しました",
     "generateWizardBtn": "ステップ生成",
     "nextBtn": "次へ",
     "back": "戻る",

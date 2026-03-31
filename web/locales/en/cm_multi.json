@@ -352,6 +352,8 @@
     "wzRetry": "Retry",
     "wzSkip": "Skip",
     "wzInclude": "Include",
+    "wzEditPrompt": "Edit prompt",
+    "wzStoppedByUser": "Stopped by user",
     "generateWizardBtn": "Generate Team",
     "nextBtn": "Next",
     "back": "Back",

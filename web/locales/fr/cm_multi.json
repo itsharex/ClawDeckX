@@ -352,6 +352,8 @@
     "wzRetry": "Réessayer",
     "wzSkip": "Ignorer",
     "wzInclude": "Inclure",
+    "wzEditPrompt": "Modifier le prompt",
+    "wzStoppedByUser": "Arrêté par l'utilisateur",
     "generateWizardBtn": "Générer (étape par étape)",
     "nextBtn": "Suivant",
     "back": "Retour",

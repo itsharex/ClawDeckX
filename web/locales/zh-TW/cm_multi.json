@@ -352,6 +352,8 @@
     "wzRetry": "重試",
     "wzSkip": "跳過",
     "wzInclude": "加入",
+    "wzEditPrompt": "編輯提示詞",
+    "wzStoppedByUser": "已被使用者停止",
     "generateWizardBtn": "逐步生成",
     "nextBtn": "下一步",
     "back": "返回",

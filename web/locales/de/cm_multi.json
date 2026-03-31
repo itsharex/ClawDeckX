@@ -352,6 +352,8 @@
     "wzRetry": "Wiederholen",
     "wzSkip": "Überspringen",
     "wzInclude": "Einschließen",
+    "wzEditPrompt": "Prompt bearbeiten",
+    "wzStoppedByUser": "Vom Benutzer gestoppt",
     "generateWizardBtn": "Schrittweise generieren",
     "nextBtn": "Weiter",
     "back": "Zurück",

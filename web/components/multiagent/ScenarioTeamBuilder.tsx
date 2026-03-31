@@ -646,8 +646,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     setWzStep1Running(false);
   }, []);
 
-  // Step2: run a single agent by index
-  const wzRunAgent = useCallback((idx: number, agents: WzAgentState[]) => {
+  // Step2: run a single agent by index. Pass singleOnly=true to prevent auto-chaining to next pending agent.
+  const wzRunAgent = useCallback((idx: number, agents: WzAgentState[], singleOnly = false) => {
     const agent = agents[idx];
     if (!agent) return;
     wzStep2AbortRef.current?.abort();
@@ -675,8 +675,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
             userMd: doneData.userMd ?? '', identityMd: doneData.identityMd ?? '',
             heartbeat: doneData.heartbeat ?? '',
           } : a);
-          // Auto-advance to next pending
-          const nextIdx = next.findIndex((a, i) => i > idx && a.status === 'pending');
+          // Auto-advance to next pending (only when running in batch mode)
+          const nextIdx = singleOnly ? -1 : next.findIndex((a, i) => i > idx && a.status === 'pending');
           if (nextIdx >= 0) {
             setTimeout(() => wzRunAgent(nextIdx, next), 200);
           } else {
@@ -700,8 +700,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const wzHandleStop = useCallback(() => {
     wzStep2AbortRef.current?.abort();
     setWzStep2Running(false);
-    setWzAgents(prev => prev.map(a => a.status === 'running' ? { ...a, status: 'error', error: 'Stopped by user' } : a));
-  }, []);
+    setWzAgents(prev => prev.map(a => a.status === 'running' ? { ...a, status: 'error', error: stb.wzStoppedByUser || 'Stopped by user' } : a));
+  }, [stb.wzStoppedByUser])
 
   const wzHandleSkip = useCallback((idx: number) => {
     if (wzStep2Running && wzStep2ActiveIdxRef.current === idx) {
@@ -1468,7 +1468,7 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
                               {/* ▶ Start — only for pending agents, when not running globally */}
                               {agent.status === 'pending' && !wzStep2Running && (
                                 <button
-                                  onClick={() => wzRunAgent(idx, wzAgents)}
+                                  onClick={() => wzRunAgent(idx, wzAgents, true)}
                                   title={stb.wzStartAgent || 'Start this agent'}
                                   className="w-6 h-6 rounded flex items-center justify-center hover:bg-violet-500/10 text-violet-500 transition-colors"
                                 >

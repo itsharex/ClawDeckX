@@ -352,6 +352,8 @@
     "wzRetry": "Coba lagi",
     "wzSkip": "Lewati",
     "wzInclude": "Sertakan",
+    "wzEditPrompt": "Edit prompt",
+    "wzStoppedByUser": "Dihentikan oleh pengguna",
     "generateWizardBtn": "Buat (Langkah demi Langkah)",
     "nextBtn": "Lanjut",
     "back": "Kembali",
