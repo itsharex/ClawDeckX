@@ -298,6 +298,14 @@ func RunServe(args []string) int {
 		svc.GatewayHost = activeProfile.Host
 		svc.GatewayPort = activeProfile.Port
 		svc.GatewayToken = activeProfile.Token
+
+		// If only the token changed (same host:port), update in-place without
+		// reconnecting — Reconnect() kills all pending WS requests and causes
+		// a 502 storm for concurrent callers.
+		if current.Host == activeProfile.Host && current.Port == activeProfile.Port {
+			gwClient.UpdateToken(activeProfile.Token)
+			return true
+		}
 		gwClient.Reconnect(openclaw.GWClientConfig{
 			Host:  activeProfile.Host,
 			Port:  activeProfile.Port,

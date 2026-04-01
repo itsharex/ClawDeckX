@@ -149,7 +149,9 @@ func (h *GatewayProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Port > 0 {
 		profile.Port = req.Port
 	}
-	profile.Token = req.Token
+	if req.Token != "" {
+		profile.Token = req.Token
+	}
 
 	if err := h.repo.Update(profile); err != nil {
 		web.FailErr(w, r, web.ErrGWProfileSaveFail)

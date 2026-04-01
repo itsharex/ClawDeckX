@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -581,10 +582,19 @@ func (c *GWClient) Stop() {
 }
 
 func (c *GWClient) Reconnect(newCfg GWClientConfig) {
+	var callerInfo string
+	if pc, file, line, ok := runtime.Caller(1); ok {
+		fn := runtime.FuncForPC(pc)
+		name := ""
+		if fn != nil {
+			name = fn.Name()
+		}
+		callerInfo = fmt.Sprintf("%s:%d (%s)", file, line, name)
+	}
 	logger.Gateway.Info().
 		Str("host", newCfg.Host).
 		Int("port", newCfg.Port).
-		Str("caller", "Reconnect").
+		Str("caller", callerInfo).
 		Msg("Reconnect() called")
 	logger.Log.Info().
 		Str("host", newCfg.Host).
@@ -643,7 +653,9 @@ func (c *GWClient) GetConfig() GWClientConfig {
 }
 
 // RefreshTokenFromConfig reloads the gateway auth token from the OpenClaw config
-// path and reconnects if the token changed.
+// path and updates the cached config if the token changed.  It does NOT call
+// Reconnect() because the WS connection already authenticated during sendConnect;
+// only the HTTP history path needs the refreshed token in cfg.
 func (c *GWClient) RefreshTokenFromConfig() bool {
 	token := readGatewayTokenFromConfig()
 	if token == "" {
@@ -651,17 +663,25 @@ func (c *GWClient) RefreshTokenFromConfig() bool {
 	}
 
 	c.mu.Lock()
-	current := c.cfg
-	if current.Token == token {
+	if c.cfg.Token == token {
 		c.mu.Unlock()
 		return false
 	}
-	current.Token = token
+	c.cfg.Token = token
 	c.mu.Unlock()
 
-	logger.Log.Info().Int("tokenLen", len(token)).Msg("gateway token refreshed from config")
-	c.Reconnect(current)
+	logger.Log.Info().Int("tokenLen", len(token)).Msg("gateway token refreshed from config (in-place)")
 	return true
+}
+
+// UpdateToken updates the cached auth token without reconnecting the WebSocket.
+// Use this when only the token changed but host:port remain the same — avoids
+// killing pending WS requests (which Reconnect would do).
+func (c *GWClient) UpdateToken(token string) {
+	c.mu.Lock()
+	c.cfg.Token = token
+	c.mu.Unlock()
+	logger.Log.Info().Int("tokenLen", len(token)).Msg("gateway token updated in-place")
 }
 
 // IsLocalGateway returns true if the gateway is running on localhost/loopback.

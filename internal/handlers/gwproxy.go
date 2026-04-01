@@ -558,7 +558,7 @@ func (h *GWProxyHandler) SessionsHistoryPaginated(w http.ResponseWriter, r *http
 	cursor := r.URL.Query().Get("cursor")
 
 	cfg := h.client.GetConfig()
-	if cfg.Host != "" && cfg.Port != 0 {
+	if cfg.Host != "" && cfg.Port != 0 && cfg.Token != "" {
 		status, body, err := fetchHistoryPageViaHTTP(r, cfg, key, limit, cursor)
 		if err == nil {
 			switch status {
