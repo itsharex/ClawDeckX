@@ -581,6 +581,11 @@ func (c *GWClient) Stop() {
 }
 
 func (c *GWClient) Reconnect(newCfg GWClientConfig) {
+	logger.Gateway.Info().
+		Str("host", newCfg.Host).
+		Int("port", newCfg.Port).
+		Str("caller", "Reconnect").
+		Msg("Reconnect() called")
 	logger.Log.Info().
 		Str("host", newCfg.Host).
 		Int("port", newCfg.Port).
@@ -817,6 +822,7 @@ func (c *GWClient) dial() error {
 
 func (c *GWClient) readLoop(conn *websocket.Conn) error {
 	defer func() {
+		logger.Gateway.Debug().Msg("readLoop: defer cleanup starting")
 		c.mu.Lock()
 		wasConnected := c.connected
 		c.connected = false
@@ -852,6 +858,7 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			logger.Gateway.Warn().Err(err).Msg("readLoop: ReadMessage error, exiting")
 			return fmt.Errorf(i18n.T(i18n.MsgErrReadMessageFailed), err)
 		}
 
