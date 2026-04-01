@@ -443,7 +443,6 @@ func RunServe(args []string) int {
 		}
 	}
 	runtimeHandler := handlers.NewRuntimeHandler(runtimeMgr)
-	runtimeHandler.SetService(svc)
 
 	router := web.NewRouter()
 
