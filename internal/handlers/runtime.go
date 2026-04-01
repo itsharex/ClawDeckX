@@ -167,7 +167,23 @@ func (h *RuntimeHandler) UpdateOpenClaw(w http.ResponseWriter, r *http.Request) 
 		if st.Running {
 			if err := h.svc.Stop(); err == nil {
 				gwWasRunning = true
-				time.Sleep(2 * time.Second) // Wait for process to fully exit and release locks
+				// Wait longer on Windows for process to fully exit and release all file locks.
+				// Windows file handle cleanup is slower than Unix, especially for node_modules.
+				// The postinstall script also needs time to complete before npm can rename files.
+				waitTime := 3 * time.Second
+				if os.Getenv("GOOS") == "windows" || os.Getenv("OS") != "" {
+					waitTime = 5 * time.Second
+				}
+				time.Sleep(waitTime)
+
+				// Verify gateway actually stopped by checking status again
+				for i := 0; i < 3; i++ {
+					st = h.svc.Status()
+					if !st.Running {
+						break
+					}
+					time.Sleep(1 * time.Second)
+				}
 			}
 		}
 	}
