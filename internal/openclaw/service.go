@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -162,7 +163,7 @@ func (s *Service) remoteStatus() Status {
 	if port == 0 {
 		port = 18789
 	}
-	addr := fmt.Sprintf("%s:%d", s.GatewayHost, port)
+	addr := net.JoinHostPort(s.GatewayHost, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
 	if err != nil {
@@ -346,6 +347,19 @@ func (s *Service) Restart() error {
 	}
 }
 
+// isConfigApplyConflict checks if the error is a retriable optimistic concurrency
+// conflict from the Gateway (hash mismatch, invalid config, stale state, etc.).
+func isConfigApplyConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "config changed since last load") ||
+		strings.Contains(msg, "invalid config") ||
+		strings.Contains(msg, "fix before patching") ||
+		strings.Contains(msg, "INVALID_REQUEST")
+}
+
 func (s *Service) gwClientRestart() error {
 	const maxRetries = 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -386,7 +400,7 @@ func (s *Service) gwClientRestart() error {
 		}
 		_, err = s.gwClient.RequestWithTimeout("config.apply", params, 15*time.Second)
 		if err != nil {
-			if strings.Contains(err.Error(), "config changed since last load") && attempt < maxRetries-1 {
+			if isConfigApplyConflict(err) && attempt < maxRetries-1 {
 				logger.Gateway.Warn().Int("attempt", attempt+1).Msg("config.apply conflict, retrying")
 				time.Sleep(200 * time.Millisecond)
 				continue

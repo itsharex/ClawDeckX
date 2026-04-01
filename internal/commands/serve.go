@@ -347,6 +347,8 @@ func RunServe(args []string) int {
 		switch event {
 		case "connected":
 			lifecycleRecorder.RecordStarted("ws_connected")
+		case "reconnected":
+			lifecycleRecorder.RecordStarted("ws_reconnected")
 		case "disconnected":
 			if svc.IsRemote() {
 				lifecycleRecorder.RecordUnreachable(detail)

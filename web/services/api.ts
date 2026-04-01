@@ -903,6 +903,17 @@ const GW_RETRY_DELAY_MS = 1500;
 const isGatewayTransientError = (e: any): boolean =>
   e?.status === 502 || e?.code === 'GW_PROXY_FAILED' || /gateway.*not.*connect/i.test(e?.message || '');
 
+const isConfigConflictError = (e: any): boolean => {
+  const msg = (e?.message || '').toLowerCase();
+  const code = e?.code || e?.errorCode || '';
+  return code === 'HASH_MISMATCH'
+    || code === 'INVALID_REQUEST'
+    || msg.includes('hash')
+    || msg.includes('invalid config')
+    || msg.includes('config changed since last load')
+    || msg.includes('fix before patching');
+};
+
 const rpc = async <T = any>(method: string, params?: any): Promise<T> => {
   let lastErr: any;
   for (let attempt = 0; attempt <= GW_RETRY_COUNT; attempt++) {
@@ -1004,15 +1015,34 @@ export const gwApi = {
     rpc<Array<{ name: string; path: string; version?: string }>>('skills.bins'),
   // Config
   configGet: () => rpc('config.get'),
-  configSet: (key: string, value: any) => {
+  configSet: async (key: string, value: any) => {
     const patch: Record<string, any> = {};
     const parts = key.split('.');
     let obj = patch;
     for (let i = 0; i < parts.length - 1; i++) { obj[parts[i]] = {}; obj = obj[parts[i]]; }
     obj[parts[parts.length - 1]] = value;
-    return rpc('config.patch', { raw: JSON.stringify(patch) });
+    return gwApi.configSafePatch(patch);
   },
-  configSetAll: (config: Record<string, any>) => rpc('config.set', { raw: JSON.stringify(config, null, 2) }),
+  configSetAll: async (config: Record<string, any>): Promise<any> => {
+    const fetchHash = async () => {
+      const res: any = await rpc('config.get');
+      return res?.hash || res?.baseHash || '';
+    };
+    const raw = JSON.stringify(config, null, 2);
+    const maxRetries = 2;
+    let lastErr: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const hash = await fetchHash();
+        return await rpc('config.set', { raw, ...(hash ? { baseHash: hash } : {}) });
+      } catch (err: any) {
+        lastErr = err;
+        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    throw lastErr;
+  },
   configReload: () => Promise.resolve({ ok: true }),
   configApply: (raw: string, baseHash: string) =>
     rpc('config.apply', { raw, baseHash }),
@@ -1020,7 +1050,7 @@ export const gwApi = {
     rpc('config.patch', { raw, baseHash }),
   /**
    * Safe config patch: auto-fetches current hash, patches, and returns fresh config.
-   * Retries once on hash mismatch (e.g. after gateway restart).
+   * Retries up to 2 times on config conflict (hash mismatch, invalid config, stale state).
    * @param patch - config patch object (will be JSON.stringify'd)
    * @returns fresh config from configGet after successful patch
    */
@@ -1030,24 +1060,24 @@ export const gwApi = {
       return res?.hash || res?.baseHash || '';
     };
     const raw = JSON.stringify(patch);
-    let hash = await fetchHash();
-    try {
-      await rpc('config.patch', { raw, baseHash: hash });
-    } catch (err: any) {
-      const msg = err?.message || '';
-      const code = err?.code || err?.errorCode || '';
-      if (code === 'HASH_MISMATCH' || msg.includes('hash') || msg.includes('Hash')) {
-        hash = await fetchHash();
+    const maxRetries = 2;
+    let lastErr: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const hash = await fetchHash();
         await rpc('config.patch', { raw, baseHash: hash });
-      } else {
-        throw err;
+        return rpc('config.get');
+      } catch (err: any) {
+        lastErr = err;
+        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
+        await new Promise(r => setTimeout(r, 300));
       }
     }
-    return rpc('config.get');
+    throw lastErr;
   },
   /**
    * Safe config apply: auto-fetches current hash, applies full config, and returns result.
-   * Retries once on hash mismatch (e.g. after gateway restart).
+   * Retries up to 2 times on config conflict (hash mismatch, invalid config, stale state).
    * @param raw - full config JSON string
    * @returns result from configApply
    */
@@ -1056,18 +1086,19 @@ export const gwApi = {
       const res: any = await rpc('config.get');
       return res?.hash || res?.baseHash || '';
     };
-    let hash = await fetchHash();
-    try {
-      return await rpc('config.apply', { raw, baseHash: hash });
-    } catch (err: any) {
-      const msg = err?.message || '';
-      const code = err?.code || err?.errorCode || '';
-      if (code === 'HASH_MISMATCH' || msg.includes('hash') || msg.includes('Hash')) {
-        hash = await fetchHash();
+    const maxRetries = 2;
+    let lastErr: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const hash = await fetchHash();
         return await rpc('config.apply', { raw, baseHash: hash });
+      } catch (err: any) {
+        lastErr = err;
+        if (!isConfigConflictError(err) || attempt === maxRetries) throw err;
+        await new Promise(r => setTimeout(r, 300));
       }
-      throw err;
     }
+    throw lastErr;
   },
   configSchema: () => rpc('config.schema'),
   configSchemaLookup: (path: string) => rpc('config.schema.lookup', { path }),

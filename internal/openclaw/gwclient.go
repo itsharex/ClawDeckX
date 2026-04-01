@@ -122,19 +122,20 @@ type GWClient struct {
 	lastTick     time.Time     // last tick event time for silent disconnect detection
 	tickInterval time.Duration // expected tick interval from gateway (default 30s)
 
-	healthMu         sync.Mutex
-	healthEnabled    bool          // enable heartbeat auto-restart
-	healthInterval   time.Duration // probe interval (default 30s)
-	healthMaxFails   int           // consecutive failure threshold (default 3)
-	healthFailCount  int           // current consecutive failure count
-	healthLastOK     time.Time     // last success time
-	healthGraceUntil time.Time     // skip health checks until this time (post-restart grace period)
-	healthStopCh     chan struct{}
-	healthRunning    bool
-	onRestart        func() error                      // restart callback (injected externally)
-	onNotify         func(string)                      // notify callback (injected externally)
-	onLifecycle      func(event string, detail string) // lifecycle event callback
-	onTokenRefreshed func(newToken string)             // called when autoRefreshToken updates the token
+	healthMu                    sync.Mutex
+	healthEnabled               bool          // enable heartbeat auto-restart
+	healthInterval              time.Duration // probe interval (default 30s)
+	healthMaxFails              int           // consecutive failure threshold (default 3)
+	healthFailCount             int           // current consecutive failure count
+	healthLastOK                time.Time     // last success time
+	healthGraceUntil            time.Time     // skip health checks until this time (post-restart grace period)
+	healthStopCh                chan struct{}
+	healthRunning               bool
+	onRestart                   func() error                      // restart callback (injected externally)
+	onNotify                    func(string)                      // notify callback (injected externally)
+	onLifecycle                 func(event string, detail string) // lifecycle event callback
+	onTokenRefreshed            func(newToken string)             // called when autoRefreshToken updates the token
+	pendingRestartSuccessNotify *time.Timer
 }
 
 func NewGWClient(cfg GWClientConfig) *GWClient {
@@ -234,6 +235,34 @@ func (c *GWClient) HealthStatus() map[string]interface{} {
 	}
 }
 
+func (c *GWClient) clearPendingRestartSuccessNotifyLocked() {
+	if c.pendingRestartSuccessNotify != nil {
+		c.pendingRestartSuccessNotify.Stop()
+		c.pendingRestartSuccessNotify = nil
+	}
+}
+
+func (c *GWClient) scheduleRestartSuccessNotify(msg string) {
+	c.healthMu.Lock()
+	c.clearPendingRestartSuccessNotifyLocked()
+	var timer *time.Timer
+	timer = time.AfterFunc(20*time.Second, func() {
+		c.healthMu.Lock()
+		if c.pendingRestartSuccessNotify != timer {
+			c.healthMu.Unlock()
+			return
+		}
+		c.pendingRestartSuccessNotify = nil
+		notifyFn := c.onNotify
+		c.healthMu.Unlock()
+		if notifyFn != nil {
+			go notifyFn(msg)
+		}
+	})
+	c.pendingRestartSuccessNotify = timer
+	c.healthMu.Unlock()
+}
+
 func (c *GWClient) healthCheckLoop() {
 	ticker := time.NewTicker(c.healthInterval)
 	defer ticker.Stop()
@@ -259,6 +288,7 @@ func (c *GWClient) healthCheckLoop() {
 			}
 
 			healthy := false
+			allowTCPFallback := false
 			c.mu.Lock()
 			wsConnected := c.connected && c.conn != nil
 			// Tick stall detection: if connected but no tick received for 3× tick interval,
@@ -280,6 +310,7 @@ func (c *GWClient) healthCheckLoop() {
 				}
 			}
 			if wsConnected {
+				allowTCPFallback = true
 				err := c.conn.WriteControl(
 					websocket.PingMessage,
 					[]byte{},
@@ -294,8 +325,8 @@ func (c *GWClient) healthCheckLoop() {
 			}
 			c.mu.Unlock()
 
-			if !healthy {
-				tcpAddr := fmt.Sprintf("%s:%d", c.cfg.Host, c.cfg.Port)
+			if !healthy && allowTCPFallback {
+				tcpAddr := net.JoinHostPort(c.cfg.Host, fmt.Sprintf("%d", c.cfg.Port))
 				if conn, tcpErr := net.DialTimeout("tcp", tcpAddr, 3*time.Second); tcpErr == nil {
 					conn.Close()
 					healthy = true
@@ -303,6 +334,8 @@ func (c *GWClient) healthCheckLoop() {
 				} else {
 					logger.Gateway.Debug().Err(tcpErr).Msg(i18n.T(i18n.MsgLogHeartbeatTcpFail))
 				}
+			} else if !healthy && !wsConnected {
+				logger.Gateway.Debug().Msg("watchdog detected websocket disconnected; skipping TCP-only healthy fallback")
 			}
 
 			c.healthMu.Lock()
@@ -344,7 +377,7 @@ func (c *GWClient) healthCheckLoop() {
 					} else {
 						logger.Gateway.Info().Msg(i18n.T(i18n.MsgLogHeartbeatRestartSuccess))
 						if notifyFn != nil {
-							go notifyFn(i18n.T(i18n.MsgNotifyHeartbeatRestartSuccess))
+							c.scheduleRestartSuccessNotify(i18n.T(i18n.MsgNotifyHeartbeatRestartSuccess))
 						}
 					}
 					continue
@@ -550,7 +583,21 @@ func (c *GWClient) Reconnect(newCfg GWClientConfig) {
 	c.cfg = newCfg
 	c.reconnectCount = 0
 	c.backoffMs = 1000
+	// Drain stale reconnect-now signal from previous cycle to prevent it
+	// from bypassing the new cycle's intended backoff (e.g. auth-error 60s).
+	select {
+	case <-c.reconnectNowCh:
+	default:
+	}
 	c.mu.Unlock()
+
+	// Restart healthCheckLoop if it was running — closing the old stopCh killed it.
+	c.healthMu.Lock()
+	if c.healthEnabled && c.healthRunning {
+		// The old loop exited because stopCh was closed; restart with new stopCh.
+		safego.GoLoopWithCooldown("gwclient/healthCheck", 5*time.Second, c.healthCheckLoop)
+	}
+	c.healthMu.Unlock()
 
 	safego.GoLoopWithCooldown("gwclient/connectLoop", 3*time.Second, c.connectLoop)
 }
@@ -678,6 +725,12 @@ func (c *GWClient) connectLoop() {
 			if isAuthError(errMsg) && c.backoffMs < 60000 {
 				c.backoffMs = 60000
 			}
+			// Pairing required: slow down to avoid rapid retries while
+			// autoApprovePairing runs asynchronously (~1-2s).
+			isPairingErr := strings.Contains(errMsg, "pairing required")
+			if isPairingErr && c.backoffMs < 10000 {
+				c.backoffMs = 10000
+			}
 			c.mu.Unlock()
 			logger.Log.Warn().Err(err).
 				Str("host", c.cfg.Host).
@@ -685,7 +738,7 @@ func (c *GWClient) connectLoop() {
 				Msg(i18n.T(i18n.MsgLogGatewayWsConnectFailed))
 			// Close 1008 "pairing required" lands here when the server sends it
 			// before the JSON response can be delivered (close frame race).
-			if strings.Contains(errMsg, "pairing required") && c.IsLocalGateway() {
+			if isPairingErr && c.IsLocalGateway() {
 				go c.autoApprovePairing()
 			}
 		}
@@ -1013,6 +1066,7 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 				c.healthGraceUntil = time.Now().Add(10 * time.Second)
 			}
 			c.healthFailCount = 0
+			c.clearPendingRestartSuccessNotifyLocked()
 			// Fire lifecycle callback — distinguish initial connect from reconnect
 			lcFn := c.onLifecycle
 			c.healthMu.Unlock()
@@ -1037,10 +1091,16 @@ func (c *GWClient) sendConnect(conn *websocket.Conn, nonce string) {
 			}
 			c.mu.Lock()
 			c.lastError = msg
+			// Pairing required: slow down to avoid rapid retries while
+			// autoApprovePairing runs asynchronously.
+			isPairing := strings.Contains(msg, "pairing required")
+			if isPairing && c.backoffMs < 10000 {
+				c.backoffMs = 10000
+			}
 			c.mu.Unlock()
 			logger.Log.Error().Str("error", msg).Msg(i18n.T(i18n.MsgLogGatewayWsAuthFail))
 			conn.Close()
-			if strings.Contains(msg, "pairing required") && c.IsLocalGateway() {
+			if isPairing && c.IsLocalGateway() {
 				go c.autoApprovePairing()
 			} else if isAuthError(msg) {
 				go c.autoRefreshToken()

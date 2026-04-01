@@ -759,9 +759,16 @@ func (h *GWProxyHandler) SkillsConfigGet(w http.ResponseWriter, r *http.Request)
 }
 
 // isConfigConflictError checks if the error is an optimistic concurrency conflict
-// from the Gateway ("config changed since last load").
+// from the Gateway ("config changed since last load", "invalid config", etc.).
 func isConfigConflictError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "config changed since last load")
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "config changed since last load") ||
+		strings.Contains(msg, "invalid config") ||
+		strings.Contains(msg, "fix before patching") ||
+		strings.Contains(msg, "INVALID_REQUEST")
 }
 
 // fetchFreshBaseHash fetches a fresh config snapshot from Gateway and returns its hash.
@@ -801,7 +808,15 @@ func proxyTimeoutForMethod(method string) time.Duration {
 	}
 }
 
+// isConfigMutatingMethod returns true for config methods that support baseHash
+// and may need automatic retry on conflict.
+func isConfigMutatingMethod(method string) bool {
+	return method == "config.patch" || method == "config.apply" || method == "config.set"
+}
+
 // GenericProxy forwards any method to the Gateway.
+// For config-mutating methods (config.patch, config.apply), it auto-retries on
+// conflict errors by refreshing the baseHash from the gateway.
 func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Method string      `json:"method"`
@@ -812,10 +827,67 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	timeout := proxyTimeoutForMethod(req.Method)
+
+	if isConfigMutatingMethod(req.Method) {
+		h.proxyConfigMutating(w, r, req.Method, req.Params, timeout)
+		return
+	}
+
 	data, err := h.client.RequestWithTimeout(req.Method, req.Params, timeout)
 	if err != nil {
 		web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
 		return
 	}
 	web.OKRaw(w, r, data)
+}
+
+// proxyConfigMutating handles config.patch / config.apply with automatic retry
+// on optimistic concurrency conflict.
+func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Request, method string, params interface{}, timeout time.Duration) {
+	const maxRetries = 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rpcParams := toMapParams(params)
+
+		// On retry, refresh baseHash from Gateway
+		if attempt > 0 {
+			freshHash := h.fetchFreshBaseHash()
+			if freshHash != "" {
+				rpcParams["baseHash"] = freshHash
+			}
+		}
+
+		data, err := h.client.RequestWithTimeout(method, rpcParams, timeout)
+		if err != nil {
+			if isConfigConflictError(err) && attempt < maxRetries-1 {
+				logger.Config.Warn().Str("method", method).Int("attempt", attempt+1).Msg("config conflict, retrying with fresh baseHash")
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+			return
+		}
+		web.OKRaw(w, r, data)
+		return
+	}
+}
+
+// toMapParams safely converts interface{} params to a mutable map.
+func toMapParams(params interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	if params == nil {
+		return result
+	}
+	if m, ok := params.(map[string]interface{}); ok {
+		for k, v := range m {
+			result[k] = v
+		}
+		return result
+	}
+	// Fallback: marshal/unmarshal to convert struct or other types
+	data, err := json.Marshal(params)
+	if err != nil {
+		return result
+	}
+	json.Unmarshal(data, &result)
+	return result
 }

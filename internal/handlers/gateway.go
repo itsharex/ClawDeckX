@@ -237,6 +237,10 @@ func (h *GatewayHandler) SetHealthCheck(w http.ResponseWriter, r *http.Request) 
 		web.Fail(w, r, "INVALID_PARAM", "reconnect_backoff_cap_ms must be between 1000 and 120000", http.StatusBadRequest)
 		return
 	}
+	if req.Enabled && !h.svc.IsRemote() && !openclaw.IsOpenClawInstalled() {
+		web.Fail(w, r, "OPENCLAW_NOT_INSTALLED", "watchdog requires OpenClaw to be installed for local gateways", http.StatusBadRequest)
+		return
+	}
 
 	intervalSec := 30
 	maxFails := 3

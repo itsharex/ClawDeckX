@@ -156,7 +156,14 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
 
   // 看门狗
   const [healthCheckEnabled, setHealthCheckEnabled] = useState(false);
-  const [healthStatus, setHealthStatus] = useState<{ fail_count: number; last_ok: string } | null>(null);
+  const [healthStatus, setHealthStatus] = useState<{
+    fail_count: number;
+    last_ok: string;
+    max_fails: number;
+    interval_sec: number;
+    reconnect_backoff_cap_ms: number;
+    grace_until: string;
+  } | null>(null);
   const [displayUptimeMs, setDisplayUptimeMs] = useState(0);
   const [watchdogIntervalSec, setWatchdogIntervalSec] = useState('30');
   const [watchdogMaxFails, setWatchdogMaxFails] = useState('3');
@@ -261,7 +268,14 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
   const fetchHealthCheck = useCallback((force = false) => {
     gatewayApi.getHealthCheckCached(6000, force).then((data: any) => {
       setHealthCheckEnabled(!!data?.enabled);
-      setHealthStatus({ fail_count: data?.fail_count || 0, last_ok: data?.last_ok || '' });
+      setHealthStatus({
+        fail_count: data?.fail_count || 0,
+        last_ok: data?.last_ok || '',
+        max_fails: data?.max_fails || 3,
+        interval_sec: data?.interval_sec || 30,
+        reconnect_backoff_cap_ms: data?.reconnect_backoff_cap_ms || 30000,
+        grace_until: data?.grace_until || '',
+      });
       setWatchdogIntervalSec(String(data?.interval_sec ?? 30));
       setWatchdogMaxFails(String(data?.max_fails ?? 3));
       setWatchdogBackoffCapMs(String(data?.reconnect_backoff_cap_ms ?? 30000));
@@ -501,13 +515,24 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
       const intervalSec = Number.parseInt(watchdogIntervalSec, 10);
       const maxFails = Number.parseInt(watchdogMaxFails, 10);
       const backoffCapMs = Number.parseInt(watchdogBackoffCapMs, 10);
-      await gatewayApi.setHealthCheck({
+      const data: any = await gatewayApi.setHealthCheck({
         enabled: !healthCheckEnabled,
         interval_sec: Number.isFinite(intervalSec) ? intervalSec : 30,
         max_fails: Number.isFinite(maxFails) ? maxFails : 3,
         reconnect_backoff_cap_ms: Number.isFinite(backoffCapMs) ? backoffCapMs : 30000,
       });
-      setHealthCheckEnabled(!healthCheckEnabled);
+      setHealthCheckEnabled(!!data?.enabled);
+      setHealthStatus({
+        fail_count: data?.fail_count || 0,
+        last_ok: data?.last_ok || '',
+        max_fails: data?.max_fails || 3,
+        interval_sec: data?.interval_sec || 30,
+        reconnect_backoff_cap_ms: data?.reconnect_backoff_cap_ms || 30000,
+        grace_until: data?.grace_until || '',
+      });
+      setWatchdogIntervalSec(String(data?.interval_sec ?? intervalSec));
+      setWatchdogMaxFails(String(data?.max_fails ?? maxFails));
+      setWatchdogBackoffCapMs(String(data?.reconnect_backoff_cap_ms ?? backoffCapMs));
       toast('success', gw.patchOk || 'Saved');
     } catch (err: any) { toast('error', err?.message || ''); }
   }, [healthCheckEnabled, watchdogIntervalSec, watchdogMaxFails, watchdogBackoffCapMs, toast, gw]);
@@ -983,6 +1008,7 @@ const Gateway: React.FC<GatewayProps> = ({ language }) => {
             {status?.running && (
               <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-white/[0.06] theme-panel">
                 {(() => {
+                  if (!healthCheckEnabled) return <><span className="material-symbols-outlined text-[12px] theme-text-muted">shield_question</span><span className="text-[11px] theme-text-muted">{gw.serviceWatchdogInactive || 'Watchdog inactive'}</span></>;
                   if (!healthStatus?.last_ok) return <><span className="material-symbols-outlined text-[12px] text-mac-yellow animate-spin">progress_activity</span><span className="text-[11px] theme-text-muted">{gw.hbProbing}</span></>;
                   if (healthStatus.fail_count > 0) return <><span className="material-symbols-outlined text-[12px] text-mac-red">heart_broken</span><span className="text-[11px] font-bold text-mac-red">{gw.hbUnhealthy} ({healthStatus.fail_count})</span></>;
                   return <><span className="material-symbols-outlined text-[12px] text-mac-green animate-pulse">favorite</span><span className="text-[11px] font-bold text-mac-green">{gw.hbHealthy}</span></>;

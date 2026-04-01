@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -227,7 +228,7 @@ func checkPortReachable(host string, port int) DiagnoseItem {
 		LabelEn: fmt.Sprintf("Port %d Reachable", port),
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseFail
@@ -249,7 +250,7 @@ func checkGatewayAPI(host string, port int) DiagnoseItem {
 		LabelEn: "Gateway API Response",
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
@@ -289,7 +290,7 @@ func checkPortConflict(host string, port int) DiagnoseItem {
 		LabelEn: "Port Conflict Check",
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnosePass
@@ -317,7 +318,7 @@ func checkAuthToken(host string, port int, configPath string) DiagnoseItem {
 		LabelEn: "Auth Token Match",
 	}
 
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		item.Status = DiagnoseWarn

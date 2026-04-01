@@ -30,7 +30,14 @@ interface WsStatus {
 interface ServicePanelProps {
   status: any;
   healthCheckEnabled: boolean;
-  healthStatus: { fail_count: number; last_ok: string } | null;
+  healthStatus: {
+    fail_count: number;
+    last_ok: string;
+    max_fails: number;
+    interval_sec: number;
+    reconnect_backoff_cap_ms: number;
+    grace_until: string;
+  } | null;
   gw: Record<string, any>;
   onCopy: (text: string) => void;
   toast: (type: 'success' | 'error', msg: string) => void;
@@ -392,36 +399,36 @@ const ServicePanel: React.FC<ServicePanelProps> = ({ status, healthCheckEnabled,
           </div>
         </div>
 
-        {healthCheckEnabled && wsStatus && (
+        {healthCheckEnabled && healthStatus && (
           <div className="grid grid-cols-3 gap-2">
             <div className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06]">
               <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase tracking-wider">{gw.wdFailCount || 'Fails'}</p>
               <p className={`text-[12px] font-bold font-mono ${
-                wsStatus.fail_count > 0 ? (wsStatus.fail_count >= wsStatus.max_fails ? 'text-mac-red' : 'text-mac-yellow') : 'text-mac-green'
+                healthStatus.fail_count > 0 ? (healthStatus.fail_count >= healthStatus.max_fails ? 'text-mac-red' : 'text-mac-yellow') : 'text-mac-green'
               }`}>
-                {wsStatus.fail_count}/{wsStatus.max_fails}
+                {healthStatus.fail_count}/{healthStatus.max_fails}
               </p>
             </div>
             <div className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06]">
               <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase tracking-wider">{gw.wdInterval || 'Interval'}</p>
-              <p className="text-[12px] font-bold font-mono text-slate-600 dark:text-white/70">{wsStatus.interval_sec}s</p>
+              <p className="text-[12px] font-bold font-mono text-slate-600 dark:text-white/70">{healthStatus.interval_sec}s</p>
             </div>
             <div className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06]">
               <p className="text-[9px] text-slate-400 dark:text-white/30 uppercase tracking-wider">{gw.wdLastOk || 'Last OK'}</p>
               <p className="text-[11px] font-mono text-slate-500 dark:text-white/60">
-                {wsStatus.last_ok ? new Date(wsStatus.last_ok).toLocaleTimeString() : '-'}
+                {healthStatus.last_ok ? new Date(healthStatus.last_ok).toLocaleTimeString() : '-'}
               </p>
             </div>
           </div>
         )}
 
-        {healthCheckEnabled && wsStatus?.grace_until && (
+        {healthCheckEnabled && healthStatus?.grace_until && (
           <div className="px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex items-center gap-2">
             <span className="material-symbols-outlined text-[14px] text-amber-500">hourglass_top</span>
             <div>
               <p className="text-[10px] font-bold text-amber-400">{gw.wdGracePeriod || 'Grace Period Active'}</p>
               <p className="text-[9px] text-slate-400 dark:text-white/30 font-mono mt-0.5">
-                {gw.wdGraceUntil || 'Until'}: {new Date(wsStatus.grace_until).toLocaleTimeString()}
+                {gw.wdGraceUntil || 'Until'}: {new Date(healthStatus.grace_until).toLocaleTimeString()}
               </p>
             </div>
           </div>

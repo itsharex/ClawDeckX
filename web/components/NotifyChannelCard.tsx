@@ -27,6 +27,8 @@ interface NotifyChannelCardProps {
   onFieldChange: (key: string, value: string) => void;
   testLabel: string;
   testingLabel?: string;
+  testDisabled?: boolean;
+  testDisabledReason?: string;
   inputClassName: string;
   labelClassName: string;
   rowClassName: string;
@@ -38,6 +40,8 @@ const NotifyChannelCard: React.FC<NotifyChannelCardProps> = ({
   onFieldChange,
   testLabel,
   testingLabel,
+  testDisabled,
+  testDisabledReason,
   inputClassName,
   labelClassName,
   rowClassName,
@@ -159,7 +163,7 @@ const NotifyChannelCard: React.FC<NotifyChannelCardProps> = ({
           </div>
           <button
             onClick={handleTest}
-            disabled={testing}
+            disabled={testing || testDisabled}
             className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold text-slate-500 dark:text-white/50 disabled:opacity-40 transition-colors"
           >
             <span className={`material-symbols-outlined text-[12px] ${testing ? 'animate-spin' : ''}`}>
@@ -170,6 +174,9 @@ const NotifyChannelCard: React.FC<NotifyChannelCardProps> = ({
             </span>
           </button>
         </div>
+        {testDisabled && testDisabledReason && (
+          <p className="mb-3 text-[10px] text-amber-600 dark:text-amber-400">{testDisabledReason}</p>
+        )}
         <div className="space-y-3">
           {renderFields()}
         </div>
