@@ -2,12 +2,9 @@
 
 ### 🐛 Bug Fixes / 修复
 
-- add reconnect diagnostics
-- stabilize gwclient reconnect and proxy flow
-- refine session delete prompts
-- avoid false session disconnect errors
+- avoid token-triggered reconnect storm
 
 ---
-**Full Changelog**: [v0.0.39...v0.0.40](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.39...v0.0.40)
+**Full Changelog**: [v0.0.40...v0.0.41](https://github.com/ClawDeckX/ClawDeckX/compare/v0.0.40...v0.0.41)
 
 
