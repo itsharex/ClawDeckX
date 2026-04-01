@@ -47,6 +47,21 @@ type RPCError struct {
 	Message string `json:"message"`
 }
 
+// GatewayRPCError represents a business-logic error returned by the gateway
+// (i.e. the gateway responded with ok:false). This is distinct from connectivity
+// errors (not connected, send failed, timeout, etc.).
+type GatewayRPCError struct {
+	Msg string
+}
+
+func (e *GatewayRPCError) Error() string { return e.Msg }
+
+// IsGatewayRPCError checks whether err is a business-logic error from the gateway.
+func IsGatewayRPCError(err error) bool {
+	var rpcErr *GatewayRPCError
+	return errors.As(err, &rpcErr)
+}
+
 type ConnectParams struct {
 	MinProtocol int                    `json:"minProtocol"`
 	MaxProtocol int                    `json:"maxProtocol"`
@@ -689,7 +704,7 @@ func (c *GWClient) RequestWithTimeout(method string, params interface{}, timeout
 			if resp.Error != nil {
 				msg = resp.Error.Message
 			}
-			return nil, fmt.Errorf(i18n.T(i18n.MsgErrGatewayError), msg)
+			return nil, &GatewayRPCError{Msg: fmt.Sprintf(i18n.T(i18n.MsgErrGatewayError), msg)}
 		}
 		return resp.Payload, nil
 	case <-time.After(timeout):

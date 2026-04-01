@@ -901,8 +901,10 @@ export const wallpaperApi = {
 const GW_RETRY_COUNT = 3;
 const GW_RETRY_DELAY_MS = 1500;
 
-const isGatewayTransientError = (e: any): boolean =>
-  e?.status === 502 || e?.code === 'GW_PROXY_FAILED' || /gateway.*not.*connect/i.test(e?.message || '');
+const isGatewayTransientError = (e: any): boolean => {
+  if (e?.code === 'GW_RPC_ERROR' || e?.status === 422) return false;
+  return e?.status === 502 || e?.code === 'GW_PROXY_FAILED' || /gateway.*not.*connect/i.test(e?.message || '');
+};
 
 const isConfigConflictError = (e: any): boolean => {
   const msg = (e?.message || '').toLowerCase();

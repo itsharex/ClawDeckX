@@ -593,7 +593,12 @@ func (h *GWProxyHandler) SessionsHistoryPaginated(w http.ResponseWriter, r *http
 
 	history, err := loadPaginatedHistoryFromRPC(h, key, cursor, limit)
 	if err != nil {
-		web.Fail(w, r, "GW_SESSIONS_HISTORY_PAGINATED_FAILED", err.Error(), http.StatusBadGateway)
+		if openclaw.IsGatewayRPCError(err) {
+			// Business logic error (e.g. session deleted / not found) — return empty history
+			web.OK(w, r, sessionHistoryPage{SessionKey: key, Messages: []json.RawMessage{}, Items: []json.RawMessage{}})
+		} else {
+			web.Fail(w, r, "GW_SESSIONS_HISTORY_PAGINATED_FAILED", err.Error(), http.StatusBadGateway)
+		}
 		return
 	}
 	web.OK(w, r, history)
@@ -835,7 +840,11 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 
 	data, err := h.client.RequestWithTimeout(req.Method, req.Params, timeout)
 	if err != nil {
-		web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+		if openclaw.IsGatewayRPCError(err) {
+			web.Fail(w, r, "GW_RPC_ERROR", err.Error(), http.StatusUnprocessableEntity)
+		} else {
+			web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+		}
 		return
 	}
 	web.OKRaw(w, r, data)
@@ -863,7 +872,11 @@ func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Requ
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
-			web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+			if openclaw.IsGatewayRPCError(err) {
+				web.Fail(w, r, "GW_RPC_ERROR", err.Error(), http.StatusUnprocessableEntity)
+			} else {
+				web.Fail(w, r, "GW_PROXY_FAILED", err.Error(), http.StatusBadGateway)
+			}
 			return
 		}
 		web.OKRaw(w, r, data)

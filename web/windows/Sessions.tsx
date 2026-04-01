@@ -523,6 +523,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const [agentFilter, setAgentFilter] = useState('');
   const [deleteConfirmKey, setDeleteConfirmKey] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Recently-deleted session keys: prevents loadSessions / ensureSessionPresent from
+  // re-adding a session that was just deleted (gateway may still broadcast it briefly).
+  // Entries auto-expire after 60s.
+  const deletedKeysRef = useRef<Map<string, number>>(new Map());
 
   // Slash command popup
   const [slashOpen, setSlashOpen] = useState(false);
@@ -1048,19 +1052,26 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
         parentKey: s.parentKey || s.parentSessionKey || '',
         spawnedBy: s.spawnedBy || s.ownerKey || '',
       }));
-      // Clean up expired patch grace entries
+      // Clean up expired patch grace entries and deleted-key entries
       const nowMs = Date.now();
       for (const [k, v] of patchGraceRef.current) {
         if (v.expiresAt <= nowMs) patchGraceRef.current.delete(k);
       }
+      for (const [k, exp] of deletedKeysRef.current) {
+        if (exp <= nowMs) deletedKeysRef.current.delete(k);
+      }
+      // Filter out recently-deleted sessions so they don't reappear
+      const filtered = deletedKeysRef.current.size > 0
+        ? mapped.filter((s: GwSession) => !deletedKeysRef.current.has(s.key))
+        : mapped;
       setSessions(prev => {
-        if (areSessionsEquivalent(prev, mapped)) {
+        if (areSessionsEquivalent(prev, filtered)) {
           return prev;
         }
         // Incremental merge: reuse previous objects by key when unchanged to preserve React identity
         const prevMap = new Map(prev.map(s => [s.key, s]));
-        let changed = prev.length !== mapped.length;
-        const merged = mapped.map((next: GwSession) => {
+        let changed = prev.length !== filtered.length;
+        const merged = filtered.map((next: GwSession) => {
           // Re-apply grace-protected fields so recent patches aren't overwritten by stale server data
           const grace = patchGraceRef.current.get(next.key);
           const effective = grace ? { ...next, ...grace.fields } as GwSession : next;
@@ -1092,6 +1103,9 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     return entry?.usage ?? null;
   }, []);
   const loadTimeseriesData = useCallback(async (key: string) => {
+    // Skip timeseries for ephemeral run sessions — they have no transcript
+    // and the gateway returns INVALID_REQUEST for them.
+    if (/:run-\d+$/.test(key)) return null;
     return await gwApi.sessionsUsageTimeseries(key) as any;
   }, []);
 
@@ -1540,6 +1554,8 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   const ensureSessionPresent = useCallback((key: string) => {
     setSessions(prev => {
       if (!key || prev.some(s => s.key === key)) return prev;
+      // Don't re-add recently deleted sessions
+      if (deletedKeysRef.current.has(key)) return prev;
       return [{
         key,
         label: key,
@@ -1567,6 +1583,7 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
   sessionsRef.current = sessions;
   useEffect(() => {
     if (!gwReadyRef.current || !sessionKey) return;
+    if (deletedKeysRef.current.has(sessionKey)) return;
     if (!sessionsRef.current.some(s => s.key === sessionKey)) {
       ensureSessionPresent(sessionKey);
       loadSessions({ silent: true });
@@ -2160,6 +2177,10 @@ const Sessions: React.FC<SessionsProps> = ({ language, pendingSessionKey, onSess
     setDeleting(true);
     try {
       await gwApi.proxy('sessions.delete', { key });
+      // Mark as recently deleted so loadSessions won't re-add it
+      deletedKeysRef.current.set(key, Date.now() + 60_000);
+      // Unsubscribe from the deleted session's message stream
+      gwApi.sessionsMessagesUnsubscribe(key).catch(() => {});
       // Remove from local list
       setSessions(prev => prev.filter(s => s.key !== key));
       // If deleted current session, switch to main
