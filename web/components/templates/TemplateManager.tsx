@@ -293,6 +293,37 @@ const AgentPresetsPanel: React.FC<AgentPresetsPanelProps> = ({ language, default
                 </div>
               )}
 
+              {detailTemplate.content.examples && detailTemplate.content.examples.length > 0 && (
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2 font-bold flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[14px]">forum</span>
+                    {tm.styleExamples || 'Style Examples'}
+                  </p>
+                  <div className="space-y-2">
+                    {(detailTemplate.content.examples as any[]).map((ex, idx) => {
+                      const isString = typeof ex === 'string';
+                      return isString ? (
+                        <div key={idx} className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.06]">
+                          <span className="material-symbols-outlined text-[14px] text-primary/60 shrink-0 mt-0.5">chat_bubble</span>
+                          <span className="text-[12px] text-slate-600 dark:text-white/60 italic">&ldquo;{ex}&rdquo;</span>
+                        </div>
+                      ) : (
+                        <div key={idx} className="rounded-lg border border-slate-100 dark:border-white/[0.06] overflow-hidden">
+                          <div className="flex items-start gap-2 px-3 py-2 bg-slate-50 dark:bg-white/[0.03]">
+                            <span className="material-symbols-outlined text-[14px] text-slate-400 dark:text-white/30 shrink-0 mt-0.5">person</span>
+                            <span className="text-[12px] text-slate-500 dark:text-white/50">{ex.input}</span>
+                          </div>
+                          <div className="flex items-start gap-2 px-3 py-2 bg-primary/[0.03] border-t border-slate-100 dark:border-white/[0.06]">
+                            <span className="material-symbols-outlined text-[14px] text-primary/60 shrink-0 mt-0.5">smart_toy</span>
+                            <span className="text-[12px] text-slate-600 dark:text-white/60 italic">&ldquo;{ex.output}&rdquo;</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {detailTemplate.content.soulSnippet && (
                 <div>
                   <p className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-white/30 mb-2 font-bold">{tm.preview || 'Preview'}</p>
