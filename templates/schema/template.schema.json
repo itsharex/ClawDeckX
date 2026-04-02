@@ -97,6 +97,33 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Doctor check IDs that relate to this FAQ"
+        },
+        "prompts": {
+          "type": "object",
+          "description": "AI generation prompts for this template (en/zh only). Keys map to specific generation phases.",
+          "properties": {
+            "step1": {
+              "type": "object",
+              "description": "Prompt for wizard step1 (team structure generation). Keyed by language code (en, zh).",
+              "additionalProperties": { "type": "string" }
+            },
+            "agentFile": {
+              "type": "object",
+              "description": "Prompt template for per-agent file generation (all files combined). Keyed by language code (en, zh). Supports placeholders: {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}.",
+              "additionalProperties": { "type": "string" }
+            },
+            "files": {
+              "type": "object",
+              "description": "Per-file prompts for AI writing individual agent workspace files. Keys: soul, agents, user, identity, heartbeat. Each value is an object keyed by language code (en, zh) with placeholder support: {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}.",
+              "properties": {
+                "soul":      { "type": "object", "additionalProperties": { "type": "string" } },
+                "agents":    { "type": "object", "additionalProperties": { "type": "string" } },
+                "user":      { "type": "object", "additionalProperties": { "type": "string" } },
+                "identity":  { "type": "object", "additionalProperties": { "type": "string" } },
+                "heartbeat": { "type": "object", "additionalProperties": { "type": "string" } }
+              }
+            }
+          }
         }
       }
     }

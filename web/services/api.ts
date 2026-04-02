@@ -1385,6 +1385,9 @@ export interface MultiAgentDeployRequest {
       icon?: string;
       color?: string;
       soul?: string;
+      agentsMd?: string;
+      userMd?: string;
+      identityMd?: string;
       heartbeat?: string;
       tools?: string;
       skills?: string[];
@@ -1459,6 +1462,9 @@ export interface MultiAgentGenerateResult {
       icon?: string;
       color?: string;
       soul?: string;
+      agentsMd?: string;
+      userMd?: string;
+      identityMd?: string;
       heartbeat?: string;
     }>;
     workflow: {
@@ -1490,6 +1496,27 @@ export interface GenTask {
   updatedAt: string;
 }
 
+export interface WizardStep1Request {
+  scenarioName: string;
+  description: string;
+  teamSize: string;
+  workflowType: string;
+  language: string;
+  modelId?: string;
+  customPrompt?: string;
+}
+
+export interface WizardStep2Request {
+  agentId: string;
+  agentName: string;
+  agentRole: string;
+  agentDesc: string;
+  scenarioName: string;
+  language: string;
+  modelId?: string;
+  customPrompt?: string;
+}
+
 export const multiAgentApi = {
   generate: (request: MultiAgentGenerateRequest, timeoutMs = 600_000) => {
     const ctrl = new AbortController();
@@ -1499,6 +1526,90 @@ export const multiAgentApi = {
   },
   generateAsync: (request: MultiAgentGenerateRequest & { directLlm?: boolean }) =>
     post<{ taskId: string }>('/api/v1/multi-agent/generate-async', request),
+  /** SSE fetch for wizard step 1. Returns an AbortController so caller can stop early. */
+  wizardStep1: (req: WizardStep1Request, onToken: (t: string) => void, onDone: (parsed: any) => void, onError: (code: string, msg: string) => void): AbortController => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const resp = await fetch('/api/v1/multi-agent/wizard-step1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+          signal: ctrl.signal,
+          credentials: 'include',
+        });
+        if (!resp.ok || !resp.body) { onError('HTTP_ERROR', `HTTP ${resp.status}`); return; }
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          let event = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) { event = line.slice(7).trim(); continue; }
+            if (line.startsWith('data: ')) {
+              try {
+                const d = JSON.parse(line.slice(6));
+                if (event === 'token') onToken(d.token ?? '');
+                else if (event === 'done') onDone(d);
+                else if (event === 'error') onError(d.code ?? 'ERROR', d.msg ?? 'Unknown error');
+              } catch { /* ignore parse errors */ }
+              event = '';
+            }
+          }
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') onError('FETCH_ERROR', e?.message ?? 'Fetch failed');
+      }
+    })();
+    return ctrl;
+  },
+  /** SSE fetch for wizard step 2 (single agent). Returns an AbortController. */
+  wizardStep2: (req: WizardStep2Request, onToken: (t: string, agentId: string) => void, onDone: (data: any) => void, onError: (code: string, msg: string) => void): AbortController => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const resp = await fetch('/api/v1/multi-agent/wizard-step2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req),
+          signal: ctrl.signal,
+          credentials: 'include',
+        });
+        if (!resp.ok || !resp.body) { onError('HTTP_ERROR', `HTTP ${resp.status}`); return; }
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          let event = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) { event = line.slice(7).trim(); continue; }
+            if (line.startsWith('data: ')) {
+              try {
+                const d = JSON.parse(line.slice(6));
+                if (event === 'token') onToken(d.token ?? '', d.agentId ?? '');
+                else if (event === 'done') onDone(d);
+                else if (event === 'error') onError(d.code ?? 'ERROR', d.msg ?? 'Unknown error');
+              } catch { /* ignore parse errors */ }
+              event = '';
+            }
+          }
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') onError('FETCH_ERROR', e?.message ?? 'Fetch failed');
+      }
+    })();
+    return ctrl;
+  },
   getGenerateTask: (taskId: string) =>
     get<GenTask>(`/api/v1/multi-agent/generate-task?taskId=${encodeURIComponent(taskId)}`),
   cancelGenerateTask: (taskId: string) =>

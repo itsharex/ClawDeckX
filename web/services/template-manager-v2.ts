@@ -23,6 +23,10 @@ export interface TemplateMetadata {
   updateFrequency?: 'static' | 'occasional' | 'frequent';
   featured?: boolean;
   lastUpdated?: string; // ISO 8601
+  /** 'single-agent': has per-file prompts suitable for single-agent workspace file writing.
+   *  'multi-agent': team-builder only, not suitable for single-agent file writing.
+   *  Omitted = legacy / no restriction. */
+  scope?: 'single-agent' | 'multi-agent';
 }
 
 export interface TemplateRequirements {
@@ -63,6 +67,11 @@ export interface TemplateAgent {
   color?: string;
   soulSnippet?: string;
   description?: string;
+  soul?: string;
+  agentsMd?: string;
+  userMd?: string;
+  identityMd?: string;
+  heartbeat?: string;
 }
 
 export interface TemplateWorkflow {
@@ -99,6 +108,21 @@ export interface ScenarioTemplate {
   integrations?: IntegrationConfig[];
 }
 
+export interface MultiAgentTemplatePrompts {
+  /** Prompt for wizard step1 (team structure). Keys: 'en', 'zh'. Supports {{scenarioName}}, {{description}}, {{agentCount}}, {{workflowType}}. */
+  step1?: Record<string, string>;
+  /** Prompt for per-agent file generation (all files combined as JSON). Keys: 'en', 'zh'. Supports {{agentName}}, {{agentRole}}, {{agentDesc}}, {{scenarioName}}. */
+  agentFile?: Record<string, string>;
+  /** Per-file prompts for AI writing individual agent workspace files. Keys: soul, agents, user, identity, heartbeat. Each value is keyed by language (en, zh). */
+  files?: {
+    soul?: Record<string, string>;
+    agents?: Record<string, string>;
+    user?: Record<string, string>;
+    identity?: Record<string, string>;
+    heartbeat?: Record<string, string>;
+  };
+}
+
 export interface MultiAgentTemplate {
   id: string;
   type: 'multi-agent';
@@ -109,6 +133,7 @@ export interface MultiAgentTemplate {
     agents: TemplateAgent[];
     workflow: TemplateWorkflow;
     examples?: string[];
+    prompts?: MultiAgentTemplatePrompts;
   };
 }
 
@@ -194,6 +219,10 @@ class TemplateManagerV2 {
   private knowledgeCache = new Map<string, KnowledgeItem[]>();
   private manifestCache: TemplateManifest | null = null;
 
+  clearMultiAgentCache(): void {
+    this.multiAgentCache.clear();
+  }
+
   /**
    * Pre-fetch manifest for GitHub sources (shared across category loads).
    * This ensures only 1 manifest request per sync cycle.
@@ -218,22 +247,17 @@ class TemplateManagerV2 {
 
     for (const source of sources) {
       try {
-        console.log(`[TemplateManager] Trying source: ${source.name} (${source.type})`);
         const data = await loader(source);
         return { data, source: source.id };
       } catch (err: any) {
-        console.warn(`[TemplateManager] Source ${source.name} failed:`, err.message);
-        
         // Try fallback source
         if (source.fallback) {
           const fallbackSource = templateSourceManager.getSource(source.fallback);
           if (fallbackSource && fallbackSource.enabled) {
             try {
-              console.log(`[TemplateManager] Trying fallback: ${fallbackSource.name}`);
               const data = await loader(fallbackSource);
               return { data, source: fallbackSource.id };
             } catch (fallbackErr: any) {
-              console.warn(`[TemplateManager] Fallback failed:`, fallbackErr.message);
             }
           }
         }
@@ -306,6 +330,7 @@ class TemplateManagerV2 {
 
         if (source.type === 'local') {
           templates = await this.loadLocalMultiAgent();
+          if (templates.length === 0) throw new Error('Local multi-agent templates returned empty');
         } else if (source.type === 'cdn') {
           const index = await cdnLoader.loadIndex(source, 'multi-agent');
           templates = await Promise.all(
@@ -327,7 +352,7 @@ class TemplateManagerV2 {
       }
     );
 
-    if (!result.data) {
+    if (!result.data || result.data.length === 0) {
       throw result.error || new Error('Failed to load multi-agent templates');
     }
 
@@ -470,22 +495,37 @@ class TemplateManagerV2 {
   }
 
   private async loadLocalMultiAgent(): Promise<MultiAgentTemplate[]> {
-    const loaders: Record<string, () => Promise<any>> = {
-      'content-factory': () => import('../../templates/official/multi-agent/content-factory.json'),
-      'research-team': () => import('../../templates/official/multi-agent/research-team.json'),
-      'devops-team': () => import('../../templates/official/multi-agent/devops-team.json'),
-      'customer-support': () => import('../../templates/official/multi-agent/customer-support.json'),
-      'data-pipeline': () => import('../../templates/official/multi-agent/data-pipeline.json'),
-    };
+    const loaders: Array<[string, () => Promise<any>]> = [
+      ['default', () => import('../../templates/official/multi-agent/default.json')],
+      ['content-factory', () => import('../../templates/official/multi-agent/content-factory.json')],
+      ['research-team', () => import('../../templates/official/multi-agent/research-team.json')],
+      ['devops-team', () => import('../../templates/official/multi-agent/devops-team.json')],
+      ['customer-support', () => import('../../templates/official/multi-agent/customer-support.json')],
+      ['data-pipeline', () => import('../../templates/official/multi-agent/data-pipeline.json')],
+      ['software-dev', () => import('../../templates/official/multi-agent/software-dev.json')],
+      ['ecommerce', () => import('../../templates/official/multi-agent/ecommerce.json')],
+      ['education', () => import('../../templates/official/multi-agent/education.json')],
+      ['finance', () => import('../../templates/official/multi-agent/finance.json')],
+    ];
 
-    const templates = await Promise.all(
-      Object.entries(loaders).map(async ([id, loader]) => {
-        const module = await loader();
-        return module.default || module;
+    const results = await Promise.allSettled(
+      loaders.map(async ([id, loader]) => {
+        try {
+          const module = await loader();
+          const tpl = module.default || module;
+          if (!tpl || !tpl.id) throw new Error(`Template ${id} missing id field`);
+          return tpl as MultiAgentTemplate;
+        } catch (err) {
+          throw err;
+        }
       })
     );
 
-    return templates;
+    const loaded = results
+      .filter((r): r is PromiseFulfilledResult<MultiAgentTemplate> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    return loaded;
   }
 
   private async loadLocalAgents(): Promise<AgentTemplate[]> {
