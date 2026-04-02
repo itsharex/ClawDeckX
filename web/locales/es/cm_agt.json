@@ -208,6 +208,16 @@
     "toolClickToToggle": "Clic en tarjeta para cambiar estado",
     "toolOverrideCount": "sobrescritos",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "Tareas",
+    "tasksTotal": "total",
+    "tasksActive": "activas",
+    "tasksTerminal": "Completadas",
+    "tasksIssues": "problemas",
+    "tasksFetchFailed": "Error al obtener tareas",
+    "tasksByStatus": "Por estado",
+    "tasksByRuntime": "Por entorno",
+    "tasksNoData": "No hay datos de tareas",
+    "tasksNote": "Resumen de tareas del endpoint de estado del gateway. Los detalles individuales se gestionan a través de OpenClaw CLI.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

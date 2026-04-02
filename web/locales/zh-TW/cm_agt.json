@@ -208,6 +208,16 @@
     "toolClickToToggle": "點擊卡片切換狀態",
     "toolOverrideCount": "項覆寫",
     "chPolicyTitle": "頻道策略",
+    "tasks": "任務",
+    "tasksTotal": "總計",
+    "tasksActive": "活躍",
+    "tasksTerminal": "已完成",
+    "tasksIssues": "異常",
+    "tasksFetchFailed": "取得任務資訊失敗",
+    "tasksByStatus": "依狀態",
+    "tasksByRuntime": "依執行環境",
+    "tasksNoData": "暫無任務資料",
+    "tasksNote": "任務摘要來自閘道狀態端點。個別任務詳情可透過 OpenClaw CLI 管理。",
     "chAfPlaceholder": "群組/使用者 ID…"
   }
 }

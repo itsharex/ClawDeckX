@@ -208,6 +208,16 @@
     "toolClickToToggle": "카드를 클릭하여 상태 전환",
     "toolOverrideCount": "개 재정의",
     "chPolicyTitle": "채널 정책",
+    "tasks": "작업",
+    "tasksTotal": "전체",
+    "tasksActive": "활성",
+    "tasksTerminal": "완료",
+    "tasksIssues": "문제",
+    "tasksFetchFailed": "작업 정보를 가져오는데 실패했습니다",
+    "tasksByStatus": "상태별",
+    "tasksByRuntime": "런타임별",
+    "tasksNoData": "작업 데이터가 없습니다",
+    "tasksNote": "게이트웨이 상태 엔드포인트의 작업 요약입니다. 개별 작업 세부 정보는 OpenClaw CLI를 통해 관리할 수 있습니다.",
     "chAfPlaceholder": "그룹/사용자 ID…"
   }
 }

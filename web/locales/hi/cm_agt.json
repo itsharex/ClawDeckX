@@ -208,6 +208,16 @@
     "toolClickToToggle": "स्थिति बदलने के लिए कार्ड पर क्लिक करें",
     "toolOverrideCount": "ओवरराइड",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "कार्य",
+    "tasksTotal": "कुल",
+    "tasksActive": "सक्रिय",
+    "tasksTerminal": "पूर्ण",
+    "tasksIssues": "समस्याएं",
+    "tasksFetchFailed": "कार्य जानकारी प्राप्त करने में विफल",
+    "tasksByStatus": "स्थिति अनुसार",
+    "tasksByRuntime": "रनटाइम अनुसार",
+    "tasksNoData": "कोई कार्य डेटा उपलब्ध नहीं",
+    "tasksNote": "गेटवे स्थिति एंडपॉइंट से कार्य सारांश। व्यक्तिगत कार्य विवरण OpenClaw CLI के माध्यम से प्रबंधित किए जा सकते हैं।",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

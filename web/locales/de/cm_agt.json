@@ -208,6 +208,16 @@
     "toolClickToToggle": "Karte klicken zum Umschalten",
     "toolOverrideCount": "Überschreibungen",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "Aufgaben",
+    "tasksTotal": "gesamt",
+    "tasksActive": "aktiv",
+    "tasksTerminal": "Abgeschlossen",
+    "tasksIssues": "Probleme",
+    "tasksFetchFailed": "Aufgaben konnten nicht abgerufen werden",
+    "tasksByStatus": "Nach Status",
+    "tasksByRuntime": "Nach Laufzeit",
+    "tasksNoData": "Keine Aufgabendaten verfügbar",
+    "tasksNote": "Aufgabenübersicht vom Gateway-Statusendpunkt. Einzelne Aufgabendetails werden über die OpenClaw CLI verwaltet.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

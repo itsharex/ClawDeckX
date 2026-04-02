@@ -208,6 +208,16 @@
     "toolClickToToggle": "点击卡片切换状态",
     "toolOverrideCount": "项覆盖",
     "chPolicyTitle": "频道策略",
+    "tasks": "任务",
+    "tasksTotal": "总计",
+    "tasksActive": "活跃",
+    "tasksTerminal": "已完成",
+    "tasksIssues": "异常",
+    "tasksFetchFailed": "获取任务信息失败",
+    "tasksByStatus": "按状态",
+    "tasksByRuntime": "按运行时",
+    "tasksNoData": "暂无任务数据",
+    "tasksNote": "任务汇总来自网关状态接口。单个任务详情可通过 OpenClaw CLI 管理。",
     "chAfPlaceholder": "群组/用户 ID…"
   }
 }

@@ -208,6 +208,16 @@
     "toolClickToToggle": "انقر على البطاقة لتغيير الحالة",
     "toolOverrideCount": "تجاوزات",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "المهام",
+    "tasksTotal": "الإجمالي",
+    "tasksActive": "نشط",
+    "tasksTerminal": "مكتمل",
+    "tasksIssues": "مشاكل",
+    "tasksFetchFailed": "فشل في جلب المهام",
+    "tasksByStatus": "حسب الحالة",
+    "tasksByRuntime": "حسب بيئة التشغيل",
+    "tasksNoData": "لا توجد بيانات مهام",
+    "tasksNote": "ملخص المهام من نقطة نهاية حالة البوابة. يمكن إدارة تفاصيل المهام الفردية عبر OpenClaw CLI.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

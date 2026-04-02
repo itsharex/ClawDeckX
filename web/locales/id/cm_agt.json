@@ -208,6 +208,16 @@
     "toolClickToToggle": "Klik kartu untuk mengubah status",
     "toolOverrideCount": "override",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "Tugas",
+    "tasksTotal": "total",
+    "tasksActive": "aktif",
+    "tasksTerminal": "Selesai",
+    "tasksIssues": "masalah",
+    "tasksFetchFailed": "Gagal mengambil data tugas",
+    "tasksByStatus": "Berdasarkan Status",
+    "tasksByRuntime": "Berdasarkan Runtime",
+    "tasksNoData": "Tidak ada data tugas",
+    "tasksNote": "Ringkasan tugas dari endpoint status gateway. Detail tugas individual dikelola melalui OpenClaw CLI.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

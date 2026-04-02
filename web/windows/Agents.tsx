@@ -14,7 +14,7 @@ import { MultiAgentCollaborationV2 } from '../components/multiagent';
 import ScenarioLibraryV2 from '../components/scenarios/ScenarioLibraryV2';
 
 interface AgentsProps { language: Language; }
-type Panel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron' | 'run' | 'scenarios' | 'collaboration';
+type Panel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron' | 'tasks' | 'run' | 'scenarios' | 'collaboration';
 
 
 function fmtHeartbeatAgo(ts: number, template: string, never: string): string {
@@ -51,6 +51,17 @@ function extractRunText(content: unknown): string {
     if (typeof c.text === 'string') return c.text;
     if (typeof c.content === 'string') return c.content;
   }
+  return '';
+}
+
+function normalizeExecSecurity(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed === 'prompt') return 'allowlist';
+  if (trimmed === 'sandbox') return 'deny';
+  if (trimmed === 'none') return 'full';
+  if (trimmed === 'deny' || trimmed === 'allowlist' || trimmed === 'full') return trimmed;
   return '';
 }
 
@@ -123,6 +134,8 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [subDraft, setSubDraft] = useState<string[] | null>(null);
   const [cronStatus, setCronStatus] = useState<any>(null);
   const [cronJobs, setCronJobs] = useState<any[]>([]);
+  const [tasksData, setTasksData] = useState<any>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
 
   // Load workspace file templates
@@ -320,6 +333,10 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     if (p === 'cron') {
       gwApi.cronStatus().then(setCronStatus).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
       gwApi.cron().then((d: any) => setCronJobs(Array.isArray(d) ? d : d?.jobs || [])).catch((err: any) => { toast('error', err?.message || a.cronFetchFailed); });
+    }
+    if (p === 'tasks') {
+      setTasksLoading(true);
+      gwApi.info().then((d: any) => { setTasksData(d?.tasks ?? null); }).catch((err: any) => { toast('error', err?.message || a.tasksFetchFailed || 'Failed to fetch tasks'); }).finally(() => setTasksLoading(false));
     }
   }, [selectedId, panel, hasUnsavedDraft, confirm, a]);
 
@@ -717,6 +734,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     { id: 'skills', icon: 'extension', label: a.skills },
     { id: 'channels', icon: 'forum', label: a.channels },
     { id: 'cron', icon: 'schedule', label: a.cron },
+    { id: 'tasks', icon: 'task_alt', label: a.tasks || 'Tasks' },
     { id: 'scenarios', icon: 'auto_awesome', label: sc.title || 'Scenarios' },
     { id: 'collaboration', icon: 'groups', label: ma.title || 'Multi-Agent' },
   ];
@@ -1053,14 +1071,18 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       const agentTools = agentEntry.tools || {};
                       const draft = toolDraft || {};
                       const liveProfile = agentTools.profile || globalTools.profile || 'full';
-                      const liveExec = { host: agentTools.exec?.host ?? globalTools.exec?.host ?? '', security: agentTools.exec?.security ?? globalTools.exec?.security ?? '', ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false };
+                      const liveExec = {
+                        host: agentTools.exec?.host ?? globalTools.exec?.host ?? '',
+                        security: normalizeExecSecurity(agentTools.exec?.security ?? globalTools.exec?.security ?? ''),
+                        ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false,
+                      };
                       const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
                       const liveAllow: string[] = Array.isArray(agentTools.allow) ? agentTools.allow : (Array.isArray(globalTools.allow) ? globalTools.allow : []);
                       const liveDeny: string[] = Array.isArray(agentTools.deny) ? agentTools.deny : (Array.isArray(globalTools.deny) ? globalTools.deny : []);
                       const liveAlsoAllow: string[] = Array.isArray(agentTools.alsoAllow) ? agentTools.alsoAllow : (Array.isArray(globalTools.alsoAllow) ? globalTools.alsoAllow : []);
                       const profile = draft.profile ?? liveProfile;
                       const execHost = draft.execHost ?? liveExec.host;
-                      const execSecurity = draft.execSecurity ?? liveExec.security;
+                      const execSecurity = normalizeExecSecurity(draft.execSecurity ?? liveExec.security);
                       const execAsk = draft.execAsk ?? liveExec.ask;
                       const fsWsOnly = draft.fsWsOnly ?? liveFsWsOnly;
                       const PROFILES = ['minimal', 'coding', 'messaging', 'full'];
@@ -1072,6 +1094,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                         if (!toolDraft) return;
                         setToolSaving(true);
                         try {
+                          const normalizedExecSecurity = normalizeExecSecurity(toolDraft.execSecurity);
                           const list2: any[] = agentsCfg?.list || [];
                           const updatedList = list2.map((e: any) => {
                             if (e?.id !== selected.id) return e;
@@ -1079,7 +1102,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                             toolsPatch.allow = toolDraft.allow?.length > 0 ? toolDraft.allow : [];
                             toolsPatch.deny = toolDraft.deny?.length > 0 ? toolDraft.deny : [];
                             toolsPatch.alsoAllow = toolDraft.alsoAllow?.length > 0 ? toolDraft.alsoAllow : [];
-                            toolsPatch.exec = { host: toolDraft.execHost || undefined, security: toolDraft.execSecurity || undefined, ask: toolDraft.execAsk || undefined };
+                            toolsPatch.exec = { host: toolDraft.execHost || undefined, security: normalizedExecSecurity || undefined, ask: toolDraft.execAsk || undefined };
                             toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
                             return { ...e, tools: toolsPatch };
                           });
@@ -1137,9 +1160,9 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                                   onChange={v => { const d = initDraft(); setToolDraft({ ...d, execSecurity: v }); }}
                                   options={[
                                     { value: '', label: a.execSecDefault || 'Default' },
-                                    { value: 'prompt', label: a.execSecPrompt || 'Prompt' },
-                                    { value: 'sandbox', label: a.execSecSandbox || 'Sandbox' },
-                                    { value: 'none', label: a.execSecNone || 'None' },
+                                    { value: 'deny', label: a.execSecDeny || a.optDeny || 'Deny' },
+                                    { value: 'allowlist', label: a.execSecAllowlist || a.optAllowlist || 'Allowlist' },
+                                    { value: 'full', label: a.execSecFull || a.optFull || 'Full' },
                                   ]}
                                   className="w-full max-w-[140px] h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60" />
                               </div>
@@ -1469,7 +1492,11 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                 const initToolDraft = () => {
                   if (toolDraft) return toolDraft;
                   const liveProfile = agentTools.profile || globalTools.profile || 'full';
-                  const liveExec = { host: agentTools.exec?.host ?? globalTools.exec?.host ?? '', security: agentTools.exec?.security ?? globalTools.exec?.security ?? '', ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false };
+                  const liveExec = {
+                    host: agentTools.exec?.host ?? globalTools.exec?.host ?? '',
+                    security: normalizeExecSecurity(agentTools.exec?.security ?? globalTools.exec?.security ?? ''),
+                    ask: agentTools.exec?.ask ?? globalTools.exec?.ask ?? false,
+                  };
                   const liveFsWsOnly = agentTools.fs?.workspaceOnly ?? globalTools.fs?.workspaceOnly ?? false;
                   return { profile: liveProfile, allow: [...liveAllow], deny: [...liveDeny], alsoAllow: [...liveAlsoAllow], execHost: liveExec.host, execSecurity: liveExec.security, execAsk: liveExec.ask, fsWsOnly: liveFsWsOnly };
                 };
@@ -1478,6 +1505,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                   if (!toolDraft) return;
                   setToolSaving(true);
                   try {
+                    const normalizedExecSecurity = normalizeExecSecurity(toolDraft.execSecurity);
                     const parsed = config?.parsed || config?.config || config || {};
                     const agentsCfg = parsed?.agents || {};
                     const list: any[] = agentsCfg?.list || [];
@@ -1487,7 +1515,7 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                       toolsPatch.allow = toolDraft.allow?.length > 0 ? toolDraft.allow : [];
                       toolsPatch.deny = toolDraft.deny?.length > 0 ? toolDraft.deny : [];
                       toolsPatch.alsoAllow = toolDraft.alsoAllow?.length > 0 ? toolDraft.alsoAllow : [];
-                      toolsPatch.exec = { host: toolDraft.execHost || undefined, security: toolDraft.execSecurity || undefined, ask: toolDraft.execAsk || undefined };
+                      toolsPatch.exec = { host: toolDraft.execHost || undefined, security: normalizedExecSecurity || undefined, ask: toolDraft.execAsk || undefined };
                       toolsPatch.fs = { workspaceOnly: toolDraft.fsWsOnly || undefined };
                       return { ...e, tools: toolsPatch };
                     });
@@ -2577,6 +2605,119 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Tasks Panel */}
+              {panel === 'tasks' && (() => {
+                const td = tasksData;
+                const statusColors: Record<string, string> = {
+                  queued: 'bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                  running: 'bg-cyan-100 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+                  succeeded: 'bg-mac-green/10 text-mac-green',
+                  failed: 'bg-red-100 dark:bg-red-500/10 text-red-500',
+                  timed_out: 'bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                  cancelled: 'bg-slate-100 dark:bg-white/5 text-slate-400',
+                  lost: 'bg-red-100 dark:bg-red-500/10 text-red-400',
+                };
+                const statusIcons: Record<string, string> = {
+                  queued: 'hourglass_empty',
+                  running: 'play_circle',
+                  succeeded: 'check_circle',
+                  failed: 'error',
+                  timed_out: 'timer_off',
+                  cancelled: 'cancel',
+                  lost: 'help_outline',
+                };
+                const runtimeIcons: Record<string, string> = {
+                  subagent: 'smart_toy',
+                  acp: 'hub',
+                  cli: 'terminal',
+                  cron: 'schedule',
+                };
+                return (
+                  <div className="space-y-4 max-w-5xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-[11px] font-bold text-slate-600 dark:text-white/60 uppercase">{a.tasks || 'Tasks'}</h3>
+                        {td && (
+                          <p className="text-[11px] text-slate-400 dark:text-white/35 mt-0.5">
+                            {td.total ?? 0} {a.tasksTotal || 'total'} · {td.active ?? 0} {a.tasksActive || 'active'} · {td.failures ?? 0} {a.tasksIssues || 'issues'}
+                          </p>
+                        )}
+                      </div>
+                      <button onClick={() => {
+                        setTasksLoading(true);
+                        gwApi.info().then((d: any) => { setTasksData(d?.tasks ?? null); }).catch((err: any) => { toast('error', err?.message || a.tasksFetchFailed || 'Failed to fetch tasks'); }).finally(() => setTasksLoading(false));
+                      }} className="text-[10px] text-primary hover:underline">{a.refresh}</button>
+                    </div>
+
+                    {tasksLoading && (
+                      <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.loading}</p>
+                    )}
+
+                    {!tasksLoading && !td && (
+                      <p className="text-[10px] text-slate-400 dark:text-white/20 py-8 text-center">{a.tasksNoData || 'No task data available'}</p>
+                    )}
+
+                    {!tasksLoading && td && (
+                      <>
+                        {/* Summary cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { label: a.tasksTotal || 'Total', value: td.total ?? 0, icon: 'task_alt', color: 'text-primary' },
+                            { label: a.tasksActive || 'Active', value: td.active ?? 0, icon: 'play_circle', color: 'text-cyan-500' },
+                            { label: a.tasksTerminal || 'Completed', value: td.terminal ?? 0, icon: 'check_circle', color: 'text-mac-green' },
+                            { label: a.tasksIssues || 'Issues', value: td.failures ?? 0, icon: 'warning', color: td.failures > 0 ? 'text-red-500' : 'text-slate-400' },
+                          ].map(card => (
+                            <div key={card.label} className="px-3 py-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className={`material-symbols-outlined text-[14px] ${card.color}`}>{card.icon}</span>
+                                <span className="text-[10px] text-slate-400 dark:text-white/35 uppercase font-bold">{card.label}</span>
+                              </div>
+                              <p className="text-lg font-bold text-slate-700 dark:text-white/80">{card.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Status breakdown */}
+                        {td.byStatus && (
+                          <div className="px-3 py-3 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                            <h4 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase mb-2">{a.tasksByStatus || 'By Status'}</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(td.byStatus as Record<string, number>).map(([status, count]) => (
+                                <div key={status} className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold ${statusColors[status] || 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
+                                  <span className="material-symbols-outlined text-[12px]">{statusIcons[status] || 'radio_button_unchecked'}</span>
+                                  {status}: {count}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Runtime breakdown */}
+                        {td.byRuntime && (
+                          <div className="px-3 py-3 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06]">
+                            <h4 className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase mb-2">{a.tasksByRuntime || 'By Runtime'}</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(td.byRuntime as Record<string, number>).map(([runtime, count]) => (
+                                <div key={runtime} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/50">
+                                  <span className="material-symbols-outlined text-[12px]">{runtimeIcons[runtime] || 'memory'}</span>
+                                  {runtime}: {count}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Info note */}
+                        <div className="px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200/60 dark:border-blue-500/10 text-[10px] text-blue-600 dark:text-blue-400 flex items-start gap-1.5">
+                          <span className="material-symbols-outlined text-[14px] mt-0.5 shrink-0">info</span>
+                          <span>{a.tasksNote || 'Task summary from the gateway status endpoint. Individual task details are managed via the OpenClaw CLI.'}</span>
+                        </div>
+                      </>
                     )}
                   </div>
                 );

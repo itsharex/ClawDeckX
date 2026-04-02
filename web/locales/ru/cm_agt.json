@@ -208,6 +208,16 @@
     "toolClickToToggle": "Нажмите на карточку для смены состояния",
     "toolOverrideCount": "переопределений",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "Задачи",
+    "tasksTotal": "всего",
+    "tasksActive": "активных",
+    "tasksTerminal": "Завершено",
+    "tasksIssues": "проблем",
+    "tasksFetchFailed": "Не удалось загрузить задачи",
+    "tasksByStatus": "По статусу",
+    "tasksByRuntime": "По среде выполнения",
+    "tasksNoData": "Нет данных о задачах",
+    "tasksNote": "Сводка задач из конечной точки статуса шлюза. Детали отдельных задач управляются через OpenClaw CLI.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }

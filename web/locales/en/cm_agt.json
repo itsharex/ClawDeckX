@@ -208,6 +208,16 @@
     "toolClickToToggle": "Click card to cycle state",
     "toolOverrideCount": "overrides",
     "chPolicyTitle": "Channel Policies",
+    "tasks": "Tasks",
+    "tasksTotal": "total",
+    "tasksActive": "active",
+    "tasksTerminal": "Completed",
+    "tasksIssues": "issues",
+    "tasksFetchFailed": "Failed to fetch tasks",
+    "tasksByStatus": "By Status",
+    "tasksByRuntime": "By Runtime",
+    "tasksNoData": "No task data available",
+    "tasksNote": "Task summary from the gateway status endpoint. Individual task details are managed via the OpenClaw CLI.",
     "chAfPlaceholder": "Group/User ID…"
   }
 }
