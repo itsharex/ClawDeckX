@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Language } from '../types';
 import { getTranslation } from '../locales';
 import { gwApi } from '../services/api';
+import { ApiError } from '../services/request';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 
@@ -11,6 +12,8 @@ interface TasksProps {
 }
 
 type TaskStatus = 'all' | 'running' | 'queued' | 'completed' | 'failed' | 'cancelled';
+
+const TASKS_FETCH_TIMEOUT_MS = 8000;
 
 interface TaskItem {
   taskId: string;
@@ -27,7 +30,46 @@ interface TaskItem {
   label?: string;
   runId?: string;
   parentTaskId?: string;
+  ownerKey?: string;
+  sourceId?: string;
+  deliveryStatus?: string;
 }
+
+interface GatewayTaskRecord {
+  taskId: string;
+  runtime?: string;
+  sourceId?: string;
+  requesterSessionKey?: string;
+  ownerKey?: string;
+  childSessionKey?: string;
+  parentTaskId?: string;
+  agentId?: string;
+  runId?: string;
+  label?: string;
+  task?: string;
+  status?: string;
+  deliveryStatus?: string;
+  createdAt?: number;
+  startedAt?: number;
+  endedAt?: number;
+  lastEventAt?: number;
+  cleanupAfter?: number;
+  error?: string;
+  progressSummary?: string;
+  terminalSummary?: string;
+}
+
+interface GatewayTaskListResponse {
+  count?: number;
+  runtime?: string | null;
+  status?: string | null;
+  tasks?: GatewayTaskRecord[];
+}
+
+type TaskLoadState =
+  | { kind: 'idle' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'unsupported'; title: string; message: string };
 
 const STATUS_ICONS: Record<string, string> = {
   running: 'play_circle',
@@ -115,6 +157,108 @@ function isHeartbeatStale(lastHeartbeat?: string): boolean {
   return Date.now() - hb > 120_000; // 2 minutes
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`tasks.list timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function toIsoTime(value?: number): string | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return new Date(value).toISOString();
+}
+
+function normalizeTaskStatus(status?: string): string {
+  switch ((status || '').toLowerCase()) {
+    case 'succeeded':
+      return 'completed';
+    case 'timed_out':
+    case 'lost':
+      return 'failed';
+    default:
+      return (status || '').toLowerCase();
+  }
+}
+
+function normalizeTaskRecord(task: GatewayTaskRecord): TaskItem {
+  return {
+    taskId: task.taskId,
+    status: normalizeTaskStatus(task.status),
+    agentId: task.agentId,
+    sessionKey: task.childSessionKey || task.requesterSessionKey,
+    source: task.runtime,
+    startedAt: toIsoTime(task.startedAt ?? task.createdAt),
+    updatedAt: toIsoTime(task.lastEventAt ?? task.startedAt ?? task.createdAt),
+    completedAt: toIsoTime(task.endedAt),
+    error: task.error,
+    lastHeartbeat: toIsoTime(task.lastEventAt),
+    description: task.terminalSummary || task.progressSummary || task.task,
+    label: task.label,
+    runId: task.runId,
+    parentTaskId: task.parentTaskId,
+    ownerKey: task.ownerKey,
+    sourceId: task.sourceId,
+    deliveryStatus: task.deliveryStatus,
+  };
+}
+
+function parseTaskListPayload(payload: unknown): TaskItem[] {
+  if (Array.isArray(payload)) {
+    return payload
+      .filter((item): item is GatewayTaskRecord => Boolean(item && typeof item === 'object' && (item as GatewayTaskRecord).taskId))
+      .map(normalizeTaskRecord);
+  }
+
+  if (payload && typeof payload === 'object' && Array.isArray((payload as GatewayTaskListResponse).tasks)) {
+    return (payload as GatewayTaskListResponse).tasks!
+      .filter((item): item is GatewayTaskRecord => Boolean(item && typeof item === 'object' && item.taskId))
+      .map(normalizeTaskRecord);
+  }
+
+  if (payload && typeof payload === 'object' && 'tasks' in (payload as Record<string, unknown>)) {
+    throw new Error('Invalid tasks.list payload: tasks is not an array');
+  }
+
+  throw new Error('Invalid tasks.list payload');
+}
+
+function isUnsupportedTasksFeatureError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase();
+  if (
+    message.includes('method not found')
+    || message.includes('unknown method')
+    || message.includes('unrecognized method')
+    || message.includes('tasks.list') && message.includes('not found')
+    || message.includes('api endpoint not available')
+  ) {
+    return true;
+  }
+
+  if (error instanceof ApiError) {
+    return error.code === 'API_NOT_AVAILABLE' || error.code === 'GW_RPC_ERROR';
+  }
+
+  if (typeof error === 'object' && error && 'code' in error) {
+    const code = String((error as { code?: unknown }).code || '');
+    return code === 'API_NOT_AVAILABLE' || code === 'GW_RPC_ERROR';
+  }
+
+  return false;
+}
+
 const Tasks: React.FC<TasksProps> = ({ language }) => {
   const t = useMemo(() => getTranslation(language) as any, [language]);
   const { toast } = useToast();
@@ -122,21 +266,35 @@ const Tasks: React.FC<TasksProps> = ({ language }) => {
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<TaskLoadState>({ kind: 'idle' });
   const [filter, setFilter] = useState<TaskStatus>('all');
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchTasks = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    setError(null);
+    if (showLoading) {
+      setLoading(true);
+      setLoadState({ kind: 'idle' });
+    }
     try {
-      const data = await gwApi.tasksList();
-      const items = Array.isArray(data) ? data : (data as any)?.tasks || [];
+      const data = await withTimeout(gwApi.tasksList(), TASKS_FETCH_TIMEOUT_MS);
+      const items = parseTaskListPayload(data);
       setTasks(items);
+      setLoadState({ kind: 'idle' });
     } catch (err: any) {
-      setError(t?.task?.fetchFailed || 'Failed to fetch tasks');
+      if (isUnsupportedTasksFeatureError(err)) {
+        setLoadState({
+          kind: 'unsupported',
+          title: t?.task?.unsupportedTitle || 'OpenClaw version not supported',
+          message: t?.task?.unsupportedHint || 'Your current OpenClaw version does not support Task Center. Please upgrade OpenClaw to a compatible version and try again.',
+        });
+      } else {
+        setLoadState({
+          kind: 'failed',
+          message: t?.task?.fetchFailed || 'Failed to fetch tasks',
+        });
+      }
       console.error('[Tasks] fetch failed:', err);
     } finally {
       if (showLoading) setLoading(false);
@@ -183,13 +341,13 @@ const Tasks: React.FC<TasksProps> = ({ language }) => {
 
   const filteredTasks = useMemo(() => {
     if (filter === 'all') return tasks;
-    return tasks.filter(t => t.status?.toLowerCase() === filter);
+    return tasks.filter(t => normalizeTaskStatus(t.status) === filter);
   }, [tasks, filter]);
 
   const stats = useMemo(() => {
     const s = { total: tasks.length, running: 0, queued: 0, completed: 0, failed: 0, cancelled: 0 };
     for (const task of tasks) {
-      const st = task.status?.toLowerCase();
+      const st = normalizeTaskStatus(task.status);
       if (st === 'running') s.running++;
       else if (st === 'queued') s.queued++;
       else if (st === 'completed') s.completed++;
@@ -297,10 +455,19 @@ const Tasks: React.FC<TasksProps> = ({ language }) => {
           <div className="flex items-center justify-center h-40">
             <span className="material-symbols-outlined animate-spin text-2xl text-white/30">progress_activity</span>
           </div>
-        ) : error && tasks.length === 0 ? (
+        ) : loadState.kind === 'unsupported' && tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
+            <span className="material-symbols-outlined text-3xl text-amber-400">update</span>
+            <span className="text-sm font-medium text-text-secondary">{loadState.title}</span>
+            <span className="text-xs text-text-muted max-w-sm">{loadState.message}</span>
+            <button onClick={() => fetchTasks(true)} className="text-xs text-cyan-400 hover:underline">
+              {t?.task?.refresh || 'Refresh'}
+            </button>
+          </div>
+        ) : loadState.kind === 'failed' && tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2">
             <span className="material-symbols-outlined text-2xl text-red-400">warning</span>
-            <span className="text-sm text-text-secondary">{error}</span>
+            <span className="text-sm text-text-secondary">{loadState.message}</span>
             <button onClick={() => fetchTasks(true)} className="text-xs text-cyan-400 hover:underline">
               {t?.task?.refresh || 'Refresh'}
             </button>
@@ -314,7 +481,7 @@ const Tasks: React.FC<TasksProps> = ({ language }) => {
         ) : (
           <div className="flex flex-col gap-2">
             {filteredTasks.map(task => {
-              const st = task.status?.toLowerCase() || 'unknown';
+              const st = normalizeTaskStatus(task.status) || 'unknown';
               const isSelected = selectedTask === task.taskId;
               const stale = st === 'running' && isHeartbeatStale(task.lastHeartbeat);
               return (
@@ -416,6 +583,21 @@ const Tasks: React.FC<TasksProps> = ({ language }) => {
                         {task.source && <>
                           <span className="text-text-muted">{t?.task?.source || 'Source'}</span>
                           <span>{getSourceLabel(task.source, t)}</span>
+                        </>}
+
+                        {task.deliveryStatus && <>
+                          <span className="text-text-muted">Delivery</span>
+                          <span>{task.deliveryStatus}</span>
+                        </>}
+
+                        {task.sourceId && <>
+                          <span className="text-text-muted">Source ID</span>
+                          <span className="font-mono text-text-secondary">{task.sourceId}</span>
+                        </>}
+
+                        {task.ownerKey && <>
+                          <span className="text-text-muted">Owner</span>
+                          <span className="font-mono text-text-secondary break-all">{task.ownerKey}</span>
                         </>}
 
                         <span className="text-text-muted">{t?.task?.startedAt || 'Started'}</span>
