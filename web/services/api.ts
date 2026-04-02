@@ -984,12 +984,12 @@ export const gwApi = {
     rpc('sessions.resolve', { key }),
   sessionsCompact: (key: string) =>
     rpc('sessions.compact', { key }),
-  sessionsCreate: (params: { agentId?: string; label?: string; sessionKey?: string }) =>
+  sessionsCreate: (params: { agentId?: string; label?: string; key?: string }) =>
     rpc('sessions.create', params),
   sessionsSend: (key: string, message: string, params?: { thinking?: string; attachments?: any[]; timeoutMs?: number; idempotencyKey?: string }) =>
-    rpc('sessions.send', { sessionKey: key, message, ...params }),
+    rpc('sessions.send', { key, message, ...params }),
   sessionsAbort: (key: string, runId?: string) =>
-    rpc('sessions.abort', { sessionKey: key, ...(runId ? { runId } : {}) }),
+    rpc('sessions.abort', { key, ...(runId ? { runId } : {}) }),
   sessionsSubscribe: () =>
     rpc('sessions.subscribe', {}),
   sessionsUnsubscribe: () =>

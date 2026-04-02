@@ -838,6 +838,10 @@ func (h *GWProxyHandler) GenericProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Method == "sessions.send" || req.Method == "sessions.abort" {
+		req.Params = h.rewriteSessionKeyParam(req.Params)
+	}
+
 	data, err := h.client.RequestWithTimeout(req.Method, req.Params, timeout)
 	if err != nil {
 		if openclaw.IsGatewayRPCError(err) {
@@ -882,6 +886,26 @@ func (h *GWProxyHandler) proxyConfigMutating(w http.ResponseWriter, r *http.Requ
 		web.OKRaw(w, r, data)
 		return
 	}
+}
+
+func (h *GWProxyHandler) rewriteSessionKeyParam(params interface{}) interface{} {
+	m := toMapParams(params)
+	if h.client.UseSessionKeyParam() {
+		if sk, ok := m["sessionKey"]; ok {
+			if _, hasKey := m["key"]; !hasKey {
+				m["key"] = sk
+			}
+			delete(m, "sessionKey")
+		}
+	} else {
+		if k, ok := m["key"]; ok {
+			if _, hasSK := m["sessionKey"]; !hasSK {
+				m["sessionKey"] = k
+			}
+			delete(m, "key")
+		}
+	}
+	return m
 }
 
 // toMapParams safely converts interface{} params to a mutable map.

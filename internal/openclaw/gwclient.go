@@ -121,6 +121,7 @@ type GWClient struct {
 	gwVersion     string    // gateway version fetched after connect
 	gwUptimeMs    int64     // gateway uptime from hello-ok snapshot
 	gwConnectedAt time.Time // when we received hello-ok (for local elapsed calc)
+	protoCaps     gwProtocolCaps
 
 	reconnectCount int
 	backoffMs      int
@@ -544,10 +545,14 @@ func (c *GWClient) ConnectionStatus() map[string]interface{} {
 		"last_ok":              lastOK,
 		"grace_until":          graceStr,
 		"version":              c.gwVersion,
-		"gateway_uptime_ms":    gwUptimeMs,
-		"last_seq":             lastSeq,
-		"last_tick_age":        lastTickAge,
-		"tick_interval_ms":     tickIntervalMs,
+		"protocol_caps": map[string]interface{}{
+			"detected":    c.protoCaps.Detected,
+			"useKeyParam": c.protoCaps.UseKeyParam,
+		},
+		"gateway_uptime_ms": gwUptimeMs,
+		"last_seq":          lastSeq,
+		"last_tick_age":     lastTickAge,
+		"tick_interval_ms":  tickIntervalMs,
 	}
 }
 
@@ -849,6 +854,7 @@ func (c *GWClient) readLoop(conn *websocket.Conn) error {
 		c.gwVersion = ""
 		c.gwUptimeMs = 0
 		c.gwConnectedAt = time.Time{}
+		c.protoCaps = gwProtocolCaps{}
 		c.lastSeq = nil
 		c.lastTick = time.Time{}
 		if c.conn == conn {
@@ -1338,8 +1344,51 @@ func (c *GWClient) fetchGatewayVersion() {
 		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(data, &status); err == nil && status.Version != "" {
+		caps := resolveProtocolCaps(status.Version)
 		c.mu.Lock()
 		c.gwVersion = status.Version
+		c.protoCaps = caps
 		c.mu.Unlock()
+	}
+}
+
+func (c *GWClient) UseSessionKeyParam() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.protoCaps.UseKeyParam
+}
+
+func (c *GWClient) SessionSendParams(sessionKey, message string) map[string]interface{} {
+	p := map[string]interface{}{
+		"message": message,
+	}
+	if c.UseSessionKeyParam() {
+		p["key"] = sessionKey
+	} else {
+		p["sessionKey"] = sessionKey
+	}
+	return p
+}
+
+func (c *GWClient) SessionAbortParams(sessionKey string, runID string) map[string]interface{} {
+	p := map[string]interface{}{}
+	if c.UseSessionKeyParam() {
+		p["key"] = sessionKey
+	} else {
+		p["sessionKey"] = sessionKey
+	}
+	if runID != "" {
+		p["runId"] = runID
+	}
+	return p
+}
+
+func (c *GWClient) ProtocolCapsInfo() map[string]interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return map[string]interface{}{
+		"detected":    c.protoCaps.Detected,
+		"useKeyParam": c.protoCaps.UseKeyParam,
+		"version":     c.protoCaps.Version,
 	}
 }

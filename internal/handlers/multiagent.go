@@ -354,10 +354,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
 	}
 
 	// Send the generation prompt, broadcasting keepalive progress while waiting.
-	sendParams := map[string]interface{}{
-		"sessionKey": sessionKey,
-		"message":    prompt,
-	}
+	sendParams := h.client.SessionSendParams(sessionKey, prompt)
 
 	// Keepalive: broadcast gen_progress so the frontend can subscribe to chat delta events
 	// using the sessionKey, and track elapsed time server-side.
@@ -911,10 +908,7 @@ Output %s agents. JSON schema:
 			}
 		}()
 
-		msgData, err := h.client.RequestWithTimeout("sessions.send", map[string]interface{}{
-			"sessionKey": sessionKey,
-			"message":    prompt,
-		}, 600*time.Second)
+		msgData, err := h.client.RequestWithTimeout("sessions.send", h.client.SessionSendParams(sessionKey, prompt), 600*time.Second)
 		close(progDone)
 		go func() {
 			h.client.Request("sessions.delete", map[string]interface{}{"key": sessionKey, "deleteTranscript": true}) //nolint:errcheck
