@@ -1,5 +1,9 @@
 ﻿## What's Changed
 
+### ✨ New Features / 新功能
+
+- add agents tasks tab
+
 ### 🐛 Bug Fixes / 修复
 
 - normalize exec security dashboard display
