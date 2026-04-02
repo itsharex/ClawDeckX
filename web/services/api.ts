@@ -1253,6 +1253,13 @@ export const gwApi = {
         }>;
       }>;
     }>('tools.catalog', params),
+  // Tasks
+  tasksList: (opts?: { status?: string; limit?: number; offset?: number }) =>
+    rpc<any[]>('tasks.list', opts),
+  tasksShow: (taskId: string) =>
+    rpc('tasks.show', { taskId }),
+  tasksCancel: (taskId: string) =>
+    rpc('tasks.cancel', { taskId }),
   // Generic proxy (escape hatch)
   proxy: (method: string, params?: any) => rpc(method, params),
 };

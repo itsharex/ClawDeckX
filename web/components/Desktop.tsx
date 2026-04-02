@@ -70,6 +70,7 @@ const ALL_DESKTOP_APPS: AppInfo[] = [
   { id: 'usage', titleKey: 'usage', icon: 'analytics', gradient: 'from-[#F472B6] to-[#DB2777]' },
   { id: 'alerts', titleKey: 'alerts', icon: 'approval', gradient: 'from-[#FF453A] to-[#C33B32]' },
   { id: 'agents', titleKey: 'agents', icon: 'robot_2', gradient: 'from-[#5856D6] to-[#3634A3]' },
+  { id: 'tasks', titleKey: 'tasks', icon: 'task_alt', gradient: 'from-[#06B6D4] to-[#0891B2]' },
   { id: 'scheduler', titleKey: 'scheduler', icon: 'event_repeat', gradient: 'from-[#FF375F] to-[#BF2A47]' },
   // — Low frequency —
   { id: 'maintenance', titleKey: 'maintenance', icon: 'health_and_safety', gradient: 'from-[#22C55E] to-[#15803D]' },
@@ -100,6 +101,7 @@ const DOCK_GROUPS: AppGroup[] = [
       { id: 'gateway', icon: 'router', color: 'bg-emerald-500' },
       { id: 'sessions', icon: 'forum', color: 'bg-teal-500' },
       { id: 'agents', icon: 'robot_2', color: 'bg-green-600' },
+      { id: 'tasks', icon: 'task_alt', color: 'bg-cyan-500' },
       { id: 'scheduler', icon: 'event_repeat', color: 'bg-cyan-600' },
     ]
   },

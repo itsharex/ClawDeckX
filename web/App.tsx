@@ -37,6 +37,7 @@ const loadNodes = () => import('./windows/Nodes');
 const loadSetupWizard = () => import('./windows/SetupWizard');
 const loadUsageWizard = () => import('./windows/UsageWizard');
 const loadKnowledge = () => import('./windows/Knowledge');
+const loadTasks = () => import('./windows/Tasks');
 
 const WINDOW_LOADERS: Record<WindowID, () => Promise<unknown>> = {
   dashboard: loadDashboard,
@@ -55,6 +56,7 @@ const WINDOW_LOADERS: Record<WindowID, () => Promise<unknown>> = {
   setup_wizard: loadSetupWizard,
   usage_wizard: loadUsageWizard,
   knowledge: loadKnowledge,
+  tasks: loadTasks,
 };
 
 const PRIORITY_WARMUP_LOADERS: Array<() => Promise<unknown>> = [
@@ -75,6 +77,7 @@ const SECONDARY_WARMUP_LOADERS: Array<() => Promise<unknown>> = [
   loadUsage,
   loadSetupWizard,
   loadUsageWizard,
+  loadTasks,
 ];
 
 const Dashboard = React.lazy(loadDashboard);
@@ -93,6 +96,7 @@ const Nodes = React.lazy(loadNodes);
 const SetupWizard = React.lazy(loadSetupWizard);
 const UsageWizard = React.lazy(loadUsageWizard);
 const Knowledge = React.lazy(loadKnowledge);
+const Tasks = React.lazy(loadTasks);
 
 const WINDOW_IDS: { id: WindowID; openByDefault?: boolean }[] = [
   { id: 'dashboard', openByDefault: true },
@@ -109,6 +113,7 @@ const WINDOW_IDS: { id: WindowID; openByDefault?: boolean }[] = [
   { id: 'settings' },
   { id: 'nodes' },
   { id: 'knowledge' },
+  { id: 'tasks' },
   { id: 'setup_wizard' },
   { id: 'usage_wizard' },
 ];
@@ -503,6 +508,7 @@ const App: React.FC = () => {
                     {w.id === 'settings' && <Settings language={language} onLogout={logout} pendingTab={pendingSettingsTab} onTabConsumed={() => setPendingSettingsTab(null)} onPrefsChange={handlePrefsChange} />}
                     {w.id === 'nodes' && <Nodes language={language} />}
                     {w.id === 'knowledge' && <Knowledge language={language} pendingExpandItem={pendingExpandItem} onExpandItemConsumed={() => setPendingExpandItem(null)} />}
+                    {w.id === 'tasks' && <Tasks language={language} />}
                     {w.id === 'setup_wizard' && (
                       <SetupWizard
                         language={language}
