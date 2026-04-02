@@ -7,10 +7,13 @@ import {
   MultiAgentDeployRequest,
   gwApi,
   GenTask,
+  WizardStep1Request,
+  WizardStep2Request,
 } from '../../services/api';
 import { useToast } from '../Toast';
 import { resolveTemplateColor } from '../../utils/templateColors';
 import { subscribeManagerWS } from '../../services/manager-ws';
+import { templateSystem, resolveTemplatePrompt } from '../../services/template-system';
 
 interface ScenarioTeamBuilderProps {
   language: Language;
@@ -23,7 +26,7 @@ interface ScenarioTeamBuilderProps {
   completedResult?: MultiAgentGenerateResult;
 }
 
-type BuilderStep = 'input' | 'prompt-review' | 'generating' | 'preview' | 'edit-agent';
+type BuilderStep = 'input' | 'generating' | 'wizard' | 'preview' | 'edit-agent';
 
 interface AgentEdit {
   id: string;
@@ -48,17 +51,19 @@ interface ScenarioTemplate {
   teamSize: 'small' | 'medium' | 'large';
   name: string;
   desc: string;
+  /** ID matching templates/official/multi-agent/{id}.json — used to load prompts */
+  multiAgentTemplateId?: string;
 }
 
 const SCENARIO_TEMPLATES: ScenarioTemplate[] = [
-  { icon: 'code', color: 'from-blue-500 to-cyan-500', nameKey: 'tpl_softdev_name', descKey: 'tpl_softdev_desc', workflowType: 'collaborative', teamSize: 'medium', name: 'Software Dev Team', desc: 'Full-stack software development team with PM, architects, frontend/backend devs and QA. Responsible for requirement analysis, system design, coding, code review, testing, and delivery management.' },
-  { icon: 'campaign', color: 'from-pink-500 to-rose-500', nameKey: 'tpl_marketing_name', descKey: 'tpl_marketing_desc', workflowType: 'parallel', teamSize: 'medium', name: 'Content Marketing', desc: 'Content creation and marketing team producing SEO articles, social media posts, email newsletters, and marketing copy. Handles content strategy, writing, editing, distribution, and analytics.' },
-  { icon: 'support_agent', color: 'from-green-500 to-emerald-500', nameKey: 'tpl_support_name', descKey: 'tpl_support_desc', workflowType: 'routing', teamSize: 'medium', name: 'Customer Support', desc: 'Multi-tier customer support team handling inbound requests through triage, L1/L2/L3 specialists, and escalation management. Focus on fast resolution, knowledge base maintenance, and CSAT improvement.' },
-  { icon: 'science', color: 'from-violet-500 to-purple-500', nameKey: 'tpl_research_name', descKey: 'tpl_research_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Research Team', desc: 'Academic or market research team with lead researcher, domain experts, data analysts, and critical reviewers. Conducts literature review, data collection, analysis, and report writing.' },
-  { icon: 'storefront', color: 'from-orange-500 to-amber-500', nameKey: 'tpl_ecommerce_name', descKey: 'tpl_ecommerce_desc', workflowType: 'collaborative', teamSize: 'large', name: 'E-Commerce Operations', desc: 'E-commerce operations team managing product listings, pricing strategy, inventory, customer service, promotions, and analytics. Covers the full order-to-fulfillment workflow.' },
-  { icon: 'school', color: 'from-teal-500 to-cyan-500', nameKey: 'tpl_education_name', descKey: 'tpl_education_desc', workflowType: 'sequential', teamSize: 'small', name: 'Education Content', desc: 'Online education content team creating courses, quizzes, video scripts, and learning materials. Roles include instructional designer, subject matter expert, writer, and quality reviewer.' },
-  { icon: 'account_balance', color: 'from-slate-500 to-gray-600', nameKey: 'tpl_finance_name', descKey: 'tpl_finance_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Financial Analysis', desc: 'Financial analysis team covering market research, financial modeling, risk assessment, portfolio analysis, and investment reporting. Produces detailed research reports and recommendations.' },
-  { icon: 'build', color: 'from-indigo-500 to-blue-600', nameKey: 'tpl_devops_name', descKey: 'tpl_devops_desc', workflowType: 'collaborative', teamSize: 'small', name: 'DevOps Team', desc: 'DevOps and SRE team managing CI/CD pipelines, infrastructure as code, monitoring, incident response, and deployment automation. Ensures system reliability, security, and scalability.' },
+  { icon: 'code', color: 'from-blue-500 to-cyan-500', nameKey: 'tpl_softdev_name', descKey: 'tpl_softdev_desc', workflowType: 'collaborative', teamSize: 'medium', name: 'Software Dev Team', desc: 'Full-stack software development team with PM, architects, frontend/backend devs and QA. Responsible for requirement analysis, system design, coding, code review, testing, and delivery management.', multiAgentTemplateId: 'software-dev' },
+  { icon: 'campaign', color: 'from-pink-500 to-rose-500', nameKey: 'tpl_marketing_name', descKey: 'tpl_marketing_desc', workflowType: 'parallel', teamSize: 'medium', name: 'Content Marketing', desc: 'Content creation and marketing team producing SEO articles, social media posts, email newsletters, and marketing copy. Handles content strategy, writing, editing, distribution, and analytics.', multiAgentTemplateId: 'content-factory' },
+  { icon: 'support_agent', color: 'from-green-500 to-emerald-500', nameKey: 'tpl_support_name', descKey: 'tpl_support_desc', workflowType: 'routing', teamSize: 'medium', name: 'Customer Support', desc: 'Multi-tier customer support team handling inbound requests through triage, L1/L2/L3 specialists, and escalation management. Focus on fast resolution, knowledge base maintenance, and CSAT improvement.', multiAgentTemplateId: 'customer-support' },
+  { icon: 'science', color: 'from-violet-500 to-purple-500', nameKey: 'tpl_research_name', descKey: 'tpl_research_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Research Team', desc: 'Academic or market research team with lead researcher, domain experts, data analysts, and critical reviewers. Conducts literature review, data collection, analysis, and report writing.', multiAgentTemplateId: 'research-team' },
+  { icon: 'storefront', color: 'from-orange-500 to-amber-500', nameKey: 'tpl_ecommerce_name', descKey: 'tpl_ecommerce_desc', workflowType: 'collaborative', teamSize: 'large', name: 'E-Commerce Operations', desc: 'E-commerce operations team managing product listings, pricing strategy, inventory, customer service, promotions, and analytics. Covers the full order-to-fulfillment workflow.', multiAgentTemplateId: 'ecommerce' },
+  { icon: 'school', color: 'from-teal-500 to-cyan-500', nameKey: 'tpl_education_name', descKey: 'tpl_education_desc', workflowType: 'sequential', teamSize: 'small', name: 'Education Content', desc: 'Online education content team creating courses, quizzes, video scripts, and learning materials. Roles include instructional designer, subject matter expert, writer, and quality reviewer.', multiAgentTemplateId: 'education' },
+  { icon: 'account_balance', color: 'from-slate-500 to-gray-600', nameKey: 'tpl_finance_name', descKey: 'tpl_finance_desc', workflowType: 'sequential', teamSize: 'medium', name: 'Financial Analysis', desc: 'Financial analysis team covering market research, financial modeling, risk assessment, portfolio analysis, and investment reporting. Produces detailed research reports and recommendations.', multiAgentTemplateId: 'finance' },
+  { icon: 'build', color: 'from-indigo-500 to-blue-600', nameKey: 'tpl_devops_name', descKey: 'tpl_devops_desc', workflowType: 'collaborative', teamSize: 'small', name: 'DevOps Team', desc: 'DevOps and SRE team managing CI/CD pipelines, infrastructure as code, monitoring, incident response, and deployment automation. Ensures system reliability, security, and scalability.', multiAgentTemplateId: 'devops-team' },
 ];
 
 const WORKFLOW_TYPES = [
@@ -68,11 +73,61 @@ const WORKFLOW_TYPES = [
   { value: 'routing', icon: 'route', labelKey: 'workflowRouting' },
 ] as const;
 
+const WORKFLOW_DESCRIPTIONS: Record<string, { en: string; zh: string }> = {
+  collaborative: {
+    en: 'collaborative — all agents work together simultaneously, sharing context and coordinating freely',
+    zh: '协作式 — 所有智能体同时协作，自由共享上下文和协调任务',
+  },
+  sequential: {
+    en: 'sequential — agents run one after another in a fixed pipeline, each passing results to the next',
+    zh: '顺序式 — 智能体按固定流水线依次执行，每个将结果传递给下一个',
+  },
+  parallel: {
+    en: 'parallel — agents run simultaneously on independent tasks, then results are merged',
+    zh: '并行式 — 智能体同时处理各自独立任务，最后汇总结果',
+  },
+  routing: {
+    en: 'routing — a router agent dispatches tasks to the most suitable specialist agent based on input',
+    zh: '路由式 — 由路由智能体根据输入将任务分发给最合适的专科智能体',
+  },
+};
+
+function getWorkflowDescription(wfType: string, language: string): string {
+  const map = WORKFLOW_DESCRIPTIONS[wfType];
+  if (!map) return wfType;
+  return (language === 'zh' || language === 'zh-TW') ? map.zh : map.en;
+}
+
 const TEAM_SIZES = [
-  { value: 'small', range: '3-4', icon: 'group' },
-  { value: 'medium', range: '5-7', icon: 'groups' },
-  { value: 'large', range: '8-10', icon: 'diversity_3' },
+  { value: 'small', range: '2-3', icon: 'group' },
+  { value: 'medium', range: '4-6', icon: 'groups' },
+  { value: 'large', range: '7-10', icon: 'diversity_3' },
 ] as const;
+
+const ElapsedTimer: React.FC<{ startedAt: number; className?: string }> = ({ startedAt, className }) => {
+  const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  const label = m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return <span className={className}>{label}</span>;
+};
+
+const StreamOutput: React.FC<{ content: string }> = ({ content }) => {
+  const preRef = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    const el = preRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [content]);
+  return (
+    <pre ref={preRef} className="px-2 py-1.5 text-[10px] font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all max-h-[100px] overflow-y-auto">
+      {content}<span className="inline-block w-1.5 h-2.5 bg-violet-400 animate-pulse ml-0.5 align-middle" />
+    </pre>
+  );
+};
 
 const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   language,
@@ -97,7 +152,6 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [editedAgents, setEditedAgents] = useState<Record<string, AgentEdit>>({});
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'workflow' | 'reasoning'>('agents');
-  const [editablePrompt, setEditablePrompt] = useState('');
 
   // Async task id for background generation
   const [genTaskId, setGenTaskId] = useState<string | null>(pendingTaskId ?? null);
@@ -256,8 +310,8 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const templatePickerRef = useRef<HTMLDivElement>(null);
 
-  // Generation mode: false = agent session (default), true = direct LLM streaming
-  const [directLlm, setDirectLlm] = useState(false);
+  // Always use direct LLM streaming mode
+  const directLlm = true;
 
   // Model selector
   const [selectedModel, setSelectedModel] = useState('');
@@ -306,80 +360,121 @@ const ScenarioTeamBuilder: React.FC<ScenarioTeamBuilderProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const applyingTemplateRef = useRef(false);
+  const currentTemplateIdRef = useRef<string | null>(null);
+
   const handleApplyTemplate = useCallback((tpl: ScenarioTemplate) => {
-    setScenarioName(stb[tpl.nameKey] || tpl.name);
-    setDescription(stb[tpl.descKey] || tpl.desc);
+    const name = stb[tpl.nameKey] || tpl.name;
+    const desc = stb[tpl.descKey] || tpl.desc;
+    setScenarioName(name);
+    setDescription(desc);
     setWorkflowType(tpl.workflowType);
     setTeamSize(tpl.teamSize);
     setTemplatePickerOpen(false);
-  }, [stb]);
-
-  const buildPrompt = useCallback(() => {
-    const agentCountHint = teamSize === 'small' ? '3 to 4' : teamSize === 'large' ? '8 to 10' : '5 to 7';
-    const langHint = language === 'zh' || language === 'zh-TW' ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
-    return `You are an AI system architect. Analyze the following scenario and generate a multi-agent team configuration in strict JSON format.
-
-Scenario Name: ${scenarioName.trim()}
-Scenario Description: ${description.trim()}
-Team Size: ${agentCountHint} agents
-Workflow Type: ${workflowType}
-Output Language for agent names/roles/descriptions: ${langHint}
-
-Requirements:
-1. Generate ${agentCountHint} specialized AI agents appropriate for this scenario
-2. Each agent should have a distinct role with clear responsibilities
-3. Design a workflow that shows how agents collaborate
-4. Generate detailed SOUL.md content for each agent (their persona, responsibilities, working style)
-5. Generate AGENTS.md content for each agent (workspace startup instructions: which files to read, memory rules, red lines, group chat rules, heartbeat behavior — tailored to this agent's role)
-6. Generate USER.md content for each agent (profile of the human/team member this agent primarily serves — name placeholder, context about what this role needs from the user, preferences)
-7. Generate IDENTITY.md content for each agent (Name, Creature, Vibe, Emoji fields — fit the agent's personality)
-8. Generate HEARTBEAT.md checklist items for each agent
-9. Use lowercase kebab-case for agent IDs (e.g., "project-manager", "backend-dev")
-10. Choose appropriate Material Symbols icon names for each agent
-11. Choose appropriate Tailwind color classes (e.g., "from-blue-500 to-cyan-500")
-
-Respond ONLY with a JSON object in this exact structure (no markdown, no explanation outside JSON):
-{
-  "reasoning": "Brief explanation of why you chose these agents and this workflow",
-  "template": {
-    "id": "kebab-case-id-based-on-scenario-name",
-    "name": "Human-readable team name",
-    "description": "Team purpose description",
-    "agents": [
-      {
-        "id": "agent-id",
-        "name": "Agent Display Name",
-        "role": "One-line role description",
-        "description": "Detailed description of agent responsibilities",
-        "icon": "material_symbol_name",
-        "color": "from-blue-500 to-cyan-500",
-        "soul": "Full SOUL.md content in markdown — persona, responsibilities, working style",
-        "agentsMd": "Full AGENTS.md content — workspace startup instructions tailored to this agent",
-        "userMd": "Full USER.md content — profile template for the human this agent serves",
-        "identityMd": "Full IDENTITY.md content — Name/Creature/Vibe/Emoji for this agent",
-        "heartbeat": "- [ ] Task 1\n- [ ] Task 2"
-      }
-    ],
-    "workflow": {
-      "type": "${workflowType}",
-      "description": "How agents collaborate",
-      "steps": [
-        {
-          "agent": "agent-id",
-          "action": "What this agent does in this step"
+    // Clear cached step1 result so next wizard run is fresh with new prompts
+    wzStep1ResultRef.current = null;
+    setWzStep1Result(null);
+    // Mark that we're applying a template so the auto-clear useEffect skips
+    applyingTemplateRef.current = true;
+    currentTemplateIdRef.current = tpl.multiAgentTemplateId ?? null;
+    setWzPromptUserEdited(false);
+    // Load template prompts if linked
+    if (tpl.multiAgentTemplateId) {
+      const agentCount = tpl.teamSize === 'small' ? '2-3' : tpl.teamSize === 'large' ? '7-10' : '4-6';
+      templateSystem.getMultiAgentTemplates(language).then(templates => {
+        const matched = templates.find(t => t.id === tpl.multiAgentTemplateId);
+        if (!matched?.content.prompts) return;
+        const step1 = resolveTemplatePrompt(matched.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: tpl.workflowType,
+          workflowDescription: getWorkflowDescription(tpl.workflowType, language),
+        });
+        if (step1) { setWzStep1Prompt(step1); setWzPromptSource(matched.metadata?.name || tpl.multiAgentTemplateId || null); }
+        // Store agentFile prompt template for later per-agent use
+        const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
+        wzAgentFilePromptRef.current = matched.content.prompts.agentFile?.[agentFileLang]
+          ?? matched.content.prompts.agentFile?.['en']
+          ?? null;
+        applyingTemplateRef.current = false;
+      }).catch(() => { applyingTemplateRef.current = false; });
+    } else {
+      // No linked template — load generic default prompt + agentFile
+      const agentCount = tpl.teamSize === 'small' ? '2 to 3' : tpl.teamSize === 'large' ? '7 to 10' : '4 to 6';
+      templateSystem.getMultiAgentTemplates(language).then(templates => {
+        const def = templates.find(t => t.id === 'default');
+        if (!def) return;
+        if (def.content.prompts?.step1) {
+          const resolved = resolveTemplatePrompt(def.content.prompts.step1, language, {
+            scenarioName: name,
+            description: desc,
+            agentCount,
+            workflowType: tpl.workflowType,
+            workflowDescription: getWorkflowDescription(tpl.workflowType, language),
+          });
+          if (resolved) { setWzStep1Prompt(resolved); setWzPromptSource(null); }
         }
-      ]
+        // Load agentFile prompt template from default for step2
+        const agentFileLang = (language === 'zh' || language === 'zh-TW') ? 'zh' : 'en';
+        wzAgentFilePromptRef.current = def.content.prompts?.agentFile?.[agentFileLang]
+          ?? def.content.prompts?.agentFile?.['en']
+          ?? null;
+        applyingTemplateRef.current = false;
+      }).catch(() => { wzAgentFilePromptRef.current = null; applyingTemplateRef.current = false; });
     }
-  }
-}`;
-  }, [scenarioName, description, teamSize, workflowType, language]);
+  }, [stb, language]);
 
-  const handlePreparePrompt = useCallback(() => {
+  const [wzStep1Prompt, setWzStep1Prompt] = useState(''); // empty = backend uses compact default prompt
+  const [wzPromptUserEdited, setWzPromptUserEdited] = useState(false); // true = user manually edited, don't auto-regenerate
+  const [wzPromptSource, setWzPromptSource] = useState<string | null>(null); // null = default, string = template name
+  const [wzPromptExpanded, setWzPromptExpanded] = useState(true); // collapsed/expanded state for prompt editor
+
+  /** Build the generic fallback step1 prompt from the _default template (mirrors Go default). */
+  const buildDefaultStep1Prompt = useCallback(async (name: string, desc: string, size: typeof teamSize, wfType: typeof workflowType): Promise<string> => {
+    const agentCount = size === 'small' ? '2 to 3' : size === 'large' ? '7 to 10' : '4 to 6';
+    try {
+      const templates = await templateSystem.getMultiAgentTemplates(language);
+      const def = templates.find(t => t.id === 'default');
+      if (def?.content.prompts?.step1) {
+        const resolved = resolveTemplatePrompt(def.content.prompts.step1, language, {
+          scenarioName: name,
+          description: desc,
+          agentCount,
+          workflowType: wfType,
+          workflowDescription: getWorkflowDescription(wfType, language),
+        });
+        if (resolved) return resolved;
+      }
+    } catch { /* fall through */ }
+    return ''; // backend will use its built-in default
+  }, [language]);
+
+  const handlePreparePrompt = useCallback(async () => {
     if (!scenarioName.trim() || !description.trim()) return;
-    setEditablePrompt(buildPrompt());
     setError(null);
-    setStep('prompt-review');
-  }, [scenarioName, description, buildPrompt]);
+    // Bust stale empty cache so template re-load always retries
+    templateSystem.clearMultiAgentCache();
+    // Navigate to wizard immediately so UI feels responsive
+    setStep('wizard');
+    setTimeout(() => {
+      if (wzStep1ResultRef.current) {
+        setWzPhase('step2');
+      } else {
+        setWzPhase('step1');
+        setWzStep1Stream('');
+        setWzStep1Error(null);
+        wzStep1BufRef.current = '';
+      }
+    }, 0);
+    // Pre-fill prompt in background if not yet set
+    if (!wzStep1Prompt) {
+      const prompt = await buildDefaultStep1Prompt(scenarioName.trim(), description.trim(), teamSize, workflowType);
+      if (prompt) setWzStep1Prompt(prompt);
+    }
+  }, [scenarioName, description, teamSize, workflowType, wzStep1Prompt, buildDefaultStep1Prompt]);
+
+  const handleConfirmWizard = handlePreparePrompt;
 
   const handleConfirmGenerate = useCallback(async () => {
     setStep('generating');
@@ -419,7 +514,7 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
       } else {
         setError(errMsg || stb.generateFailed || 'Generation failed');
       }
-      setStep('prompt-review');
+      setStep('input');
     }
   }, [scenarioName, description, teamSize, workflowType, language, selectedModel, directLlm, stb, onTaskSubmitted]);
 
@@ -502,6 +597,258 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
     return colors[type] || 'bg-slate-500/10 text-slate-500 border-slate-500/20';
   };
 
+  // ── Inline wizard state ───────────────────────────────────────────────────
+  type WzPhase = 'step1' | 'step2';
+  type WzAgentStatus = 'pending' | 'running' | 'done' | 'skipped' | 'error';
+  interface WzAgentState {
+    id: string; name: string; role: string; description: string; icon: string; color: string;
+    status: WzAgentStatus;
+    streamBuf: string;
+    soul: string; agentsMd: string; userMd: string; identityMd: string; heartbeat: string;
+    error?: string;
+    customPrompt?: string;
+    expanded: boolean;
+    showPrompt: boolean;
+    startedAt?: number;   // Date.now() when streaming started
+    tokenCount?: number;  // accumulated token count
+  }
+
+  const [wzPhase, setWzPhase] = useState<WzPhase>('step1');
+  // Step1
+  const [wzStep1Stream, setWzStep1Stream] = useState('');
+  const [wzStep1Running, setWzStep1Running] = useState(false);
+  const [wzStep1Error, setWzStep1Error] = useState<string | null>(null);
+  const [wzStep1Result, setWzStep1Result] = useState<any>(null); // cached parsed JSON
+  const wzStep1ResultRef = useRef<any>(null); // mirror for reading in callbacks before state settles
+  const wzStep1AbortRef = useRef<AbortController | null>(null);
+  const wzStep1BufRef = useRef('');
+  const wzStep1RafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Step2
+  const [wzAgents, setWzAgents] = useState<WzAgentState[]>([]);
+  const wzAgentsRef = useRef<WzAgentState[]>([]); // mirrors wzAgents for use in async callbacks
+  const [wzStep2Running, setWzStep2Running] = useState(false);
+  const wzStep2AbortRef = useRef<AbortController | null>(null);
+  const wzStep2ActiveIdxRef = useRef(0);
+  // Stable ref to the start-step1 function so handleConfirmWizard can auto-invoke it
+  const wzStartStep1Ref = useRef<(() => void) | null>(null);
+  // Cached agentFile prompt template from loaded multi-agent template (raw, with {{placeholders}})
+  const wzAgentFilePromptRef = useRef<string | null>(null);
+
+  const wzLangHint = language === 'zh' || language === 'zh-TW' ? 'Chinese'
+    : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+
+  // Step1: start/stop
+  const wzHandleStep1Start = useCallback(() => {
+    wzStep1AbortRef.current?.abort();
+    wzStep1BufRef.current = '';
+    if (wzStep1RafRef.current !== null) { clearTimeout(wzStep1RafRef.current); wzStep1RafRef.current = null; }
+    setWzStep1Stream('');
+    setWzStep1Error(null);
+    setWzStep1Running(true);
+    setWzStep1Result(null);
+
+    const req: WizardStep1Request = {
+      scenarioName: scenarioName.trim(),
+      description: description.trim(),
+      teamSize,
+      workflowType,
+      language,
+      modelId: selectedModel || undefined,
+      customPrompt: wzStep1Prompt || undefined,
+    };
+
+    wzStep1AbortRef.current = multiAgentApi.wizardStep1(
+      req,
+      (token) => {
+        wzStep1BufRef.current += token;
+        if (wzStep1RafRef.current === null) {
+          wzStep1RafRef.current = setTimeout(() => {
+            setWzStep1Stream(wzStep1BufRef.current);
+            wzStep1RafRef.current = null;
+          }, 30);
+        }
+      },
+      (doneData) => {
+        setWzStep1Running(false);
+        wzStep1ResultRef.current = doneData;
+        setWzStep1Result(doneData);
+        const agentList: any[] = doneData.parsed?.template?.agents ?? [];
+        const agentFilePromptTpl = wzAgentFilePromptRef.current;
+        setWzAgents(agentList.map((a: any) => {
+          const core = { id: a.id ?? '', name: a.name ?? '', role: a.role ?? '', description: a.description ?? '', icon: a.icon ?? 'person', color: a.color ?? 'from-blue-500 to-cyan-500' };
+          // Resolve per-agent prompt: use template if available, otherwise fallback to generic default
+          const customPrompt = agentFilePromptTpl
+            ? agentFilePromptTpl
+              .replace(/\{\{agentName\}\}/g, core.name)
+              .replace(/\{\{agentRole\}\}/g, core.role)
+              .replace(/\{\{agentDesc\}\}/g, core.description)
+              .replace(/\{\{scenarioName\}\}/g, scenarioName)
+            : `Output ONLY valid JSON. No markdown fences, no explanation.\n\nYou are writing OpenClaw agent workspace files for a multi-agent system.\nAgent name: ${core.name}\nAgent role: ${core.role}\nAgent description: ${core.description}\nScenario / team name: ${scenarioName}\nWrite all content in: ${wzLangHint}\n\nFILE SPECIFICATIONS — follow these exactly:\n\nSOUL.md — Persona, tone, and boundaries. Loaded every session.\n  - Write in first person as the agent.\n  - Cover: who this agent is, what they care about, their working principles, their communication style.\n  - 3-5 short paragraphs. Use markdown headers (## Core Truths, ## Boundaries, ## Vibe).\n  - Be specific to this agent's role, NOT generic AI platitudes.\n\nAGENTS.md — Operating instructions and memory rules. Loaded every session.\n  - Starts with "## Session Startup" listing files to read on wake-up (SOUL.md, USER.md, memory/YYYY-MM-DD.md).\n  - Includes "## Red Lines" (things this agent must never do).\n  - Includes role-specific rules and priorities for this agent's domain.\n  - Use markdown headers and bullet lists.\n\nUSER.md — Profile of the human this agent serves. Loaded every session.\n  - Use the standard template format: - **Name:** / - **What to call them:** / - **Pronouns:** (optional) / - **Timezone:** / - **Notes:**\n  - Add a "## Context" section about what this agent should learn about the user (relevant to the agent's role).\n  - Leave field values blank — the agent fills them in from real interactions.\n\nIDENTITY.md — The agent's name, creature, vibe, and emoji.\n  - Use this format exactly: - **Name:** / - **Creature:** / - **Vibe:** / - **Emoji:**\n  - Do NOT add extra fields.\n\nHEARTBEAT.md — Optional periodic checklist for background proactive work. Keep minimal to avoid token burn.\n  - First, judge whether this agent genuinely has recurring background tasks worth checking periodically.\n  - If YES: write 2-4 specific, actionable "- [ ] task" checklist items for this agent's role.\n  - If NO (agent is purely reactive or session-driven with no background state): output exactly: # No periodic tasks for this agent\n  - Never pad with vague items just to fill space.\n\nReturn JSON with these exact keys. Values are full markdown file contents (escape newlines as \\n):\n{"soul":"","agentsMd":"","userMd":"","identityMd":"","heartbeat":""}`;
+          return { ...core, status: 'pending' as WzAgentStatus, streamBuf: '', soul: '', agentsMd: '', userMd: '', identityMd: '', heartbeat: '', expanded: false, showPrompt: false, customPrompt };
+        }));
+        setWzPhase('step2');
+      },
+      (code, msg) => {
+        setWzStep1Running(false);
+        setWzStep1Error(`${code}: ${msg}`);
+      },
+    );
+  }, [scenarioName, description, teamSize, workflowType, language, selectedModel, wzStep1Prompt, wzLangHint]);
+
+  // Register auto-start ref so handleConfirmWizard can call it after state flush
+  useEffect(() => { wzStartStep1Ref.current = wzHandleStep1Start; }, [wzHandleStep1Start]);
+
+  // Auto-clear prompt when key params change (if not user-edited), so it gets regenerated fresh
+  // Skip when a template is being applied — the template's own async loader sets the prompt.
+  useEffect(() => {
+    if (wzPromptUserEdited) return;
+    if (applyingTemplateRef.current) return;
+    setWzStep1Prompt('');
+    setWzPromptSource(null);
+  }, [teamSize, workflowType, scenarioName, description]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Retry prompt load when wizard step1 is active but prompt still empty (async race on first open)
+  useEffect(() => {
+    if (step !== 'wizard' || wzPhase !== 'step1' || wzStep1Prompt || wzStep1Running) return;
+    const tplId = currentTemplateIdRef.current;
+    const agentCount = teamSize === 'small' ? '2-3' : teamSize === 'large' ? '7-10' : '4-6';
+    templateSystem.getMultiAgentTemplates(language).then(templates => {
+      const tpl = tplId ? templates.find(t => t.id === tplId) : templates.find(t => t.id === 'default');
+      const promptObj = tpl?.content.prompts?.step1 ?? templates.find(t => t.id === 'default')?.content.prompts?.step1;
+      if (!promptObj) return;
+      const resolved = resolveTemplatePrompt(promptObj, language, {
+        scenarioName: scenarioName.trim(),
+        description: description.trim(),
+        agentCount,
+        workflowType,
+        workflowDescription: getWorkflowDescription(workflowType, language),
+      });
+      if (resolved) {
+        setWzStep1Prompt(resolved);
+        setWzPromptSource(tplId ? (tpl?.metadata?.name ?? tplId) : null);
+      }
+    }).catch(() => {});
+  }, [step, wzPhase, wzStep1Prompt, wzStep1Running, scenarioName, description, teamSize, workflowType, language]);
+
+  const wzHandleStep1Stop = useCallback(() => {
+    wzStep1AbortRef.current?.abort();
+    setWzStep1Running(false);
+  }, []);
+
+  // Stable ref so the done callback always calls the latest version (avoids stale closure in setTimeout)
+  const wzRunAgentRef = useRef<(idx: number, agents: WzAgentState[], singleOnly?: boolean) => void>(() => {});
+
+  // Step2: run a single agent by index. Pass singleOnly=true to prevent auto-chaining to next pending agent.
+  const wzRunAgent = useCallback((idx: number, agents: WzAgentState[], singleOnly = false) => {
+    const agent = agents[idx];
+    if (!agent) return;
+    wzStep2AbortRef.current?.abort();
+    wzStep2ActiveIdxRef.current = idx;
+    setWzStep2Running(true);
+    setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'running', streamBuf: '', error: undefined, startedAt: Date.now(), tokenCount: 0 } : a));
+
+    const req: WizardStep2Request = {
+      agentId: agent.id, agentName: agent.name, agentRole: agent.role, agentDesc: agent.description,
+      scenarioName: scenarioName.trim(), language,
+      modelId: selectedModel || undefined,
+      customPrompt: agent.customPrompt,
+    };
+
+    wzStep2AbortRef.current = multiAgentApi.wizardStep2(
+      req,
+      (_token, _agentId) => {
+        setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, streamBuf: a.streamBuf + _token, tokenCount: (a.tokenCount ?? 0) + _token.length } : a));
+      },
+      (doneData) => {
+        // Build the updated agents list
+        const updatedAgents = wzAgentsRef.current.map((a, i) => i === idx ? {
+          ...a, status: 'done' as WzAgentStatus, streamBuf: '',
+          soul: doneData.soul ?? '', agentsMd: doneData.agentsMd ?? '',
+          userMd: doneData.userMd ?? '', identityMd: doneData.identityMd ?? '',
+          heartbeat: doneData.heartbeat ?? '',
+        } : a);
+        wzAgentsRef.current = updatedAgents;
+        setWzAgents(updatedAgents);
+        // Auto-advance to next pending agent
+        if (!singleOnly) {
+          const nextIdx = updatedAgents.findIndex((a, i) => i > idx && a.status === 'pending');
+          if (nextIdx >= 0) {
+            setTimeout(() => wzRunAgentRef.current(nextIdx, wzAgentsRef.current), 200);
+          } else {
+            setWzStep2Running(false);
+          }
+        } else {
+          setWzStep2Running(false);
+        }
+      },
+      (code, msg) => {
+        setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'error', error: `${code}: ${msg}` } : a));
+        setWzStep2Running(false);
+      },
+    );
+  }, [scenarioName, language, selectedModel]);
+  wzRunAgentRef.current = wzRunAgent;
+  // Keep wzAgentsRef in sync so async callbacks always see the latest state
+  // (this runs synchronously on every render, before any effect fires)
+  wzAgentsRef.current = wzAgents;
+
+  const wzHandleGenerateAll = useCallback(() => {
+    const firstIdx = wzAgents.findIndex(a => a.status === 'pending');
+    if (firstIdx >= 0) wzRunAgent(firstIdx, wzAgents);
+  }, [wzAgents, wzRunAgent]);
+
+  const wzHandleStop = useCallback(() => {
+    wzStep2AbortRef.current?.abort();
+    setWzStep2Running(false);
+    setWzAgents(prev => prev.map(a => a.status === 'running' ? { ...a, status: 'error', error: stb.wzStoppedByUser || 'Stopped by user' } : a));
+  }, [stb.wzStoppedByUser])
+
+  const wzHandleSkip = useCallback((idx: number) => {
+    if (wzStep2Running && wzStep2ActiveIdxRef.current === idx) {
+      wzStep2AbortRef.current?.abort();
+      setWzStep2Running(false);
+    }
+    setWzAgents(prev => {
+      const next = prev.map((a, i) => i === idx ? { ...a, status: 'skipped' as WzAgentStatus } : a);
+      if (wzStep2Running && wzStep2ActiveIdxRef.current === idx) {
+        const nextIdx = next.findIndex((a, i) => i > idx && a.status === 'pending');
+        if (nextIdx >= 0) setTimeout(() => wzRunAgent(nextIdx, next), 100);
+      }
+      return next;
+    });
+  }, [wzStep2Running, wzRunAgent]);
+
+  const wzHandleFinish = useCallback(() => {
+    if (!wzStep1Result) return;
+    const parsed = wzStep1Result.parsed ?? {};
+    const result: MultiAgentGenerateResult = {
+      reasoning: parsed.reasoning ?? '',
+      template: {
+        id: parsed.template?.id ?? '',
+        name: parsed.template?.name ?? scenarioName,
+        description: parsed.template?.description ?? description,
+        agents: wzAgents.map(a => ({
+          id: a.id, name: a.name, role: a.role, description: a.description,
+          icon: a.icon, color: a.color,
+          soul: a.soul, agentsMd: a.agentsMd, userMd: a.userMd,
+          identityMd: a.identityMd, heartbeat: a.heartbeat,
+        })),
+        workflow: parsed.template?.workflow ?? { type: workflowType, description: '', steps: [] },
+      },
+    };
+    setGenerateResult(result);
+    setEditedAgents({});
+    setStep('preview');
+  }, [wzStep1Result, wzAgents, scenarioName, description, workflowType]);
+
+  // Cleanup wizard SSE on unmount or leaving wizard step
+  useEffect(() => {
+    if (step !== 'wizard') {
+      wzStep1AbortRef.current?.abort();
+      wzStep2AbortRef.current?.abort();
+    }
+  }, [step]);
+
   const selectedModelLabel = modelOptions.find(o => o.value === selectedModel)?.label;
 
   return (
@@ -536,10 +883,10 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
               </button>
             )}
             {/* Step indicator */}
-            {(step === 'input' || step === 'prompt-review') && (
+            {step === 'input' && (
               <div className="hidden sm:flex items-center gap-1">
-                {(['input', 'prompt-review', 'preview'] as const).map((s, i) => {
-                  const order: BuilderStep[] = ['input', 'prompt-review', 'generating', 'preview', 'edit-agent'];
+                {(['input', 'wizard', 'preview'] as const).map((s, i) => {
+                  const order: BuilderStep[] = ['input', 'generating', 'wizard', 'preview', 'edit-agent'];
                   const done = order.indexOf(step) > order.indexOf(s);
                   const active = step === s;
                   return (
@@ -556,14 +903,14 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
             <button
               onClick={
                 step === 'edit-agent' ? () => setStep('preview')
-                : step === 'prompt-review' ? () => setStep('input')
+                : step === 'wizard' ? () => { setStep('input'); setWzPromptUserEdited(false); }
                 : step === 'generating' && genTaskId ? () => { setMinimized(true); onClose(); }
                 : onClose
               }
               className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-colors"
             >
               <span className="material-symbols-outlined text-[18px] text-slate-400">
-                {step === 'edit-agent' || step === 'prompt-review' ? 'arrow_back'
+                {step === 'edit-agent' ? 'arrow_back'
                   : step === 'generating' && genTaskId ? 'minimize'
                   : 'close'}
               </span>
@@ -758,38 +1105,6 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
                 </div>
               </div>
 
-              {/* ── Generation Mode Toggle ── */}
-              <div className="flex items-center justify-between gap-3 py-2 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="material-symbols-outlined text-[15px] shrink-0 text-slate-400 dark:text-white/30">
-                    {directLlm ? 'bolt' : 'smart_toy'}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-700 dark:text-white/70 truncate">
-                      {directLlm
-                        ? (stb.directLlmLabel || 'Direct LLM (streaming)')
-                        : (stb.agentSessionLabel || 'Agent session (default)')}
-                    </p>
-                    <p className="text-[10px] text-slate-400 dark:text-white/30 truncate">
-                      {directLlm
-                        ? (stb.directLlmDesc || 'Calls LLM directly — no tool execution, faster response')
-                        : (stb.agentSessionDesc || 'Routes through OpenClaw agent — supports richer context')}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setDirectLlm(v => !v)}
-                  className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${
-                    directLlm ? 'bg-violet-500' : 'bg-slate-300 dark:bg-white/15'
-                  }`}
-                  aria-label={stb.directLlmToggle || 'Toggle generation mode'}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
-                    directLlm ? 'start-[18px]' : 'start-0.5'
-                  }`} />
-                </button>
-              </div>
-
               {/* ── Model Selector ── */}
               {modelOptions.length > 0 && (
                 <div>
@@ -840,117 +1155,6 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ══ Step: Prompt Review ══ */}
-          {step === 'prompt-review' && (
-            <div className="p-5 space-y-3">
-              {error && (error === '__gateway__' ? (
-                <div className="rounded-xl bg-red-500/10 border border-red-500/25 p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5 text-red-500">wifi_off</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-bold text-red-600 dark:text-red-400">
-                        {stb.genErrGateway || 'Gateway disconnected'}
-                      </p>
-                      <p className="text-[11px] text-red-500/80 dark:text-red-400/70 mt-0.5">
-                        {stb.genErrGatewayDesc || 'The gateway connection was lost. Check gateway status and retry.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <button
-                      onClick={handleConfirmGenerate}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/20 hover:bg-red-500/30 text-red-600 dark:text-red-400 transition-colors flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">refresh</span>
-                      {stb.retryGenerate || 'Retry'}
-                    </button>
-                    <span className="text-[10px] text-red-500/60">
-                      {stb.genErrGatewayTip || 'Check that the gateway is running and reconnect'}
-                    </span>
-                  </div>
-                </div>
-              ) : error === '__timeout__' ? (
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="material-symbols-outlined text-[16px] shrink-0 mt-0.5 text-amber-500">schedule</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-bold text-amber-600 dark:text-amber-400">
-                        {stb.timeoutTitle || 'AI is taking longer than expected'}
-                      </p>
-                      <p className="text-[11px] text-amber-600/80 dark:text-amber-400/70 mt-0.5">
-                        {stb.timeoutDesc || 'The AI may still be generating. Try again — a faster model or a shorter description may help.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <button
-                      onClick={handleConfirmGenerate}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 transition-colors flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">refresh</span>
-                      {stb.retryGenerate || 'Retry'}
-                    </button>
-                    <span className="text-[10px] text-amber-500/60">
-                      {stb.timeoutTip || 'Tip: Try switching to a faster model above'}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-[11px] text-red-600 dark:text-red-400 flex items-start gap-2">
-                  <span className="material-symbols-outlined text-[15px] shrink-0 mt-0.5">error</span>
-                  <span className="flex-1 min-w-0 break-words">{error}</span>
-                </div>
-              ))}
-              {/* Summary chips */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">edit_note</span>
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-white/70 max-w-[140px] truncate">{scenarioName}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">{TEAM_SIZES.find(s => s.value === teamSize)?.icon || 'groups'}</span>
-                  <span className="text-[11px] text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                  <span className="material-symbols-outlined text-[13px] text-violet-500">{WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}</span>
-                  <span className="text-[11px] text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
-                </div>
-                {selectedModelLabel && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-                    <span className="material-symbols-outlined text-[13px] text-violet-500">memory</span>
-                    <span className="text-[11px] text-slate-600 dark:text-white/60 max-w-[120px] truncate">{selectedModelLabel}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Editable prompt */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider">
-                    {stb.promptLabel || 'AI Prompt'}
-                  </label>
-                  <button
-                    onClick={() => setEditablePrompt(buildPrompt())}
-                    className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-white/30 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[12px]">restart_alt</span>
-                    {stb.promptReset || 'Reset'}
-                  </button>
-                </div>
-                <textarea
-                  value={editablePrompt}
-                  onChange={e => setEditablePrompt(e.target.value)}
-                  rows={14}
-                  className="w-full px-3 py-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 resize-none leading-relaxed transition-all"
-                />
-                <p className="text-[10px] text-slate-400 dark:text-white/25 mt-1.5 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[12px]">info</span>
-                  {stb.promptHint || 'You can freely edit this prompt before sending it to the AI.'}
-                </p>
-              </div>
             </div>
           )}
 
@@ -1116,6 +1320,376 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
             );
           })()}
 
+
+          {/* ══ Step: Wizard ══ */}
+          {step === 'wizard' && (
+            <div className="flex flex-col">
+              {/* Phase tabs */}
+              <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
+                {(['step1', 'step2'] as const).map((p, i) => {
+                  const isActive = wzPhase === p;
+                  const isDone = p === 'step1' && wzPhase === 'step2';
+                  return (
+                    <React.Fragment key={p}>
+                      {i > 0 && <span className="w-5 h-px bg-slate-200 dark:bg-white/10 shrink-0" />}
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                        isDone ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
+                        : isActive ? 'bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-400'
+                        : 'bg-slate-100 dark:bg-white/5 border-transparent text-slate-400 dark:text-white/25'
+                      }`}>
+                        <span className="material-symbols-outlined text-[13px]">
+                          {isDone ? 'check_circle' : i === 0 ? 'account_tree' : 'auto_awesome'}
+                        </span>
+                        {p === 'step1' ? (stb.wzPhase1 || 'Team Structure') : (stb.wzPhase2 || 'Agent Files')}
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {/* ── Phase 1: Stream core structure ── */}
+              {wzPhase === 'step1' && (
+                <div className="p-4 space-y-3">
+                  {/* Config summary chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
+                      <span className="material-symbols-outlined text-[11px] text-violet-500">edit_note</span>
+                      <span className="text-xs font-bold text-slate-700 dark:text-white/70 max-w-[120px] truncate">{scenarioName}</span>
+                    </div>
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
+                      <span className="material-symbols-outlined text-[11px] text-violet-500">{TEAM_SIZES.find(s => s.value === teamSize)?.icon || 'groups'}</span>
+                      <span className="text-xs text-slate-600 dark:text-white/60">{stb[`teamSize_${teamSize}`] || teamSize} · {TEAM_SIZES.find(s => s.value === teamSize)?.range}</span>
+                    </div>
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
+                      <span className="material-symbols-outlined text-[11px] text-violet-500">{WORKFLOW_TYPES.find(w => w.value === workflowType)?.icon || 'hub'}</span>
+                      <span className="text-xs text-slate-600 dark:text-white/60">{ma[WORKFLOW_TYPES.find(w => w.value === workflowType)?.labelKey || ''] || workflowType}</span>
+                    </div>
+                    {selectedModelLabel && (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
+                        <span className="material-symbols-outlined text-[11px] text-violet-500">memory</span>
+                        <span className="text-xs text-slate-600 dark:text-white/60 max-w-[100px] truncate">{selectedModelLabel}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Status + controls */}
+                  <div className="flex items-center gap-2">
+                    {wzStep1Running
+                      ? <span className="material-symbols-outlined text-[17px] text-violet-500 animate-spin" style={{ animationDuration: '1.5s' }}>progress_activity</span>
+                      : wzStep1Error ? <span className="material-symbols-outlined text-[17px] text-red-500">error</span>
+                      : wzStep1Result ? <span className="material-symbols-outlined text-[17px] text-green-500">check_circle</span>
+                      : <span className="material-symbols-outlined text-[17px] text-slate-300 dark:text-white/15">radio_button_unchecked</span>
+                    }
+                    <p className="text-[13px] font-bold text-slate-700 dark:text-white/80 flex-1 min-w-0">
+                      {wzStep1Running ? (stb.wzStep1Running || 'Generating team structure…')
+                        : wzStep1Error ? (stb.wzStep1Error || 'Generation failed')
+                        : wzStep1Result ? (stb.wzStep1Done || 'Structure ready — click Next to continue')
+                        : (stb.wzStep1Waiting || 'Ready to generate')}
+                    </p>
+                    {wzStep1Running && (
+                      <button onClick={wzHandleStep1Stop} className="px-2.5 py-1 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-colors flex items-center gap-1 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">stop</span>
+                        {stb.wzStop || 'Stop'}
+                      </button>
+                    )}
+                    {!wzStep1Running && wzStep1Result && (
+                      <button onClick={wzHandleStep1Start} className="px-2.5 py-1 rounded-lg text-xs font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/20 transition-colors flex items-center gap-1 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">refresh</span>
+                        {stb.wzRegenerate || 'Regenerate'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Error */}
+                  {wzStep1Error && (
+                    <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                      <p className="text-xs text-red-600 dark:text-red-400 font-mono break-all">{wzStep1Error}</p>
+                    </div>
+                  )}
+
+                  {/* Live stream */}
+                  {(wzStep1Stream || wzStep1Running) && (
+                    <div className="rounded-xl bg-slate-900/70 dark:bg-black/50 border border-violet-500/15 overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-violet-500/10">
+                        {wzStep1Running && (
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-75" />
+                            <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                        <span className="ms-auto text-[10px] text-slate-500 dark:text-white/20 font-mono">{wzStep1Stream.length} chars</span>
+                      </div>
+                      <div className="px-2.5 py-2 max-h-[180px] overflow-y-auto">
+                        <pre className="text-xs font-mono text-slate-300/70 dark:text-white/40 leading-relaxed whitespace-pre-wrap break-all">
+                          {wzStep1Stream || ' '}
+                          {wzStep1Running && <span className="inline-block w-1.5 h-3 bg-violet-400 animate-pulse ml-0.5 align-middle" />}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt editor — shares wzStep1Prompt with prompt-review step */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setWzPromptExpanded(v => !v)}
+                      className="w-full flex items-center justify-between mb-1 group"
+                    >
+                      <span className="text-xs font-bold text-slate-500 dark:text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                        {stb.promptLabel || 'AI Prompt'}
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
+                          wzPromptUserEdited
+                            ? 'bg-amber-500/10 text-amber-500 dark:text-amber-400'
+                            : wzPromptSource
+                              ? 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
+                              : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30'
+                        }`}>
+                          {wzPromptUserEdited
+                            ? (stb.promptSourceEdited || 'Edited')
+                            : wzPromptSource
+                              ? wzPromptSource
+                              : (stb.promptSourceDefault || 'Default')}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {wzPromptExpanded && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={e => { e.stopPropagation(); setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); }}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setWzStep1Prompt(''); setWzPromptUserEdited(false); setWzPromptSource(null); } }}
+                            className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-500 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">restart_alt</span>
+                            {stb.promptReset || 'Reset'}
+                          </span>
+                        )}
+                        <span className="material-symbols-outlined text-[14px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white/50 transition-colors">
+                          {wzPromptExpanded ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </div>
+                    </button>
+                    {wzPromptExpanded && (
+                      <textarea
+                        value={wzStep1Prompt}
+                        onChange={e => { setWzStep1Prompt(e.target.value); setWzPromptUserEdited(true); setWzPromptSource(stb.promptSourceEdited || 'Edited'); }}
+                        placeholder="Leave empty to use the default compact prompt (recommended)"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-white/70 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/30 resize-y leading-relaxed placeholder:text-slate-300 dark:placeholder:text-white/15"
+                        style={{ minHeight: '96px', maxHeight: '480px' }}
+                        spellCheck={false}
+                      />
+                    )}
+                  </div>
+
+                </div>
+              )}
+
+              {/* ── Phase 2: Per-agent file generation ── */}
+              {wzPhase === 'step2' && (
+                <div className="p-4 space-y-3">
+                  {/* Summary + progress */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold text-slate-700 dark:text-white/80">{stb.wzStep2Title || 'Generate agent workspace files'}</p>
+                      <p className="text-xs text-slate-400 dark:text-white/30 mt-0.5">
+                        {wzAgents.filter(a => a.status === 'done' || a.status === 'skipped').length}/{wzAgents.length} {stb.wzDone || 'done'}
+                        {wzAgents.some(a => a.status === 'error') && (
+                          <span className="ms-2 text-red-500 text-xs">{wzAgents.filter(a => a.status === 'error').length} {stb.wzErrors || 'errors'}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="w-20 h-1.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden shrink-0">
+                      <div className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                        style={{ width: `${wzAgents.length ? (wzAgents.filter(a => a.status === 'done' || a.status === 'skipped').length / wzAgents.length) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+
+                  {/* Action row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
+                      <button onClick={wzHandleGenerateAll} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-500 hover:bg-violet-600 text-white flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">play_arrow</span>
+                        {stb.wzGenerateAll || 'Generate all'}
+                      </button>
+                    )}
+                    {wzStep2Running && (
+                      <button onClick={wzHandleStop} className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">stop</span>
+                        {stb.wzStop || 'Stop'}
+                      </button>
+                    )}
+                    {wzAgents.every(a => a.status !== 'pending' && a.status !== 'running') && (
+                      <button onClick={wzHandleFinish} className="ms-auto px-3 py-1.5 rounded-lg text-xs font-bold bg-green-500 hover:bg-green-600 text-white flex items-center gap-1.5 transition-colors">
+                        <span className="material-symbols-outlined text-[13px]">check</span>
+                        {stb.wzFinish || 'Continue to preview'}
+                      </button>
+                    )}
+                    {!wzStep2Running && wzAgents.some(a => a.status === 'pending') && (
+                      <button onClick={wzHandleFinish} className="ms-auto px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white/50 border border-dashed border-slate-200 dark:border-white/10 transition-colors">
+                        {stb.wzSkipFiles || 'Skip files & continue'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Agent cards */}
+                  <div className="space-y-2">
+                    {wzAgents.map((agent, idx) => {
+                      const isActive = wzStep2Running && wzStep2ActiveIdxRef.current === idx && agent.status === 'running';
+                      const colorStyle = resolveTemplateColor(agent.color);
+                      const statusIcon = agent.status === 'done' ? 'check_circle'
+                        : agent.status === 'error' ? 'error'
+                        : agent.status === 'skipped' ? 'skip_next'
+                        : agent.status === 'running' ? 'progress_activity'
+                        : 'radio_button_unchecked';
+                      const statusColor = agent.status === 'done' ? 'text-green-500'
+                        : agent.status === 'error' ? 'text-red-500'
+                        : agent.status === 'skipped' ? 'text-slate-400 dark:text-white/25'
+                        : agent.status === 'running' ? 'text-violet-500'
+                        : 'text-slate-300 dark:text-white/15';
+
+                      return (
+                        <div key={agent.id} className={`rounded-xl border overflow-hidden transition-all ${isActive ? 'border-violet-500/40 shadow-sm shadow-violet-500/10' : 'border-slate-200 dark:border-white/10'}`}>
+                          {/* Header row */}
+                          <div className="flex items-center gap-2.5 p-2.5 bg-white dark:bg-white/[0.02]">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={colorStyle}>
+                              <span className="material-symbols-outlined text-white text-[15px]">{agent.icon}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-white/80 truncate">{agent.name}</p>
+                              <p className="text-[11px] text-slate-400 dark:text-white/30 truncate">{agent.role}</p>
+                            </div>
+                            {/* Status icon */}
+                            <span className={`material-symbols-outlined text-[16px] shrink-0 ${statusColor} ${isActive ? 'animate-spin' : ''}`}
+                              style={isActive ? { animationDuration: '1.5s' } : {}}>{statusIcon}</span>
+                            {/* Controls */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {/* ▶ Start — only for pending agents, when not running globally */}
+                              {agent.status === 'pending' && !wzStep2Running && (
+                                <button
+                                  onClick={() => wzRunAgent(idx, wzAgents, true)}
+                                  title={stb.wzStartAgent || 'Start this agent'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-violet-500/10 text-violet-500 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[15px]">play_arrow</span>
+                                </button>
+                              )}
+                              {/* 🔄 Retry — for error/done agents */}
+                              {(agent.status === 'error' || agent.status === 'done') && !wzStep2Running && (
+                                <button
+                                  onClick={() => {
+                                    setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'pending', error: undefined } : a));
+                                    setTimeout(() => wzRunAgent(idx, wzAgents.map((a, i) => i === idx ? { ...a, status: 'pending' } : a)), 0);
+                                  }}
+                                  title={stb.wzRetry || 'Retry'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-violet-500/10 text-violet-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">refresh</span>
+                                </button>
+                              )}
+                              {/* ⏭ Skip */}
+                              {agent.status !== 'skipped' && agent.status !== 'done' && (
+                                <button
+                                  onClick={() => wzHandleSkip(idx)}
+                                  title={stb.wzSkip || 'Skip'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">skip_next</span>
+                                </button>
+                              )}
+                              {/* Re-include skipped */}
+                              {agent.status === 'skipped' && (
+                                <button
+                                  onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, status: 'pending' } : a))}
+                                  title={stb.wzInclude || 'Include'}
+                                  className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                                </button>
+                              )}
+                              {/* Expand */}
+                              <button
+                                onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, expanded: !a.expanded } : a))}
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">{agent.expanded ? 'expand_less' : 'expand_more'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {agent.expanded && (
+                            <div className="border-t border-slate-100 dark:border-white/[0.05] bg-slate-50 dark:bg-white/[0.01] p-2.5 space-y-2">
+                              {/* Live stream */}
+                              {agent.status === 'running' && agent.streamBuf && (
+                                <div className="rounded-lg bg-slate-900/70 border border-violet-500/15 overflow-hidden">
+                                  <div className="flex items-center gap-1.5 px-2 py-1 border-b border-violet-500/10">
+                                    <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                      <span className="animate-ping absolute inset-0 rounded-full bg-green-400 opacity-75" />
+                                      <span className="relative rounded-full h-1.5 w-1.5 bg-green-500" />
+                                    </span>
+                                    <span className="text-[10px] font-bold text-green-400/70 uppercase tracking-wider">{stb.wzLiveOutput || 'Live output'}</span>
+                                    <span className="ms-auto flex items-center gap-2">
+                                      {agent.startedAt && (
+                                        <ElapsedTimer startedAt={agent.startedAt} className="text-[10px] font-mono text-slate-500 dark:text-white/20" />
+                                      )}
+                                      {(agent.tokenCount ?? 0) > 0 && (
+                                        <span className="text-[10px] font-mono text-slate-500 dark:text-white/20">{agent.tokenCount} chars</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  <StreamOutput content={agent.streamBuf} />
+                                </div>
+                              )}
+                              {/* Done: file previews */}
+                              {agent.status === 'done' && (
+                                <div className="space-y-1.5">
+                                  {(['soul', 'agentsMd', 'userMd', 'identityMd', 'heartbeat'] as const).map(key => {
+                                    const labels: Record<string, string> = { soul: 'SOUL.md', agentsMd: 'AGENTS.md', userMd: 'USER.md', identityMd: 'IDENTITY.md', heartbeat: 'HEARTBEAT.md' };
+                                    const val = agent[key];
+                                    if (!val) return null;
+                                    return (
+                                      <div key={key} className="rounded-lg border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] overflow-hidden">
+                                        <div className="flex items-center gap-1.5 px-2 py-1 border-b border-slate-100 dark:border-white/[0.04]">
+                                          <span className="material-symbols-outlined text-[11px] text-slate-400">description</span>
+                                          <span className="text-[10px] font-bold text-slate-500 dark:text-white/40 font-mono">{labels[key]}</span>
+                                        </div>
+                                        <p className="px-2 py-1.5 text-xs text-slate-500 dark:text-white/40 line-clamp-2 font-mono leading-relaxed">{val}</p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {/* Error */}
+                              {agent.status === 'error' && <p className="text-xs text-red-500 font-mono break-all">{agent.error}</p>}
+                              {/* Prompt editor */}
+                              <div>
+                                <button
+                                  onClick={() => setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, showPrompt: !a.showPrompt } : a))}
+                                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white/50 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">edit</span>
+                                  {stb.wzEditPrompt || 'Edit prompt'}
+                                </button>
+                                {agent.showPrompt && (
+                                  <textarea
+                                    value={agent.customPrompt ?? ''}
+                                    onChange={e => { const v = e.target.value; setWzAgents(prev => prev.map((a, i) => i === idx ? { ...a, customPrompt: v } : a)); }}
+                                    className="mt-1.5 w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-[10px] font-mono text-slate-700 dark:text-white/70 resize-y focus:outline-none focus:ring-1 focus:ring-violet-500/30"
+                                    style={{ minHeight: '80px', maxHeight: '400px' }}
+                                    spellCheck={false}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ══ Step: Preview ══ */}
           {step === 'preview' && generateResult && (
@@ -1358,15 +1932,15 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
           <button
             onClick={
               step === 'edit-agent' ? () => setStep('preview')
-              : step === 'prompt-review' ? () => setStep('input')
+              : step === 'wizard' ? () => { setStep('input'); setWzPromptUserEdited(false); }
               : step === 'generating' && genTaskId
                 ? () => { setMinimized(true); onClose(); }
-                : onClose
+              : onClose
             }
             className="px-4 py-2 rounded-lg text-[11px] font-bold text-slate-600 dark:text-white/60 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
           >
             {step === 'edit-agent' ? (stb.backToPreview || 'Back')
-              : step === 'prompt-review' ? (stb.back || 'Back')
+              : step === 'wizard' ? (stb.back || 'Back')
               : step === 'generating' && genTaskId ? (stb.minimizeBtn || 'Minimize')
               : (stb.cancel || 'Cancel')}
           </button>
@@ -1374,22 +1948,30 @@ Respond ONLY with a JSON object in this exact structure (no markdown, no explana
           <div className="flex items-center gap-2">
             {step === 'input' && (
               <button
-                onClick={handlePreparePrompt}
+                onClick={directLlm ? handlePreparePrompt : handleConfirmGenerate}
                 disabled={!scenarioName.trim() || !description.trim()}
                 className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
               >
-                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                {stb.nextBtn || 'Next'}
+                <span className="material-symbols-outlined text-[16px]">{directLlm ? 'auto_fix_high' : 'auto_awesome'}</span>
+                {directLlm ? (stb.generateWizardBtn || '生成团队') : (stb.generateBtn || 'Generate Team with AI')}
               </button>
             )}
-            {step === 'prompt-review' && (
+            {step === 'wizard' && wzPhase === 'step1' && !wzStep1Running && !wzStep1Result && (
               <button
-                onClick={handleConfirmGenerate}
-                disabled={!editablePrompt.trim()}
-                className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
+                onClick={wzHandleStep1Start}
+                className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
               >
-                <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                {stb.generateBtn || 'Generate Team with AI'}
+                <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                {stb.wzStart || '开始'}
+              </button>
+            )}
+            {step === 'wizard' && wzPhase === 'step1' && wzStep1Result && (
+              <button
+                onClick={() => setWzPhase('step2')}
+                className="px-5 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 flex items-center gap-2 transition-all shadow-md shadow-violet-500/20"
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                {stb.wzNextToAgentFiles || 'Next: Generate Agent Files'}
               </button>
             )}
             {step === 'preview' && generateResult && (

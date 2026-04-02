@@ -2,11 +2,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Language } from '../types';
 import { getTranslation } from '../locales';
-import { gwApi, workspaceMemoryApi, MemoryFileEntry } from '../services/api';
+import { gwApi, workspaceMemoryApi, MemoryFileEntry, multiAgentApi, WizardStep2Request } from '../services/api';
 import { useGatewayStatus } from '../hooks/useGatewayStatus';
 import { fmtAgoCompact } from '../utils/time';
 import { subscribeManagerWS } from '../services/manager-ws';
-import { templateSystem, WorkspaceTemplate } from '../services/template-system';
+import { templateSystem, WorkspaceTemplate, resolveTemplatePrompt, MultiAgentTemplate } from '../services/template-system';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import CustomSelect from '../components/CustomSelect';
@@ -138,10 +138,50 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
 
+  // AI file generate state
+  const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [aiGenPrompt, setAiGenPrompt] = useState('');
+  const [aiGenRunning, setAiGenRunning] = useState(false);
+  const [aiGenStream, setAiGenStream] = useState('');
+  const [aiGenResult, setAiGenResult] = useState<string | null>(null);
+  const [aiGenTemplates, setAiGenTemplates] = useState<MultiAgentTemplate[]>([]);
+  const [aiGenSelectedTplId, setAiGenSelectedTplId] = useState<string>('');
+  const aiGenAbortRef = useRef<AbortController | null>(null);
+  const aiGenBufRef = useRef('');
+  const aiGenRafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Core files that support AI generation */
+  const AI_GEN_FILES = ['SOUL.md', 'AGENTS.md', 'USER.md', 'IDENTITY.md', 'HEARTBEAT.md'];
+
   // Load workspace file templates
   useEffect(() => {
     templateSystem.getAllTemplates(language).then(setFileTemplates).catch(() => { /* templates optional */ });
   }, [language]);
+
+  // Re-apply selected template prompt when: file changes, panel opens, template selection changes, OR templates finish loading
+  useEffect(() => {
+    if (!aiGenOpen || !fileActive) return;
+    if (!aiGenSelectedTplId) {
+      setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
+    const tpl = aiGenTemplates.find(t => t.id === aiGenSelectedTplId);
+    if (!tpl?.content.prompts) {
+      // Templates not loaded yet — keep current prompt, will re-run when aiGenTemplates updates
+      return;
+    }
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
+    const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
+    const fileKeyMap: Record<string, string> = { agents: 'agents', soul: 'soul', user: 'user', identity: 'identity', heartbeat: 'heartbeat' };
+    const mappedKey = fileKeyMap[fileActive.replace('.md', '').toLowerCase()];
+    const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
+    const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
+    if (resolved) setAiGenPrompt(resolved);
+    else setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+  }, [fileActive, aiGenOpen, aiGenSelectedTplId, aiGenTemplates, identity, selectedId]); // identity/selectedId: re-apply when agent data loads
 
   // Subscribe to shared Manager WS for agent chat streaming events
   useEffect(() => {
@@ -382,6 +422,165 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
     } catch (err: any) { toast('error', err?.message || a.fileSaveFailed); }
     setFileSaving(false);
   }, [selectedId, fileActive, fileDrafts, a]);
+
+  /** Build a generic fallback prompt for the given file type */
+  const buildAiGenFallbackPrompt = useCallback((fileName: string) => {
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
+    const isZh = language === 'zh' || language === 'zh-TW';
+    const langHint = isZh ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    const fileKey = fileName.replace('.md', '').toLowerCase();
+    const fileHints: Record<string, string> = isZh ? {
+      soul: `写一份 SOUL.md 人设文件（Markdown，3-5段，第一人称）。\n涵盖：\n- 核心身份认同与职业哲学（工作风格、质量标准、价值观）\n- 专业领域专长与该智能体负责的具体决策范围\n- 在团队中的协作方式：产出什么、依赖谁、解除哪些阻碍\n- "完成"的定义：质量标准与验收条件\n- 一句指导性原则或个人座右铭`,
+      agents: `写一份 AGENTS.md 会话启动指南（Markdown格式）。\n包含：\n- 会话开始时首先加载哪些上下文、文件或历史记录\n- 本次会话的主要目标与预期交付物\n- 与哪些团队成员协作、依赖关系与交接方式\n- 输出格式要求与质量标准\n- 需要遵守的约束条件或注意事项`,
+      user: `写一份 USER.md 用户画像文件（Markdown格式）。\n包含：\n- 该智能体服务的用户/负责人的角色背景与决策上下文\n- 他们如何使用该智能体的产出（战略决策、执行落地、审查把关等）\n- 沟通偏好（异步文档、摘要汇报、详细数据等）\n- 对该智能体最看重的能力与期望\n- 对他们来说"高质量交付"意味着什么`,
+      identity: `写一行 IDENTITY.md，严格格式：Name: X | Creature: X | Vibe: X | Emoji: X\n选择一种能体现该智能体个性的动物，2-4词的氛围描述，以及一个合适的emoji。`,
+      heartbeat: `写一份 HEARTBEAT.md 任务清单（Markdown复选框格式）。\n要求：\n- 5-7个周期性日常/会话任务\n- 每项任务具体、可执行，格式：- [ ] 任务描述\n- 任务应真实反映该智能体的职责范围\n- 不要标题，不要其他文字，只输出复选框列表`,
+    } : {
+      soul: `Write a SOUL.md persona file in Markdown (3–5 paragraphs, first person).\nCover:\n- Core identity and professional philosophy (working style, quality bar, values)\n- Domain expertise and the specific decisions this agent owns\n- How they collaborate in the team: what they produce, who they depend on, what they unblock\n- Definition of done: quality standards and acceptance criteria\n- A guiding engineering/professional principle or personal motto`,
+      agents: `Write an AGENTS.md session-startup guide in Markdown.\nInclude:\n- What context, files, or prior history to load first at session start\n- Primary goal and expected deliverables for this session\n- Collaboration touchpoints: which teammates, handoff format, dependencies\n- Output format requirements and quality standards\n- Constraints or important notes to keep in mind`,
+      user: `Write a USER.md profile file in Markdown.\nInclude:\n- Role and background of the human/stakeholder this agent serves\n- How they consume this agent's outputs (strategic decisions, execution, review)\n- Communication preferences (async docs, summary reports, raw data, etc.)\n- What they value most from this agent and their expectations\n- What "high quality delivery" means to them`,
+      identity: `Write a single-line IDENTITY.md in this exact format: Name: X | Creature: X | Vibe: X | Emoji: X\nPick a creature that fits the agent's personality, a 2–4 word vibe, and a fitting emoji.`,
+      heartbeat: `Write a HEARTBEAT.md task checklist in Markdown.\nRequirements:\n- 5–7 recurring daily/session tasks\n- Each task is specific and actionable, format: - [ ] task description\n- Tasks must reflect this agent's actual responsibilities\n- No headings, no extra text — only the checkbox list`,
+    };
+    const hint = fileHints[fileKey] || (isZh ? `为 ${fileName} 生成高质量的 Markdown 内容。` : `Generate high-quality Markdown content for ${fileName}.`);
+    const header = isZh
+      ? `为智能体 "${agentName}" 生成 ${fileName} 文件内容。${agentRole ? `\n角色：${agentRole}` : ''}${agentDesc ? `\n描述：${agentDesc}` : ''}\n语言：中文\n\n`
+      : `Generate ${fileName} content for agent "${agentName}".${agentRole ? `\nRole: ${agentRole}` : ''}${agentDesc ? `\nDescription: ${agentDesc}` : ''}\nLanguage: ${langHint}\n\n`;
+    return header + hint;
+  }, [identity, selectedId, language]);
+
+  // Open AI generate panel — loads template list, starts with generic prompt (no auto-select)
+  const openAiGen = useCallback(async () => {
+    if (!fileActive || !selectedId) return;
+    setAiGenResult(null);
+    setAiGenStream('');
+    setAiGenSelectedTplId('');
+    setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+    setAiGenOpen(true);
+    // Load multi-agent templates for the picker (fire-and-forget)
+    try {
+      const templates = await templateSystem.getMultiAgentTemplates(language);
+      setAiGenTemplates(templates.filter(t =>
+        t.content.prompts?.files || t.content.prompts?.agentFile
+      ));
+    } catch { /* templates optional */ }
+  }, [fileActive, selectedId, language, buildAiGenFallbackPrompt]);
+
+  /** Called when user picks a template from the dropdown — resolves per-file prompt */
+  const handleAiGenSelectTemplate = useCallback((tplId: string) => {
+    setAiGenSelectedTplId(tplId);
+    if (!tplId) {
+      if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
+    const tpl = aiGenTemplates.find(t => t.id === tplId);
+    console.debug('[AiGen] selectTemplate', tplId, 'templates loaded:', aiGenTemplates.length, 'found:', !!tpl);
+    if (!tpl) {
+      // Templates not yet loaded — selection will be re-applied by the useEffect below once they arrive
+      console.debug('[AiGen] template list empty, will retry when loaded');
+      return;
+    }
+    if (!tpl.content.prompts) {
+      console.debug('[AiGen] template has no prompts, using fallback');
+      if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+      return;
+    }
+    const agentIdentity = selectedId ? identity[selectedId] : null;
+    const agentName = agentIdentity?.name || selectedId || '';
+    const agentRole = agentIdentity?.role || '';
+    const agentDesc = agentIdentity?.description || '';
+    const placeholders = { agentName, agentRole, agentDesc, scenarioName: agentRole || agentName };
+    // Map filename → files key
+    const fileKeyMap: Record<string, string> = { 'agents': 'agents', 'soul': 'soul', 'user': 'user', 'identity': 'identity', 'heartbeat': 'heartbeat' };
+    const mappedKey = fileActive ? fileKeyMap[fileActive.replace('.md', '').toLowerCase()] : undefined;
+    // Prefer prompts.files[key], fall back to prompts.agentFile
+    const perFilePrompts = mappedKey ? tpl.content.prompts.files?.[mappedKey as keyof NonNullable<typeof tpl.content.prompts.files>] : undefined;
+    console.debug('[AiGen] perFilePrompts:', !!perFilePrompts, 'agentFile:', !!tpl.content.prompts.agentFile, 'language:', language);
+    const resolved = resolveTemplatePrompt(perFilePrompts ?? tpl.content.prompts.agentFile, language, placeholders);
+    console.debug('[AiGen] resolved length:', resolved?.length ?? 0);
+    if (resolved) setAiGenPrompt(resolved);
+    else if (fileActive) setAiGenPrompt(buildAiGenFallbackPrompt(fileActive));
+  }, [aiGenTemplates, fileActive, identity, selectedId, language, buildAiGenFallbackPrompt]);
+
+  const handleAiGenRun = useCallback(() => {
+    if (!fileActive || !selectedId || aiGenRunning) return;
+    aiGenAbortRef.current?.abort();
+    aiGenBufRef.current = '';
+    if (aiGenRafRef.current !== null) { clearTimeout(aiGenRafRef.current); aiGenRafRef.current = null; }
+    setAiGenStream('');
+    setAiGenResult(null);
+    setAiGenRunning(true);
+    const agentName = identity?.name || selectedId;
+    const agentRole = identity?.role || '';
+    const agentDesc = identity?.description || '';
+    const langHint = (language === 'zh' || language === 'zh-TW') ? 'Chinese' : language === 'ja' ? 'Japanese' : language === 'ko' ? 'Korean' : 'English';
+    const req: WizardStep2Request = {
+      agentId: selectedId,
+      agentName,
+      agentRole,
+      agentDesc,
+      scenarioName: agentRole || agentName,
+      language: langHint,
+      customPrompt: aiGenPrompt,
+    };
+    aiGenAbortRef.current = multiAgentApi.wizardStep2(
+      req,
+      (token) => {
+        aiGenBufRef.current += token;
+        if (aiGenRafRef.current === null) {
+          aiGenRafRef.current = setTimeout(() => {
+            setAiGenStream(aiGenBufRef.current);
+            aiGenRafRef.current = null;
+          }, 30);
+        }
+      },
+      (data) => {
+        setAiGenRunning(false);
+        // Extract plain text from the parsed result if possible
+        const parsed = data?.parsed ?? data;
+        let content = '';
+        if (parsed && typeof parsed === 'object') {
+          const fileKey = fileActive!.replace('.md', '').toLowerCase();
+          const keyMap: Record<string, string[]> = {
+            soul: ['soul', 'soulSnippet'],
+            agents: ['agentsMd', 'agents'],
+            user: ['userMd', 'user'],
+            identity: ['identityMd', 'identity'],
+            heartbeat: ['heartbeat'],
+          };
+          const keys = keyMap[fileKey] ?? [];
+          for (const k of keys) {
+            if (parsed[k]) { content = parsed[k]; break; }
+          }
+          if (!content) content = aiGenBufRef.current;
+        } else {
+          content = aiGenBufRef.current;
+        }
+        setAiGenResult(content);
+        setAiGenStream(content);
+      },
+      (code, msg) => {
+        setAiGenRunning(false);
+        toast('error', `${code}: ${msg}`);
+      },
+    );
+  }, [fileActive, selectedId, identity, language, aiGenPrompt, aiGenRunning]);
+
+  const handleAiGenStop = useCallback(() => {
+    aiGenAbortRef.current?.abort();
+    setAiGenRunning(false);
+  }, []);
+
+  const handleAiGenApply = useCallback(() => {
+    if (!fileActive || !aiGenResult) return;
+    setFileDrafts(prev => ({ ...prev, [fileActive!]: aiGenResult }));
+    setAiGenOpen(false);
+    setAiGenResult(null);
+    setAiGenStream('');
+  }, [fileActive, aiGenResult]);
 
   // CRUD state
   const [crudMode, setCrudMode] = useState<'create' | 'edit' | null>(null);
@@ -1416,6 +1615,20 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                             ) : fileActive}
                           </span>
                           <div className="flex gap-2">
+                            {/* AI Generate button — shown for core agent files */}
+                            {fileActive && AI_GEN_FILES.includes(fileActive) && !fileActive.startsWith('memory/') && (
+                              <button
+                                onClick={() => { setTplDropdown(false); if (aiGenOpen) { setAiGenOpen(false); } else { openAiGen(); } }}
+                                className={`text-[10px] px-2 py-1 rounded-lg border font-bold transition-colors flex items-center gap-1 ${
+                                  aiGenOpen
+                                    ? 'border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                                    : 'border-violet-400/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/5'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-[12px]">auto_awesome</span>
+                                {a.aiGenerate || 'AI Write'}
+                              </button>
+                            )}
                             {/* Template insert dropdown */}
                             {fileActive && fileTemplates.filter(t => t.targetFile === fileActive).length > 0 && (
                               <div className="relative">
@@ -1453,6 +1666,96 @@ const Agents: React.FC<AgentsProps> = ({ language }) => {
                               className="text-[10px] px-3 py-1 rounded-lg bg-primary text-white font-bold disabled:opacity-30">{fileSaving ? a.saving : a.save}</button>
                           </div>
                         </div>
+                        {/* AI Generate Panel */}
+                        {aiGenOpen && fileActive && AI_GEN_FILES.includes(fileActive) && (
+                          <div className="rounded-xl border border-violet-400/30 bg-violet-500/5 dark:bg-violet-500/[0.06] p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
+                                {a.aiGenerateTitle || 'AI Write File Content'}
+                              </span>
+                              <button onClick={() => { setAiGenOpen(false); setAiGenStream(''); setAiGenResult(null); }}
+                                className="text-[10px] text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white/60 transition-colors">
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                              </button>
+                            </div>
+                            {/* Template picker */}
+                            {aiGenTemplates.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 dark:text-white/40 shrink-0">
+                                  {a.aiGenTemplate || 'Template'}
+                                </span>
+                                <CustomSelect
+                                  value={aiGenSelectedTplId}
+                                  onChange={handleAiGenSelectTemplate}
+                                  disabled={aiGenRunning}
+                                  placeholder={a.aiGenNoTemplate || '— Generic prompt —'}
+                                  className="w-full h-7 px-2 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-md text-[10px] text-slate-600 dark:text-white/60"
+                                  options={[
+                                    { value: '', label: a.aiGenNoTemplate || '— Generic prompt —' },
+                                    ...aiGenTemplates.map(tpl => ({
+                                      value: tpl.id,
+                                      label: tpl.metadata?.scope === 'multi-agent'
+                                        ? `[${a.aiGenScopeMulti || '多'}] ${tpl.metadata?.name || tpl.id}`
+                                        : tpl.metadata?.name || tpl.id,
+                                    })),
+                                  ]}
+                                />
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-white/30 uppercase tracking-wider">
+                                {a.aiGenPromptLabel || 'Prompt'}
+                              </span>
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
+                                aiGenSelectedTplId
+                                  ? 'bg-violet-500/10 text-violet-500 dark:text-violet-400'
+                                  : 'bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30'
+                              }`}>
+                                {aiGenSelectedTplId
+                                  ? (aiGenTemplates.find(t => t.id === aiGenSelectedTplId)?.metadata?.name ?? aiGenSelectedTplId)
+                                  : (a.aiGenPromptSourceDefault || 'Generic')}
+                              </span>
+                            </div>
+                            <textarea
+                              value={aiGenPrompt}
+                              onChange={e => setAiGenPrompt(e.target.value)}
+                              rows={5}
+                              disabled={aiGenRunning}
+                              className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-white/[0.03] border border-violet-400/20 text-[11px] font-mono text-slate-700 dark:text-white/70 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500/30 disabled:opacity-60"
+                            />
+                            <div className="flex items-center gap-2">
+                              {!aiGenRunning ? (
+                                <button onClick={handleAiGenRun} disabled={!aiGenPrompt.trim()}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-violet-600 text-white font-bold hover:bg-violet-700 disabled:opacity-40 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">play_arrow</span>
+                                  {a.aiGenStart || 'Generate'}
+                                </button>
+                              ) : (
+                                <button onClick={handleAiGenStop}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500 text-white font-bold hover:bg-red-600 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">stop</span>
+                                  {a.aiGenStop || 'Stop'}
+                                </button>
+                              )}
+                              {aiGenResult && !aiGenRunning && (
+                                <button onClick={handleAiGenApply}
+                                  className="text-[10px] px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px]">check</span>
+                                  {a.aiGenApply || 'Apply to File'}
+                                </button>
+                              )}
+                              {aiGenRunning && (
+                                <span className="text-[10px] text-violet-500 dark:text-violet-400 animate-pulse">{a.aiGenRunning || 'Generating…'}</span>
+                              )}
+                            </div>
+                            {aiGenStream && (
+                              <pre className="w-full max-h-48 overflow-y-auto p-2.5 rounded-lg bg-white dark:bg-black/20 border border-violet-400/20 text-[10px] font-mono text-slate-700 dark:text-white/60 whitespace-pre-wrap break-words neon-scrollbar">
+                                {aiGenStream}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                         {/* File path hint */}
                         {filesList?.workspace && fileActive && !fileActive.startsWith('memory/') && (
                           <div className="flex items-center gap-1.5 px-1 -mt-0.5">

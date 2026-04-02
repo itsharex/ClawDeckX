@@ -745,6 +745,8 @@ func RunServe(args []string) int {
 	router.POST("/api/v1/multi-agent/generate-async", web.RequireAdmin(multiAgentHandler.GenerateAsync))
 	router.GET("/api/v1/multi-agent/generate-task", multiAgentHandler.GetGenerateTask)
 	router.POST("/api/v1/multi-agent/generate-cancel", web.RequireAdmin(multiAgentHandler.CancelGenerateTask))
+	router.POST("/api/v1/multi-agent/wizard-step1", web.RequireAdmin(multiAgentHandler.GenerateWizardStep1))
+	router.POST("/api/v1/multi-agent/wizard-step2", web.RequireAdmin(multiAgentHandler.GenerateWizardStep2))
 	router.POST("/api/v1/multi-agent/deploy", web.RequireAdmin(multiAgentHandler.Deploy))
 	router.POST("/api/v1/multi-agent/preview", web.RequireAdmin(multiAgentHandler.Preview))
 	router.GET("/api/v1/multi-agent/status", multiAgentHandler.Status)

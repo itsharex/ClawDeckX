@@ -74,7 +74,7 @@ const MultiAgentCollaborationV2: React.FC<MultiAgentCollaborationProps> = ({ lan
     setLoading(true);
     templateSystem.getMultiAgentTemplates(language)
       .then(data => {
-        setTemplates(data);
+        setTemplates(data.filter(t => t.id !== 'default'));
         setError(null);
       })
       .catch(err => setError(err))
@@ -652,6 +652,11 @@ ${blockEnd}
                 icon: a.icon,
                 color: a.color,
                 soulSnippet: a.soul,
+                soul: a.soul,
+                agentsMd: a.agentsMd,
+                userMd: a.userMd,
+                identityMd: a.identityMd,
+                heartbeat: a.heartbeat,
               })),
               workflow: aiDeployRequest.request.template.workflow,
               examples: [],
